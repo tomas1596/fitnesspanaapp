@@ -5,6 +5,20 @@ import { Dumbbell, Utensils, Droplet, TrendingUp, ChevronDown, Flame, Footprints
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import StarDisplay from '@/components/StarDisplay';
+import { calculateAge } from '@/lib/age';
+import { localDayBoundsISO } from '@/lib/nutritionDay';
+
+type MealGroupKey = 'desayuno' | 'almuerzo' | 'cena' | 'snack';
+
+const LEGACY_MEAL_TO_GROUP: Record<string, MealGroupKey> = {
+  breakfast: 'desayuno',
+  lunch: 'almuerzo',
+  dinner: 'cena',
+  snack: 'snack',
+  desayuno: 'desayuno',
+  almuerzo: 'almuerzo',
+  cena: 'cena',
+};
 
 interface ExerciseSet {
   reps: number;
@@ -30,7 +44,7 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises }: DailyReportShee
   const [calories, setCalories] = useState({ total: 0, goal: 0, protein: 0, proteinGoal: 0, carbs: 0, fat: 0 });
   const [glasses, setGlasses] = useState(0);
   const [recovery, setRecovery] = useState({ sleep: 0, energy: 0 });
-  const [foods, setFoods] = useState<{ id: string; name: string; calories: number; protein: number; carbs: number; fat: number; meal: string; quantity: number }[]>([]);
+  const [foods, setFoods] = useState<{ id: string; name: string; calories: number; protein: number; carbs: number; fat: number; mealKey: MealGroupKey; quantity: number }[]>([]);
   const [foodsOpen, setFoodsOpen] = useState(false);
   const [steps, setSteps] = useState(0);
   const [stepGoal, setStepGoal] = useState(10000);
@@ -38,29 +52,47 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises }: DailyReportShee
   useEffect(() => {
     if (!user || !open) return;
 
-    supabase.from('profiles').select('weight, height, age, gender, step_goal').eq('user_id', user.id).single().then(({ data }) => {
+    supabase.from('profiles').select('weight, height, date_of_birth, gender, step_goal').eq('user_id', user.id).single().then(({ data }) => {
       if (data?.step_goal) setStepGoal(data.step_goal);
-      if (!data?.weight || !data?.height || !data?.age || !data?.gender) return;
-      const w = Number(data.weight), h = Number(data.height), a = Number(data.age);
+      const a = calculateAge(data?.date_of_birth);
+      if (!data?.weight || !data?.height || a == null || a <= 0 || !data?.gender) return;
+      const w = Number(data.weight), h = Number(data.height);
       const bmr = data.gender === 'male' ? 10 * w + 6.25 * h - 5 * a + 5 : 10 * w + 6.25 * h - 5 * a - 161;
       setCalories(prev => ({ ...prev, goal: Math.round(bmr * 1.55), proteinGoal: Math.round(w * 2) }));
     });
 
-    supabase.from('food_entries').select('id, name, calories, protein, carbs, fat, meal, quantity').eq('user_id', user.id).eq('entry_date', dateStr).order('created_at').then(({ data }) => {
-      const list = (data || []).map(f => ({
-        id: f.id, name: f.name,
-        calories: f.calories,
+    const { start, end } = localDayBoundsISO(dateStr);
+
+    Promise.all([
+      supabase.from('food_entries').select('id, name, calories, protein, carbs, fat, meal, quantity').eq('user_id', user.id).eq('entry_date', dateStr).order('created_at'),
+      supabase.from('nutrition_logs').select('id, food_name, calories, protein, carbs, fat, meal_type, quantity_multiplier, consumed_at').eq('user_id', user.id).gte('consumed_at', start).lte('consumed_at', end).order('consumed_at'),
+    ]).then(([feRes, nlRes]) => {
+      const fromLegacy = (feRes.data || []).map((f) => ({
+        id: `fe:${f.id}`,
+        name: f.name,
+        calories: Number(f.calories),
         protein: Number(f.protein),
         carbs: Number(f.carbs ?? 0),
         fat: Number(f.fat ?? 0),
-        meal: (f.meal as string) || 'breakfast',
+        mealKey: LEGACY_MEAL_TO_GROUP[(f.meal as string) || 'breakfast'] ?? 'desayuno',
         quantity: Number(f.quantity ?? 1),
       }));
+      const fromLogs = (nlRes.data || []).map((f) => ({
+        id: `nl:${f.id}`,
+        name: f.food_name,
+        calories: Number(f.calories),
+        protein: Number(f.protein),
+        carbs: Number(f.carbs ?? 0),
+        fat: Number(f.fat ?? 0),
+        mealKey: (LEGACY_MEAL_TO_GROUP[f.meal_type as string] ?? 'desayuno') as MealGroupKey,
+        quantity: Number(f.quantity_multiplier ?? 1),
+      }));
+      const list = [...fromLegacy, ...fromLogs];
       const total = list.reduce((s, f) => s + f.calories, 0);
       const protein = list.reduce((s, f) => s + f.protein, 0);
       const carbs = list.reduce((s, f) => s + f.carbs, 0);
       const fat = list.reduce((s, f) => s + f.fat, 0);
-      setCalories(prev => ({ ...prev, total, protein: Math.round(protein), carbs: Math.round(carbs), fat: Math.round(fat) }));
+      setCalories((prev) => ({ ...prev, total, protein: Math.round(protein), carbs: Math.round(carbs), fat: Math.round(fat) }));
       setFoods(list);
     });
 
@@ -162,12 +194,12 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises }: DailyReportShee
                 <p className="py-2 text-center text-xs text-muted-foreground">Sin comidas registradas</p>
               ) : (
                 ([
-                  { key: 'breakfast', label: 'Desayuno', Icon: Sun },
-                  { key: 'lunch',     label: 'Almuerzo', Icon: Sunset },
-                  { key: 'snack',     label: 'Merienda', Icon: Cookie },
-                  { key: 'dinner',    label: 'Cena',     Icon: Moon },
+                  { key: 'desayuno' as const, label: 'Desayuno', Icon: Sun },
+                  { key: 'almuerzo' as const, label: 'Almuerzo', Icon: Sunset },
+                  { key: 'snack' as const, label: 'Snack', Icon: Cookie },
+                  { key: 'cena' as const, label: 'Cena', Icon: Moon },
                 ] as const).map(({ key, label, Icon }) => {
-                  const items = foods.filter(f => f.meal === key);
+                  const items = foods.filter((f) => f.mealKey === key);
                   if (items.length === 0) return null;
                   const sumCal = items.reduce((s, f) => s + f.calories, 0);
                   return (

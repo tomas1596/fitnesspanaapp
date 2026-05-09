@@ -1,14 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 @layer base {
   :root {
-    --background: 0 0% 98%;
+    /* Fondo gris muy claro (no blanco puro) para mejor descanso visual */
+    --background: 220 14% 94%;
     --foreground: 220 13% 10%;
 
+    /* Tarjetas ligeramente elevadas respecto al fondo */
     --card: 0 0% 100%;
     --card-foreground: 220 13% 10%;
 
@@ -18,31 +20,33 @@
     --primary: 145 70% 38%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 10% 94%;
+    /* Campos: tono un poco más profundo que el fondo de página */
+    --secondary: 220 12% 91%;
     --secondary-foreground: 220 13% 15%;
 
-    --muted: 220 10% 94%;
+    --muted: 220 12% 91%;
     --muted-foreground: 220 8% 40%;
 
-    --accent: 220 10% 90%;
+    --accent: 220 12% 88%;
     --accent-foreground: 220 13% 10%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 10% 88%;
-    --input: 220 10% 88%;
+    /* Bordes más visibles en modo día (inputs, cards, selects) */
+    --border: 220 12% 82%;
+    --input: 220 12% 78%;
     --ring: 145 70% 38%;
 
     --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
+    --sidebar-background: 220 14% 94%;
     --sidebar-foreground: 220 13% 15%;
     --sidebar-primary: 145 70% 38%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 220 10% 94%;
     --sidebar-accent-foreground: 220 13% 10%;
-    --sidebar-border: 220 10% 88%;
+    --sidebar-border: 220 12% 82%;
     --sidebar-ring: 145 70% 38%;
   }
 
@@ -96,6 +100,17 @@
     font-family: 'Inter', sans-serif;
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
+  }
+
+  /* Modo día: recuadros tipo card con borde fino + sombra suave (patrón habitual en la app) */
+  html:not(.dark) .rounded-2xl.bg-card {
+    border: 1px solid hsl(var(--border) / 0.9);
+    box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.06);
+  }
+
+  html:not(.dark) .rounded-xl.bg-card {
+    border: 1px solid hsl(var(--border) / 0.9);
+    box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.05);
   }
 
   /* Hide scrollbar for mobile feel */

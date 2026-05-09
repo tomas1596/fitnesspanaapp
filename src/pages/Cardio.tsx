@@ -1,51 +1,47 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { History as HistoryIcon, Pause, Play, Square } from 'lucide-react';
+import { Bluetooth, History as HistoryIcon, Pause, Play, Square } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/hooks/useTheme';
+import {
+  computeKmSplits,
+  computePositiveElevationGainM,
+  distM,
+  smoothRouteForDisplay,
+  type LatLng,
+} from '@/lib/runAnalysis';
+import { estimateRunCalories, estimateRunSteps } from '@/lib/calories';
+import { RUN_SIMULATION_DEFAULT } from '@/config/runMode';
+import { fmtPace, fmtTime, NRC_GREEN } from '@/lib/runFormat';
+import { KmMilestoneMarkers } from '@/components/KmMilestoneMarkers';
+import { PaceHeatPolylines } from '@/components/PaceHeatPolylines';
+import {
+  generateVillegasKmExtension,
+  randomPaceSecPerKmVillegas,
+  randomSeedNearVillegas,
+} from '@/lib/villegasSim';
 
-type LatLng = { lat: number; lng: number; t: number };
 type RunRow = {
   id: string;
   started_at: string;
   duration_seconds: number;
   distance_meters: number;
   avg_pace_seconds_per_km: number;
-  route: LatLng[];
+  route_data: LatLng[];
+  title?: string | null;
+  calories?: number | null;
+  elevation_gain_m?: number | null;
+  avg_heart_rate?: number | null;
 };
 
 const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 const LIGHT_TILES = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 const TILE_ATTR = '&copy; OpenStreetMap &copy; CARTO';
-
-// Haversine
-const distM = (a: LatLng, b: LatLng) => {
-  const R = 6371000;
-  const toRad = (x: number) => (x * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const h = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-  return 2 * R * Math.asin(Math.sqrt(h));
-};
-
-const fmtTime = (s: number) => {
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-};
-const fmtPace = (sPerKm: number) => {
-  if (!isFinite(sPerKm) || sPerKm <= 0) return "--'--\"";
-  const m = Math.floor(sPerKm / 60);
-  const s = Math.floor(sPerKm % 60);
-  return `${m}'${String(s).padStart(2, '0')}"`;
-};
 
 const Recenter = ({ center }: { center: [number, number] | null }) => {
   const map = useMap();
@@ -57,7 +53,7 @@ const Recenter = ({ center }: { center: [number, number] | null }) => {
 
 const dotIcon = L.divIcon({
   className: '',
-  html: '<div style="width:16px;height:16px;border-radius:9999px;background:#22FF55;border:3px solid #0b0f14;box-shadow:0 0 12px #22FF55;"></div>',
+  html: `<div style="width:16px;height:16px;border-radius:9999px;background:${NRC_GREEN};border:3px solid #0b0f14;box-shadow:0 0 12px ${NRC_GREEN};"></div>`,
   iconSize: [16, 16],
   iconAnchor: [8, 8],
 });
@@ -70,6 +66,43 @@ const speak = (text: string) => {
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
 };
+
+/** Ritmo medio en texto para TTS (minutos y segundos por km). */
+const paceForSpeech = (secPerKm: number) => {
+  if (!isFinite(secPerKm) || secPerKm <= 0) return 'sin datos';
+  const m = Math.floor(secPerKm / 60);
+  const s = Math.floor(secPerKm % 60);
+  if (m === 0) return `${s} segundos`;
+  if (s === 0) return `${m} minuto${m !== 1 ? 's' : ''}`;
+  return `${m} minuto${m !== 1 ? 's' : ''} y ${s} segundo${s !== 1 ? 's' : ''}`;
+};
+
+const speakKmMilestones = (fromKm: number, toKm: number, distanceM: number, elapsedSec: number) => {
+  if (!('speechSynthesis' in window) || fromKm >= toKm) return;
+  window.speechSynthesis.cancel();
+  const texts: string[] = [];
+  for (let k = fromKm + 1; k <= toKm; k++) {
+    const avgSecPerKm = distanceM > 0 ? elapsedSec / (distanceM / 1000) : 0;
+    texts.push(
+      `Distancia: ${k} kilómetros. Ritmo medio: ${paceForSpeech(avgSecPerKm)} por kilómetro.`
+    );
+  }
+  let i = 0;
+  const next = () => {
+    if (i >= texts.length) return;
+    const u = new SpeechSynthesisUtterance(texts[i]);
+    u.lang = 'es-ES';
+    u.rate = 1;
+    u.onend = () => {
+      i += 1;
+      next();
+    };
+    window.speechSynthesis.speak(u);
+  };
+  next();
+};
+
+const MIN_RUN_METERS = 50;
 
 const playTone = (frequency: number, duration = 0.12, volume = 0.2) => {
   const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -100,8 +133,11 @@ const Cardio = () => {
   const { resolved } = useTheme();
   const tileUrl = resolved === 'dark' ? DARK_TILES : LIGHT_TILES;
   const mapBg = resolved === 'dark' ? '#0b0f14' : '#e9ecef';
+  const mapHeatTheme = resolved === 'dark' ? 'dark' : 'light';
 
   const [tab, setTab] = useState<'run' | 'history'>('run');
+  /** Solo efecto en dev: permite +1 km simulado. Producción = siempre GPS real. */
+  const [isSimulated, setIsSimulated] = useState(RUN_SIMULATION_DEFAULT);
 
   const [position, setPosition] = useState<[number, number] | null>(null);
   const [route, setRoute] = useState<LatLng[]>([]);
@@ -111,6 +147,7 @@ const Cardio = () => {
   const [holdProgress, setHoldProgress] = useState(0); // 0..1 for finish hold
   const [countdown, setCountdown] = useState<number | null>(null);
   const startedAtRef = useRef<Date | null>(null);
+  const lastAnnouncedKmRef = useRef(0);
 
   const watchIdRef = useRef<number | null>(null);
   const tickRef = useRef<number | null>(null);
@@ -119,10 +156,13 @@ const Cardio = () => {
   // History
   const [runs, setRuns] = useState<RunRow[]>([]);
 
+  /** Reservado para sensores BLE (PPM); hoy solo UI. */
+  const [liveHeartRate, setLiveHeartRate] = useState<number | null>(null);
+
   const fetchRuns = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
-      .from('cardio_runs')
+      .from('activities')
       .select('*')
       .eq('user_id', user.id)
       .order('started_at', { ascending: false });
@@ -149,7 +189,14 @@ const Cardio = () => {
     }
     watchIdRef.current = navigator.geolocation.watchPosition(
       (p) => {
-        const point: LatLng = { lat: p.coords.latitude, lng: p.coords.longitude, t: Date.now() };
+        const alt =
+          p.coords.altitude != null && Number.isFinite(p.coords.altitude) ? p.coords.altitude : null;
+        const point: LatLng = {
+          lat: p.coords.latitude,
+          lng: p.coords.longitude,
+          t: Date.now(),
+          alt,
+        };
         setPosition([point.lat, point.lng]);
         setRoute(prev => {
           if (prev.length === 0) return [point];
@@ -184,6 +231,16 @@ const Cardio = () => {
     return () => { if (tickRef.current) window.clearInterval(tickRef.current); };
   }, [phase]);
 
+  // Aviso de voz al completar cada kilómetro entero (carrera en curso: activa o en pausa; incluye simulador +1km).
+  useEffect(() => {
+    if (phase !== 'active' && phase !== 'paused') return;
+    const completedKm = Math.floor(distance / 1000);
+    if (completedKm <= lastAnnouncedKmRef.current) return;
+    const from = lastAnnouncedKmRef.current;
+    lastAnnouncedKmRef.current = completedKm;
+    speakKmMilestones(from, completedKm, distance, seconds);
+  }, [distance, seconds, phase]);
+
   const handleStart = async () => {
     if (phase === 'paused') { setPhase('active'); return; }
     speak('preparate');
@@ -195,7 +252,9 @@ const Cardio = () => {
     setCountdown(null);
     if (!startWatch()) return;
     startedAtRef.current = new Date();
+    lastAnnouncedKmRef.current = 0;
     setRoute([]); setDistance(0); setSeconds(0);
+    setLiveHeartRate(null);
     setPhase('active');
   };
 
@@ -209,22 +268,36 @@ const Cardio = () => {
     const dist = distance;
     const km = dist / 1000;
     const pace = km > 0 ? Math.round(dur / km) : 0;
-    successChime();
-    speak('carrera finalizada');
     setPhase('idle');
-    if (dist < 10 || dur < 5) {
-      toast({ title: 'Carrera muy corta', description: 'No se guardó.' });
+    if (dist < MIN_RUN_METERS) {
+      speak('Carrera demasiado corta para guardar');
+      toast({ title: 'Carrera demasiado corta', description: 'Menos de 50 metros. No se guardó.' });
       setRoute([]); setDistance(0); setSeconds(0);
+      lastAnnouncedKmRef.current = 0;
+      setLiveHeartRate(null);
       return;
     }
+    successChime();
+    speak('carrera finalizada');
     if (user) {
-      const { error } = await supabase.from('cardio_runs').insert({
+      const kmSaved = dist / 1000;
+      const calories = estimateRunCalories(kmSaved);
+      const steps = estimateRunSteps(kmSaved);
+      const splitsPayload = computeKmSplits(route);
+      const elevationGain = computePositiveElevationGainM(route);
+      const hasAltSamples = route.some((p) => p.alt != null && Number.isFinite(p.alt));
+      const { error } = await supabase.from('activities').insert({
         user_id: user.id,
         started_at: (startedAtRef.current || new Date()).toISOString(),
         duration_seconds: dur,
         distance_meters: dist,
         avg_pace_seconds_per_km: pace,
-        route: route as never,
+        route_data: route as never,
+        splits: splitsPayload as never,
+        calories,
+        steps,
+        elevation_gain_m: hasAltSamples ? elevationGain : null,
+        avg_heart_rate: liveHeartRate,
       });
       if (!error) {
         toast({ title: '¡Carrera guardada!', description: `${km.toFixed(2)} km · ${fmtTime(dur)}` });
@@ -232,6 +305,8 @@ const Cardio = () => {
       }
     }
     setRoute([]); setDistance(0); setSeconds(0);
+    lastAnnouncedKmRef.current = 0;
+    setLiveHeartRate(null);
   };
 
   // Long-press finish
@@ -260,6 +335,20 @@ const Cardio = () => {
   const km = distance / 1000;
   const pace = km > 0 ? seconds / km : 0;
 
+  const displayRoute = useMemo(() => smoothRouteForDisplay(route), [route]);
+  const routeHasAlt = useMemo(
+    () => route.some((p) => p.alt != null && Number.isFinite(p.alt)),
+    [route],
+  );
+  const livePositiveElevM = useMemo(() => computePositiveElevationGainM(route), [route]);
+
+  const connectHrSensor = () => {
+    toast({
+      title: 'Sensor de ritmo cardíaco',
+      description: 'Próximamente: vinculación Bluetooth (BLE) con pulsómetros externos.',
+    });
+  };
+
   // Monthly stats
   const monthStats = useMemo(() => {
     const now = new Date();
@@ -275,16 +364,42 @@ const Cardio = () => {
     return { km: totalKm, count: inMonth.length, time: totalTime, pace: avgPace };
   }, [runs]);
 
-  const polyline = useMemo(
-    () => route.map(p => [p.lat, p.lng] as [number, number]),
-    [route]
-  );
+  const devSimulateKm = () => {
+    const paceThisKm = randomPaceSecPerKmVillegas();
+    setRoute((prev) => {
+      let next: LatLng[];
+      if (prev.length === 0) {
+        const seed = randomSeedNearVillegas();
+        next = [seed, ...generateVillegasKmExtension(seed, paceThisKm)];
+      } else {
+        const origin = prev[prev.length - 1];
+        next = [...prev, ...generateVillegasKmExtension(origin, paceThisKm)];
+      }
+      const last = next[next.length - 1];
+      queueMicrotask(() => setPosition([last.lat, last.lng]));
+      return next;
+    });
+    setDistance((d) => d + 1000);
+    setSeconds((s) => s + paceThisKm);
+  };
 
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header tabs */}
       <div className="flex items-center justify-between px-4 pt-4">
         <h1 className="text-2xl font-bold">Modo Ruta</h1>
+        <div className="flex items-center gap-2">
+          {import.meta.env.DEV && (
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
+              <input
+                type="checkbox"
+                className="accent-primary"
+                checked={isSimulated}
+                onChange={(e) => setIsSimulated(e.target.checked)}
+              />
+              Sim
+            </label>
+          )}
         <div className="flex items-center gap-1 rounded-full bg-card p-1">
           <button
             onClick={() => setTab('run')}
@@ -295,10 +410,21 @@ const Cardio = () => {
             className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition ${tab === 'history' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
           ><HistoryIcon className="h-3.5 w-3.5" /> Actividad</button>
         </div>
+        </div>
       </div>
 
       {tab === 'run' ? (
         <div className="relative mt-3 h-[calc(100vh-180px)] overflow-hidden">
+          {import.meta.env.DEV && isSimulated && (phase === 'active' || phase === 'paused') && (
+            <button
+              type="button"
+              onClick={devSimulateKm}
+              className="absolute bottom-20 right-2 z-[60] rounded-md border border-border bg-card/95 px-2 py-1 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm"
+              title="Dev: +1 km con GPS simulado (General Villegas) y ritmo 4'30''–6'00''"
+            >
+              +1km
+            </button>
+          )}
           {/* Countdown overlay */}
           {countdown !== null && (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-background">
@@ -321,9 +447,14 @@ const Cardio = () => {
                   <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Ritmo</div>
                   <div className="mt-1 text-2xl font-bold tabular-nums text-foreground">{fmtPace(pace)}</div>
                 </div>
-                <div>
+                <div className="min-h-[4.5rem]">
                   <div className="text-[10px] uppercase tracking-widest text-muted-foreground">PPM</div>
-                  <div className="mt-1 text-2xl font-bold tabular-nums text-foreground">--</div>
+                  <div className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+                    {liveHeartRate != null ? liveHeartRate : '—'}
+                  </div>
+                  {liveHeartRate == null && (
+                    <p className="mt-0.5 text-[9px] leading-tight text-muted-foreground">Sensor no vinculado</p>
+                  )}
                 </div>
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Tiempo</div>
@@ -331,15 +462,19 @@ const Cardio = () => {
                 </div>
               </div>
 
-              {/* Center: massive distance */}
-              <div className="flex flex-1 flex-col items-center justify-center">
-                <div
-                  className="font-extrabold tabular-nums text-primary"
-                  style={{ fontSize: 'clamp(5rem, 28vw, 10rem)', lineHeight: 1 }}
-                >
-                  {km.toFixed(2).replace('.', ',')}
+              {/* Center: distance + unit (single line, running-app style) */}
+              <div className="flex min-h-0 flex-1 flex-col justify-center px-2 py-4">
+                <div className="flex w-full items-baseline justify-center gap-1.5 sm:gap-2">
+                  <span
+                    className="font-extrabold tabular-nums"
+                    style={{ color: NRC_GREEN, fontSize: 'clamp(5rem, 28vw, 10rem)', lineHeight: 0.9 }}
+                  >
+                    {km.toFixed(2).replace('.', ',')}
+                  </span>
+                  <span className="text-lg font-light tracking-wide text-muted-foreground/85 sm:text-2xl">
+                    km
+                  </span>
                 </div>
-                <div className="mt-2 text-xs uppercase tracking-[0.3em] text-muted-foreground">Kilómetros</div>
               </div>
 
               {/* Bottom: pause + long-press finish */}
@@ -387,9 +522,8 @@ const Cardio = () => {
                     style={{ width: '100%', height: '100%', background: mapBg }}
                   >
                     <TileLayer url={tileUrl} attribution={TILE_ATTR} />
-                    {polyline.length > 1 && (
-                      <Polyline positions={polyline} pathOptions={{ color: '#22FF55', weight: 5, opacity: 0.9 }} />
-                    )}
+                    <PaceHeatPolylines points={displayRoute} avgPaceSecPerKm={pace} mapTheme={mapHeatTheme} />
+                    <KmMilestoneMarkers points={displayRoute} mapTheme={mapHeatTheme} />
                     <Marker position={position} icon={dotIcon} />
                     <Recenter center={position} />
                   </MapContainer>
@@ -410,8 +544,11 @@ const Cardio = () => {
                   <Metric label="Tiempo" value={fmtTime(seconds)} big />
                   {/* Row 2 */}
                   <Metric label="Calorías" value="0" />
-                  <Metric label="Elevación" value="0 m" />
-                  <Metric label="PPM" value="--" />
+                  <Metric
+                    label="Desnivel +"
+                    value={routeHasAlt ? `${livePositiveElevM} m` : '—'}
+                  />
+                  <Metric label="PPM" value={liveHeartRate != null ? String(liveHeartRate) : '—'} />
                 </div>
 
                 <div className="flex items-center justify-center gap-10">
@@ -458,9 +595,8 @@ const Cardio = () => {
                 style={{ width: '100%', height: '100%', background: mapBg }}
               >
                 <TileLayer url={tileUrl} attribution={TILE_ATTR} />
-                {polyline.length > 1 && (
-                  <Polyline positions={polyline} pathOptions={{ color: '#22FF55', weight: 5, opacity: 0.9 }} />
-                )}
+                <PaceHeatPolylines points={displayRoute} avgPaceSecPerKm={pace} mapTheme={mapHeatTheme} />
+                <KmMilestoneMarkers points={displayRoute} mapTheme={mapHeatTheme} />
                 {position && <Marker position={position} icon={dotIcon} />}
                 <Recenter center={position} />
               </MapContainer>
@@ -476,9 +612,17 @@ const Cardio = () => {
             {phase === 'idle' && (
               <div className="pointer-events-auto flex flex-col items-center gap-3">
                 <button
+                  type="button"
+                  onClick={connectHrSensor}
+                  className="flex items-center gap-2 rounded-2xl border border-border bg-card/95 px-4 py-3 text-sm font-semibold text-foreground shadow-lg backdrop-blur-sm transition active:scale-[0.98]"
+                >
+                  <Bluetooth className="h-5 w-5 text-primary" />
+                  Conectar Sensor de Ritmo Cardíaco
+                </button>
+                <button
                   onClick={handleStart}
                   className="flex h-32 w-32 items-center justify-center rounded-full text-xl font-extrabold tracking-wider text-black shadow-2xl transition active:scale-95"
-                  style={{ background: '#22FF55', boxShadow: '0 10px 40px rgba(34,255,85,0.45)' }}
+                  style={{ background: NRC_GREEN, boxShadow: '0 10px 40px rgba(57,255,20,0.45)' }}
                 >
                   COMENZAR
                 </button>
@@ -533,14 +677,18 @@ const RunCard = ({ run }: { run: RunRow }) => {
   const { resolved } = useTheme();
   const tileUrl = resolved === 'dark' ? DARK_TILES : LIGHT_TILES;
   const mapBg = resolved === 'dark' ? '#0b0f14' : '#e9ecef';
+  const mapHeatTheme = resolved === 'dark' ? 'dark' : 'light';
   const km = Number(run.distance_meters) / 1000;
   const date = new Date(run.started_at);
-  const route = (run.route || []) as LatLng[];
+  const route = (run.route_data || []) as LatLng[];
+  const displayRoute = useMemo(() => smoothRouteForDisplay(route), [route]);
   const center: [number, number] | null = route.length > 0 ? [route[0].lat, route[0].lng] : null;
-  const poly = route.map(p => [p.lat, p.lng] as [number, number]);
 
   return (
-    <div className="overflow-hidden rounded-2xl bg-card">
+    <Link
+      to={`/actividad/${run.id}`}
+      className="block overflow-hidden rounded-2xl bg-card ring-offset-background transition hover:ring-2 hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
       <div className="h-32 w-full bg-secondary">
         {center ? (
           <MapContainer
@@ -555,9 +703,7 @@ const RunCard = ({ run }: { run: RunRow }) => {
             style={{ width: '100%', height: '100%', background: mapBg }}
           >
             <TileLayer url={tileUrl} attribution={TILE_ATTR} />
-            {poly.length > 1 && (
-              <Polyline positions={poly} pathOptions={{ color: '#22FF55', weight: 4 }} />
-            )}
+            <PaceHeatPolylines points={displayRoute} avgPaceSecPerKm={run.avg_pace_seconds_per_km} mapTheme={mapHeatTheme} />
           </MapContainer>
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Sin ruta</div>
@@ -575,7 +721,7 @@ const RunCard = ({ run }: { run: RunRow }) => {
           <div className="text-xs text-muted-foreground">{fmtPace(run.avg_pace_seconds_per_km)} /km</div>
         </div>
       </div>
-    </div>
+    </Link>
   );
 };
 

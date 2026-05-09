@@ -13,6 +13,8 @@ const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  if (location.pathname.startsWith('/actividad/')) return null;
+
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-lg"

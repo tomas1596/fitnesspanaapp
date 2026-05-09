@@ -10,6 +10,9 @@ const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -30,9 +33,21 @@ const Auth = () => {
     setSuccessMsg('');
     setSubmitting(true);
 
+    if (!isLogin) {
+      if (!firstName.trim() || !lastName.trim() || !dateOfBirth) {
+        setError('Completá nombre, apellido y fecha de nacimiento.');
+        setSubmitting(false);
+        return;
+      }
+    }
+
     const { error } = isLogin
       ? await signIn(email, password)
-      : await signUp(email, password);
+      : await signUp(email, password, {
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          dateOfBirth,
+        });
 
     if (error) {
       setError(error.message);
@@ -53,12 +68,45 @@ const Auth = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
+        {!isLogin && (
+          <>
+            <Input
+              type="text"
+              placeholder="Nombre"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              required={!isLogin}
+              autoComplete="given-name"
+              className="h-14 rounded-xl border-none bg-card text-foreground placeholder:text-muted-foreground"
+            />
+            <Input
+              type="text"
+              placeholder="Apellido"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              required={!isLogin}
+              autoComplete="family-name"
+              className="h-14 rounded-xl border-none bg-card text-foreground placeholder:text-muted-foreground"
+            />
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Fecha de nacimiento</label>
+              <Input
+                type="date"
+                value={dateOfBirth}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+                required={!isLogin}
+                className="h-14 rounded-xl border-none bg-card text-foreground"
+              />
+            </div>
+          </>
+        )}
         <Input
           type="email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
+          autoComplete="email"
           className="h-14 rounded-xl border-none bg-card text-foreground placeholder:text-muted-foreground"
         />
         <Input
@@ -68,6 +116,7 @@ const Auth = () => {
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={6}
+          autoComplete={isLogin ? 'current-password' : 'new-password'}
           className="h-14 rounded-xl border-none bg-card text-foreground placeholder:text-muted-foreground"
         />
 
@@ -84,7 +133,11 @@ const Auth = () => {
 
         <button
           type="button"
-          onClick={() => { setIsLogin(!isLogin); setError(''); setSuccessMsg(''); }}
+          onClick={() => {
+            setIsLogin(!isLogin);
+            setError('');
+            setSuccessMsg('');
+          }}
           className="w-full text-center text-sm text-muted-foreground"
         >
           {isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}

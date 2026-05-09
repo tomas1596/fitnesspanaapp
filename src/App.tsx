@@ -1,17 +1,16 @@
-import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
-import { supabase } from "@/integrations/supabase/client";
 import BottomNav from "@/components/BottomNav";
 import Auth from "./pages/Auth";
 import Workout from "./pages/Workout";
 import Nutrition from "./pages/Nutrition";
 import Timer from "./pages/Timer";
 import Cardio from "./pages/Cardio";
+import ActivityDetail from "./pages/ActivityDetail";
 import Profile from "./pages/Profile";
 import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
@@ -26,54 +25,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const AppRoutes = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, checkingOnboarding, needsOnboarding } = useAuth();
   const location = useLocation();
-  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
-
-  useEffect(() => {
-    if (!user) {
-      setCheckingOnboarding(false);
-      setNeedsOnboarding(false);
-      return;
-    }
-
-    let active = true;
-    const checkProfile = async () => {
-      setCheckingOnboarding(true);
-      const { data } = await supabase
-        .from("profiles")
-        .select("display_name, age, gender, weight, height, activity_level, fitness_goal")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!active) return;
-      const profile = data as {
-        display_name?: string | null;
-        age?: number | null;
-        gender?: string | null;
-        weight?: number | null;
-        height?: number | null;
-        activity_level?: string | null;
-        fitness_goal?: string | null;
-      } | null;
-
-      const missing =
-        !profile ||
-        !profile.display_name ||
-        !profile.age ||
-        !profile.gender ||
-        !profile.weight ||
-        !profile.height ||
-        !profile.activity_level ||
-        !profile.fitness_goal;
-      setNeedsOnboarding(missing);
-      setCheckingOnboarding(false);
-    };
-
-    checkProfile();
-    return () => { active = false; };
-  }, [user]);
 
   if (loading || checkingOnboarding) return null;
 
@@ -91,6 +44,7 @@ const AppRoutes = () => {
         <Route path="/" element={<ProtectedRoute><Workout /></ProtectedRoute>} />
         <Route path="/timer" element={<ProtectedRoute><Timer /></ProtectedRoute>} />
         <Route path="/cardio" element={<ProtectedRoute><Cardio /></ProtectedRoute>} />
+        <Route path="/actividad/:id" element={<ProtectedRoute><ActivityDetail /></ProtectedRoute>} />
         <Route path="/nutrition" element={<ProtectedRoute><Nutrition /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />

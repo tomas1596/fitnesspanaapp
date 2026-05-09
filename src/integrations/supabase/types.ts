@@ -50,35 +50,92 @@ export type Database = {
         }
         Relationships: []
       }
-      cardio_runs: {
+      custom_foods: {
         Row: {
-          avg_pace_seconds_per_km: number
+          base_calories: number
+          base_carbs: number
+          base_fat: number
+          base_protein: number
           created_at: string
-          distance_meters: number
-          duration_seconds: number
           id: string
-          route: Json
-          started_at: string
+          name: string
           user_id: string
         }
         Insert: {
-          avg_pace_seconds_per_km?: number
+          base_calories?: number
+          base_carbs?: number
+          base_fat?: number
+          base_protein?: number
           created_at?: string
-          distance_meters?: number
-          duration_seconds?: number
           id?: string
-          route?: Json
-          started_at?: string
+          name: string
           user_id: string
         }
         Update: {
+          base_calories?: number
+          base_carbs?: number
+          base_fat?: number
+          base_protein?: number
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      activities: {
+        Row: {
+          avg_heart_rate: number | null
+          avg_pace_seconds_per_km: number
+          cadence: number | null
+          calories: number | null
+          created_at: string
+          distance_meters: number
+          duration_seconds: number
+          elevation_gain_m: number | null
+          elevation_loss_m: number | null
+          id: string
+          route_data: Json
+          splits: Json
+          steps: number | null
+          started_at: string
+          title: string | null
+          user_id: string
+        }
+        Insert: {
+          avg_heart_rate?: number | null
           avg_pace_seconds_per_km?: number
+          cadence?: number | null
+          calories?: number | null
           created_at?: string
           distance_meters?: number
           duration_seconds?: number
+          elevation_gain_m?: number | null
+          elevation_loss_m?: number | null
           id?: string
-          route?: Json
+          route_data?: Json
+          splits?: Json
+          steps?: number | null
           started_at?: string
+          title?: string | null
+          user_id: string
+        }
+        Update: {
+          avg_heart_rate?: number | null
+          avg_pace_seconds_per_km?: number
+          cadence?: number | null
+          calories?: number | null
+          created_at?: string
+          distance_meters?: number
+          duration_seconds?: number
+          elevation_gain_m?: number | null
+          elevation_loss_m?: number | null
+          id?: string
+          route_data?: Json
+          splits?: Json
+          steps?: number | null
+          started_at?: string
+          title?: string | null
           user_id?: string
         }
         Relationships: []
@@ -226,17 +283,58 @@ export type Database = {
         }
         Relationships: []
       }
+      nutrition_logs: {
+        Row: {
+          calories: number
+          carbs: number
+          consumed_at: string
+          fat: number
+          food_name: string
+          id: string
+          meal_type: string
+          protein: number
+          quantity_multiplier: number
+          user_id: string
+        }
+        Insert: {
+          calories?: number
+          carbs?: number
+          consumed_at?: string
+          fat?: number
+          food_name: string
+          id?: string
+          meal_type: string
+          protein?: number
+          quantity_multiplier?: number
+          user_id: string
+        }
+        Update: {
+          calories?: number
+          carbs?: number
+          consumed_at?: string
+          fat?: number
+          food_name?: string
+          id?: string
+          meal_type?: string
+          protein?: number
+          quantity_multiplier?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           activity_level: string | null
-          age: number | null
           avatar_url: string | null
           created_at: string
+          date_of_birth: string | null
           display_name: string | null
+          first_name: string | null
           fitness_goal: string | null
           gender: string | null
           height: number | null
           id: string
+          last_name: string | null
           step_goal: number
           target_weight: number | null
           updated_at: string
@@ -245,14 +343,16 @@ export type Database = {
         }
         Insert: {
           activity_level?: string | null
-          age?: number | null
           avatar_url?: string | null
           created_at?: string
+          date_of_birth?: string | null
           display_name?: string | null
+          first_name?: string | null
           fitness_goal?: string | null
           gender?: string | null
           height?: number | null
           id?: string
+          last_name?: string | null
           step_goal?: number
           target_weight?: number | null
           updated_at?: string
@@ -261,14 +361,16 @@ export type Database = {
         }
         Update: {
           activity_level?: string | null
-          age?: number | null
           avatar_url?: string | null
           created_at?: string
+          date_of_birth?: string | null
           display_name?: string | null
+          first_name?: string | null
           fitness_goal?: string | null
           gender?: string | null
           height?: number | null
           id?: string
+          last_name?: string | null
           step_goal?: number
           target_weight?: number | null
           updated_at?: string

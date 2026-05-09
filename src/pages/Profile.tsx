@@ -8,11 +8,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import {
   LogOut, User, Activity, Flame, Beef, Droplets, Save, Camera, Lock,
-  Target, Plus, TrendingUp, Settings2, Sun, Moon,
+  Target, Plus, TrendingUp, Settings2, Sun, Moon, Pencil,
 } from 'lucide-react';
 import StepsRing from '@/components/StepsRing';
 import EvolutionSheet from '@/components/EvolutionSheet';
 import { useTheme } from '@/hooks/useTheme';
+import { ACTIVITY_LEVEL_OPTIONS, FITNESS_GOAL_OPTIONS } from '@/lib/profileOptions';
+import { calculateAge } from '@/lib/age';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -22,12 +24,15 @@ const Profile = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme, setTheme } = useTheme();
 
-  // Profile basics
-  const [age, setAge] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [height, setHeight] = useState('');
   const [weight, setWeight] = useState('');
   const [gender, setGender] = useState('');
   const [targetWeight, setTargetWeight] = useState('');
+  const [activityLevel, setActivityLevel] = useState('');
+  const [fitnessGoal, setFitnessGoal] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -35,26 +40,36 @@ const Profile = () => {
   const [newPassword, setNewPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
 
-  // Steps
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [draftFirst, setDraftFirst] = useState('');
+  const [draftLast, setDraftLast] = useState('');
+  const [draftDob, setDraftDob] = useState('');
+  const [savingIdentity, setSavingIdentity] = useState(false);
+
   const [steps, setSteps] = useState(0);
   const [stepsId, setStepsId] = useState<string | null>(null);
   const [stepGoal, setStepGoal] = useState(10000);
   const [goalDialog, setGoalDialog] = useState(false);
   const [draftGoal, setDraftGoal] = useState('10000');
 
-  // Evolution timeline
   const [evolutionOpen, setEvolutionOpen] = useState(false);
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
     const today = todayStr();
-    const { data } = await supabase.from('profiles').select('age, height, weight, gender, target_weight, avatar_url, step_goal').eq('user_id', user.id).single();
+    const { data } = await supabase.from('profiles').select(
+      'first_name, last_name, date_of_birth, height, weight, gender, target_weight, avatar_url, step_goal, activity_level, fitness_goal',
+    ).eq('user_id', user.id).single();
     if (data) {
-      setAge(data.age?.toString() || '');
+      setFirstName(data.first_name || '');
+      setLastName(data.last_name || '');
+      setDateOfBirth(data.date_of_birth || '');
       setHeight(data.height?.toString() || '');
       setWeight(data.weight?.toString() || '');
       setGender(data.gender || '');
       setTargetWeight(data.target_weight?.toString() || '');
+      setActivityLevel(data.activity_level || '');
+      setFitnessGoal(data.fitness_goal || '');
       setAvatarUrl(data.avatar_url || null);
       setStepGoal(data.step_goal || 10000);
       setDraftGoal((data.step_goal || 10000).toString());
@@ -65,15 +80,51 @@ const Profile = () => {
 
   useEffect(() => { loadProfile(); }, [loadProfile]);
 
+  const openEditProfile = () => {
+    setDraftFirst(firstName);
+    setDraftLast(lastName);
+    setDraftDob(dateOfBirth);
+    setEditProfileOpen(true);
+  };
+
+  const saveIdentity = async () => {
+    if (!user) return;
+    const fn = draftFirst.trim();
+    const ln = draftLast.trim();
+    if (!fn || !ln || !draftDob) {
+      toast({ title: 'Faltan datos', description: 'Nombre, apellido y fecha de nacimiento son obligatorios.', variant: 'destructive' });
+      return;
+    }
+    setSavingIdentity(true);
+    const displayName = [fn, ln].filter(Boolean).join(' ');
+    const { error } = await supabase.from('profiles').update({
+      first_name: fn,
+      last_name: ln,
+      date_of_birth: draftDob,
+      display_name: displayName,
+    }).eq('user_id', user.id);
+    setSavingIdentity(false);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setFirstName(fn);
+    setLastName(ln);
+    setDateOfBirth(draftDob);
+    setEditProfileOpen(false);
+    toast({ title: 'Perfil actualizado' });
+  };
+
   const saveProfile = async () => {
     if (!user) return;
     setSaving(true);
     const { error } = await supabase.from('profiles').update({
-      age: age ? parseInt(age) : null,
       height: height ? parseFloat(height) : null,
       weight: weight ? parseFloat(weight) : null,
       gender: gender || null,
       target_weight: targetWeight ? parseFloat(targetWeight) : null,
+      activity_level: activityLevel || null,
+      fitness_goal: fitnessGoal || null,
     }).eq('user_id', user.id);
     setSaving(false);
     if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
@@ -103,7 +154,7 @@ const Profile = () => {
       await supabase.from('step_logs').update({ steps: next }).eq('id', stepsId);
     } else {
       const { data } = await supabase.from('step_logs').insert(
-        { user_id: user.id, log_date: today, steps: next }
+        { user_id: user.id, log_date: today, steps: next },
       ).select().single();
       if (data) setStepsId(data.id);
     }
@@ -127,15 +178,20 @@ const Profile = () => {
     setNewPassword(''); setPasswordDialog(false);
   };
 
-  // Derived
-  const w = parseFloat(weight); const h = parseFloat(height); const a = parseInt(age); const tw = parseFloat(targetWeight);
-  const hasData = w > 0 && h > 0 && a > 0 && gender;
+  const w = parseFloat(weight);
+  const h = parseFloat(height);
+  const tw = parseFloat(targetWeight);
+  const ageYears = calculateAge(dateOfBirth);
+  const hasData = w > 0 && h > 0 && ageYears != null && ageYears > 0 && !!gender;
   const imc = hasData ? w / ((h / 100) ** 2) : 0;
-  const bmr = hasData ? (gender === 'male' ? 10 * w + 6.25 * h - 5 * a + 5 : 10 * w + 6.25 * h - 5 * a - 161) : 0;
+  const bmr = hasData ? (gender === 'male' ? 10 * w + 6.25 * h - 5 * ageYears + 5 : 10 * w + 6.25 * h - 5 * ageYears - 161) : 0;
   const tdee = Math.round(bmr * 1.55);
   const proteinGoal = hasData ? Math.round(w * 2) : 0;
   const hydrationL = hasData ? ((w * 35) / 1000).toFixed(1) : '0';
   const weightDiff = w > 0 && tw > 0 ? (w - tw) : null;
+
+  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+  const ageLabel = ageYears != null ? `${ageYears} años` : 'Completá tu fecha de nacimiento';
 
   return (
     <div className="min-h-screen bg-background px-4 pb-24 pt-6">
@@ -144,7 +200,7 @@ const Profile = () => {
           <h1 className="text-2xl font-bold text-foreground">Perfil</h1>
           <div className="w-48">
             <Select value={theme} onValueChange={(v) => setTheme(v as 'light' | 'dark' | 'system')}>
-              <SelectTrigger className="h-10 rounded-xl border-0 bg-card text-xs font-medium text-foreground">
+              <SelectTrigger className="h-10 rounded-xl border border-input bg-card text-xs font-medium text-foreground shadow-sm">
                 <SelectValue placeholder="Tema" />
               </SelectTrigger>
               <SelectContent>
@@ -160,7 +216,6 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* User card (clean) */}
         <div className="rounded-2xl bg-card p-4">
           <div className="flex items-center gap-4">
             <div className="relative">
@@ -171,7 +226,7 @@ const Profile = () => {
                 disabled={uploadingAvatar}
                 className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-accent"
               >
-                {avatarUrl ? <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" /> :
+                {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> :
                   <User className="h-6 w-6 text-muted-foreground" />}
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
                   <Camera className="h-4 w-4 text-white" />
@@ -179,13 +234,17 @@ const Profile = () => {
               </button>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground">{user?.email}</p>
-              <p className="text-xs text-muted-foreground">Atleta</p>
+              <p className="text-lg font-semibold leading-tight text-foreground">
+                {fullName || 'Tu nombre'}
+              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">{ageLabel}</p>
             </div>
+            <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0 rounded-xl" onClick={openEditProfile} aria-label="Editar perfil">
+              <Pencil className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
-        {/* Steps NEAT */}
         <div className="rounded-2xl bg-card p-4">
           <div className="flex items-center gap-4">
             <StepsRing steps={steps} goal={stepGoal} />
@@ -204,7 +263,7 @@ const Profile = () => {
                   value={steps || ''}
                   placeholder="0"
                   onChange={e => updateSteps(parseInt(e.target.value) || 0)}
-                  className="h-10 rounded-xl border-0 bg-secondary text-sm"
+                  className="h-10 rounded-xl border border-input bg-secondary text-sm"
                 />
                 <Button size="sm" variant="secondary" onClick={() => updateSteps(steps + 1000)} className="h-10 rounded-xl px-3">
                   <Plus className="mr-1 h-3 w-3" /> 1k
@@ -214,7 +273,6 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* Evolution Físic */}
         <Button
           onClick={() => setEvolutionOpen(true)}
           variant="secondary"
@@ -226,21 +284,45 @@ const Profile = () => {
           <span className="text-xs text-muted-foreground">›</span>
         </Button>
 
-        {/* Biometric / goals */}
         <div className="rounded-2xl bg-card p-4">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Datos & objetivos</h2>
           <div className="grid grid-cols-2 gap-2">
-            <LabeledNum label="Edad" value={age} onChange={setAge} />
             <LabeledNum label="Altura (cm)" value={height} onChange={setHeight} />
             <LabeledNum label="Peso (kg)" value={weight} onChange={setWeight} />
             <LabeledNum label="Peso meta (kg)" value={targetWeight} onChange={setTargetWeight} />
             <div className="col-span-2">
               <label className="mb-1 block text-[11px] text-muted-foreground">Género</label>
               <Select value={gender} onValueChange={setGender}>
-                <SelectTrigger className="h-10 rounded-xl border-0 bg-secondary text-sm"><SelectValue placeholder="Elegir" /></SelectTrigger>
+                <SelectTrigger className="h-10 rounded-xl border border-input bg-secondary text-sm"><SelectValue placeholder="Elegir" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="male">Masculino</SelectItem>
                   <SelectItem value="female">Femenino</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2">
+              <label className="mb-1 block text-[11px] text-muted-foreground">Nivel de actividad</label>
+              <Select value={activityLevel || undefined} onValueChange={setActivityLevel}>
+                <SelectTrigger className="h-10 rounded-xl border border-input bg-secondary text-sm">
+                  <SelectValue placeholder="Elegir nivel" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACTIVITY_LEVEL_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2">
+              <label className="mb-1 block text-[11px] text-muted-foreground">Objetivo fitness</label>
+              <Select value={fitnessGoal || undefined} onValueChange={setFitnessGoal}>
+                <SelectTrigger className="h-10 rounded-xl border border-input bg-secondary text-sm">
+                  <SelectValue placeholder="Elegir objetivo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FITNESS_GOAL_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -257,7 +339,6 @@ const Profile = () => {
           </Button>
         </div>
 
-        {/* Calculated cards */}
         {hasData && (
           <div className="grid grid-cols-4 gap-2">
             <MiniStat icon={Activity} label="IMC" value={imc.toFixed(1)} />
@@ -267,7 +348,6 @@ const Profile = () => {
           </div>
         )}
 
-        {/* Account */}
         <div className="rounded-2xl bg-card p-3">
           <Button variant="ghost" onClick={() => setPasswordDialog(true)} className="h-10 w-full justify-start rounded-xl text-sm">
             <Lock className="mr-2 h-4 w-4" /> Cambiar Contraseña
@@ -280,12 +360,37 @@ const Profile = () => {
 
       <EvolutionSheet open={evolutionOpen} onClose={() => setEvolutionOpen(false)} />
 
+      <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
+        <DialogContent className="rounded-2xl border-0 bg-card">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Editar perfil</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Nombre</label>
+              <Input value={draftFirst} onChange={(e) => setDraftFirst(e.target.value)} className="h-11 rounded-xl border border-input bg-secondary" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Apellido</label>
+              <Input value={draftLast} onChange={(e) => setDraftLast(e.target.value)} className="h-11 rounded-xl border border-input bg-secondary" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Fecha de nacimiento</label>
+              <Input type="date" value={draftDob} onChange={(e) => setDraftDob(e.target.value)} className="h-11 rounded-xl border border-input bg-secondary" />
+            </div>
+            <Button onClick={() => void saveIdentity()} disabled={savingIdentity} className="h-11 w-full rounded-xl font-semibold">
+              {savingIdentity ? 'Guardando...' : 'Guardar cambios'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={goalDialog} onOpenChange={setGoalDialog}>
         <DialogContent className="rounded-2xl border-0 bg-card">
           <DialogHeader><DialogTitle className="text-foreground">Meta diaria de pasos</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <Input type="number" inputMode="numeric" value={draftGoal}
-              onChange={e => setDraftGoal(e.target.value)} className="h-12 rounded-xl border-0 bg-secondary" />
+              onChange={e => setDraftGoal(e.target.value)} className="h-12 rounded-xl border border-input bg-secondary" />
             <Button onClick={saveStepGoal} className="h-12 w-full rounded-xl text-base font-semibold">Guardar</Button>
           </div>
         </DialogContent>
@@ -296,7 +401,7 @@ const Profile = () => {
           <DialogHeader><DialogTitle className="text-foreground">Cambiar Contraseña</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <Input type="password" placeholder="Nueva contraseña (mín. 6)" value={newPassword}
-              onChange={e => setNewPassword(e.target.value)} className="h-12 rounded-xl border-0 bg-secondary" />
+              onChange={e => setNewPassword(e.target.value)} className="h-12 rounded-xl border border-input bg-secondary" />
             <Button onClick={changePassword} disabled={changingPassword} className="h-12 w-full rounded-xl text-base font-semibold">
               {changingPassword ? 'Guardando...' : 'Actualizar'}
             </Button>
@@ -311,7 +416,7 @@ const LabeledNum = ({ label, value, onChange }: { label: string; value: string; 
   <div>
     <label className="mb-1 block text-[11px] text-muted-foreground">{label}</label>
     <Input type="number" inputMode="decimal" value={value} onChange={e => onChange(e.target.value)}
-      className="h-10 rounded-xl border-0 bg-secondary text-sm" />
+      className="h-10 rounded-xl border border-input bg-secondary text-sm" />
   </div>
 );
 
