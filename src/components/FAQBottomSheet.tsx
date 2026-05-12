@@ -11,14 +11,19 @@ const MP_ALIAS = 'tomaspanadeiro.mp';
 function CopyAliasButton() {
   const { toast } = useToast();
 
-  const copy = useCallback(async () => {
+  const copy = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     try {
+      // Esta es la forma moderna y correcta. Solo funciona en HTTPS (Netlify)
       await navigator.clipboard.writeText(MP_ALIAS);
       toast({ title: '¡Copiado!', description: 'El alias se guardó en el portapapeles.' });
-    } catch {
+    } catch (err) {
+      // Si salta esto, es porque lo estás probando en localhost sin HTTPS
       toast({
-        title: 'No se pudo copiar',
-        description: 'Copiá el alias manualmente.',
+        title: 'Error de entorno',
+        description: 'Copiá el alias a mano. (Esto se soluciona al subir a Netlify).',
         variant: 'destructive',
       });
     }
@@ -30,7 +35,7 @@ function CopyAliasButton() {
       variant="ghost"
       size="icon"
       className="h-8 w-8 shrink-0 rounded-lg text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-      onClick={() => void copy()}
+      onClick={copy}
       aria-label="Copiar alias de Mercado Pago"
     >
       <Copy className="h-4 w-4" />
