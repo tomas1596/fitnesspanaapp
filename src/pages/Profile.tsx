@@ -12,7 +12,6 @@ import {
   Target, Plus, TrendingUp, Settings2, Sun, Moon, Pencil, LayoutDashboard, HelpCircle,
 } from 'lucide-react';
 import StepsRing from '@/components/StepsRing';
-import EvolutionSheet from '@/components/EvolutionSheet';
 import { FAQBottomSheet } from '@/components/FAQBottomSheet';
 import { useTheme } from '@/hooks/useTheme';
 import { ACTIVITY_LEVEL_OPTIONS, FITNESS_GOAL_OPTIONS } from '@/lib/profileOptions';
@@ -77,7 +76,6 @@ const Profile = () => {
   const [goalDialog, setGoalDialog] = useState(false);
   const [draftGoal, setDraftGoal] = useState('10000');
 
-  const [evolutionOpen, setEvolutionOpen] = useState(false);
   const [faqOpen, setFaqOpen] = useState(false);
 
   const loadProfile = useCallback(async () => {
@@ -364,17 +362,6 @@ const Profile = () => {
 
         {isAdmin && <AdminButton />}
 
-        <Button
-          onClick={() => setEvolutionOpen(true)}
-          variant="secondary"
-          className="h-12 w-full justify-between rounded-2xl bg-card px-4 text-sm font-semibold text-foreground hover:bg-card/80"
-        >
-          <span className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-primary" /> Evolución Física
-          </span>
-          <span className="text-xs text-muted-foreground">›</span>
-        </Button>
-
         <div className="rounded-2xl bg-card p-4">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Datos & objetivos</h2>
           <div className="grid grid-cols-2 gap-2">
@@ -447,7 +434,6 @@ const Profile = () => {
         </div>
       </div>
 
-      <EvolutionSheet open={evolutionOpen} onClose={() => setEvolutionOpen(false)} />
       <FAQBottomSheet open={faqOpen} onOpenChange={setFaqOpen} />
 
       <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
