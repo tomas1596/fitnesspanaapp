@@ -35,6 +35,9 @@ type RunRow = {
   avg_heart_rate?: number | null;
 };
 
+/** Web Bluetooth sólo existe en Chrome/Edge (no en Safari/iOS). Evaluado una vez. */
+const BT_SUPPORTED = typeof navigator !== 'undefined' && 'bluetooth' in navigator;
+
 const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 const LIGHT_TILES = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 const TILE_ATTR = '&copy; OpenStreetMap &copy; CARTO';
@@ -189,6 +192,7 @@ const Cardio = () => {
 
   // Reconexión automática al pulsómetro guardado (sin selector).
   useEffect(() => {
+    if (!BT_SUPPORTED) return;
     let cancelled = false;
     (async () => {
       try {
@@ -729,8 +733,8 @@ const Cardio = () => {
             )}
           </div>
 
-          {/* FAB Bluetooth (mapa): gris = desconectado, verde neón = conectado */}
-          {countdown === null && (
+          {/* FAB Bluetooth (mapa): solo visible si el navegador soporta Web Bluetooth */}
+          {BT_SUPPORTED && countdown === null && (
             <button
               type="button"
               onClick={handleHrFab}

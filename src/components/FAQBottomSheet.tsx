@@ -34,7 +34,7 @@ function CopyAliasButton() {
       type="button"
       variant="ghost"
       size="icon"
-      className="h-8 w-8 shrink-0 rounded-lg text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+      className="h-8 w-8 shrink-0 rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100"
       onClick={copy}
       aria-label="Copiar alias de Mercado Pago"
     >
@@ -55,7 +55,7 @@ const FAQ_ITEMS: { question: string; answer: ReactNode }[] = [
       <>
         El pago es por transferencia directa vía Mercado Pago al alias{' '}
         <span className="inline-flex items-center gap-1 align-middle">
-          <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 font-mono text-sm font-semibold text-emerald-400">
+          <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 font-mono text-sm font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
             {MP_ALIAS}
           </span>
           <CopyAliasButton />
@@ -92,12 +92,12 @@ export function FAQBottomSheet({ open, onOpenChange }: Props) {
     <Drawer open={open} onOpenChange={onOpenChange} shouldScaleBackground>
       <DrawerContent
         className={cn(
-          'max-h-[90vh] border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl transition-transform duration-300',
-          'rounded-t-2xl [&>div:first-child]:mt-3 [&>div:first-child]:h-1 [&>div:first-child]:w-10 [&>div:first-child]:rounded-full [&>div:first-child]:bg-zinc-600',
+          'max-h-[90vh] border-zinc-200 bg-white text-zinc-900 shadow-2xl transition-transform duration-300 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100',
+          'rounded-t-2xl [&>div:first-child]:mt-3 [&>div:first-child]:h-1 [&>div:first-child]:w-10 [&>div:first-child]:rounded-full [&>div:first-child]:bg-zinc-300 [&>div:first-child]:dark:bg-zinc-600',
         )}
       >
-        <DrawerHeader className="border-b border-zinc-800/80 px-4 pb-3 pt-0 text-left">
-          <DrawerTitle className="text-lg font-semibold text-zinc-50">Suscripción y ayuda</DrawerTitle>
+        <DrawerHeader className="border-b border-zinc-200 px-4 pb-3 pt-0 text-left dark:border-zinc-800">
+          <DrawerTitle className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">Suscripción y ayuda</DrawerTitle>
           <DrawerDescription className="sr-only">
             Preguntas frecuentes sobre suscripción, pagos y cuenta.
           </DrawerDescription>
@@ -108,15 +108,21 @@ export function FAQBottomSheet({ open, onOpenChange }: Props) {
             {FAQ_ITEMS.map((item, i) => {
               const isOpen = expanded === i;
               return (
-                <div key={item.question} className="rounded-xl border border-zinc-800/80 bg-zinc-900/50">
+                <div
+                  key={item.question}
+                  className="rounded-xl border border-zinc-200 bg-zinc-50/90 dark:border-zinc-800 dark:bg-zinc-900/50"
+                >
                   <button
                     type="button"
                     onClick={() => setExpanded(isOpen ? null : i)}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left text-sm font-medium text-zinc-100 transition-colors hover:bg-zinc-800/60"
+                    className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-100/90 dark:text-zinc-100 dark:hover:bg-zinc-800/60"
                   >
                     <span className="pr-2">{item.question}</span>
                     <ChevronDown
-                      className={cn('h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-300', isOpen && 'rotate-180')}
+                      className={cn(
+                        'h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-300 dark:text-zinc-500',
+                        isOpen && 'rotate-180',
+                      )}
                     />
                   </button>
                   <div
@@ -126,7 +132,7 @@ export function FAQBottomSheet({ open, onOpenChange }: Props) {
                     )}
                   >
                     <div className="overflow-hidden">
-                      <div className="border-t border-zinc-800/60 px-3 pb-3 pt-2 text-sm leading-relaxed text-zinc-300">
+                      <div className="border-t border-zinc-200 px-3 pb-3 pt-2 text-sm leading-relaxed text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
                         {item.answer}
                       </div>
                     </div>
