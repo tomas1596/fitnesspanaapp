@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dumbbell } from 'lucide-react';
 
 const Auth = () => {
@@ -13,6 +14,7 @@ const Auth = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
+  const [gender, setGender] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -34,8 +36,8 @@ const Auth = () => {
     setSubmitting(true);
 
     if (!isLogin) {
-      if (!firstName.trim() || !lastName.trim() || !dateOfBirth) {
-        setError('Completá nombre, apellido y fecha de nacimiento.');
+      if (!firstName.trim() || !lastName.trim() || !dateOfBirth || !gender) {
+        setError('Completá nombre, apellido, fecha de nacimiento y género.');
         setSubmitting(false);
         return;
       }
@@ -47,6 +49,7 @@ const Auth = () => {
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           dateOfBirth,
+          gender,
         });
 
     if (error) {
@@ -97,6 +100,18 @@ const Auth = () => {
                 required={!isLogin}
                 className="h-14 rounded-xl border-none bg-card text-foreground"
               />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Género</label>
+              <Select value={gender} onValueChange={setGender}>
+                <SelectTrigger className="h-14 rounded-xl border-none bg-card text-foreground">
+                  <SelectValue placeholder="Seleccionar género" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="male">Masculino</SelectItem>
+                  <SelectItem value="female">Femenino</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </>
         )}

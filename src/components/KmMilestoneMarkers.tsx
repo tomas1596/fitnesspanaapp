@@ -7,17 +7,19 @@ import type { PaceHeatTheme } from '@/lib/paceHeatmap';
 
 function kmDiscIcon(km: number, theme: PaceHeatTheme) {
   const isDark = theme === 'dark';
-  const size = 26;
-  const bg = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.12)';
-  const border = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(15,23,42,0.2)';
+  const h = 30;
+  const bg = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.1)';
+  const border = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(15,23,42,0.22)';
   const color = isDark ? '#f8fafc' : '#0f172a';
-  const shadow = isDark ? '0 0 14px rgba(57,255,20,0.35)' : '0 2px 8px rgba(0,0,0,0.12)';
-  const label = `${km}`;
+  const shadow = isDark ? '0 0 18px rgba(57,255,20,0.45)' : '0 2px 10px rgba(0,0,0,0.14)';
+  const label = `${km} km`;
+  const iconW = km >= 10 ? 52 : 44;
   return L.divIcon({
     className: 'nrc-km-disc',
     html: `<div style="
-      width:${size}px;
-      height:${size}px;
+      min-width:${iconW}px;
+      height:${h}px;
+      padding:0 8px;
       border-radius:9999px;
       display:flex;
       align-items:center;
@@ -25,16 +27,17 @@ function kmDiscIcon(km: number, theme: PaceHeatTheme) {
       font-size:10px;
       font-weight:800;
       font-family:system-ui,sans-serif;
+      white-space:nowrap;
       color:${color};
       background:${bg};
-      -webkit-backdrop-filter:blur(10px);
-      backdrop-filter:blur(10px);
+      -webkit-backdrop-filter:blur(15px);
+      backdrop-filter:blur(15px);
       border:1px solid ${border};
       box-shadow:${shadow};
       box-sizing:border-box;
     ">${label}</div>`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
+    iconSize: [iconW, h],
+    iconAnchor: [iconW / 2, h / 2],
   });
 }
 

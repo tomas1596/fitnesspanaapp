@@ -25,6 +25,8 @@ import {
   randomPaceSecPerKmVillegas,
   randomSeedNearVillegas,
 } from '@/lib/villegasSim';
+import { postRunStopToSw, postRunTickToSw } from '@/lib/runTrackingSw';
+import { connectHeartRateSensor, tryReconnectStoredHeartRate, type HrConnection } from '@/lib/hrBluetooth';
 
 type RunRow = {
   id: string;
@@ -156,8 +158,12 @@ const Cardio = () => {
   // History
   const [runs, setRuns] = useState<RunRow[]>([]);
 
-  /** Reservado para sensores BLE (PPM); hoy solo UI. */
+  /** PPM desde pulsómetro BLE (Web Bluetooth). */
   const [liveHeartRate, setLiveHeartRate] = useState<number | null>(null);
+  const [hrBtConnected, setHrBtConnected] = useState(false);
+  const [hrBtBusy, setHrBtBusy] = useState(false);
+  const hrConnRef = useRef<HrConnection | null>(null);
+  const runSwPayloadRef = useRef({ seconds: 0, distance: 0 });
 
   const fetchRuns = useCallback(async () => {
     if (!user) return;
@@ -170,6 +176,57 @@ const Cardio = () => {
   }, [user]);
 
   useEffect(() => { fetchRuns(); }, [fetchRuns]);
+
+  // Reconexión automática al pulsómetro guardado (sin selector).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const conn = await tryReconnectStoredHeartRate(
+          (bpm) => {
+            if (!cancelled) setLiveHeartRate(bpm);
+          },
+          () => {
+            if (!cancelled) {
+              setHrBtConnected(false);
+              hrConnRef.current = null;
+              setLiveHeartRate(null);
+            }
+          },
+        );
+        if (!cancelled && conn) {
+          hrConnRef.current = conn;
+          setHrBtConnected(true);
+        }
+      } catch {
+        /* sin diálogo en segundo plano */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      hrConnRef.current?.disconnect();
+      hrConnRef.current = null;
+    };
+  }, []);
+
+  // Notificación persistente de carrera: solo mientras hay sesión activa o en pausa.
+  useEffect(() => {
+    if (phase === 'active' || phase === 'paused') return;
+    postRunStopToSw();
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== 'active' && phase !== 'paused') return;
+    const tick = () => {
+      const { seconds: s, distance: d } = runSwPayloadRef.current;
+      const kmd = d / 1000;
+      const paceSec = kmd > 0 ? s / kmd : 0;
+      postRunTickToSw({ seconds: s, km: kmd, paceSecPerKm: paceSec });
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [phase]);
 
   // Initial geolocation lock
   useEffect(() => {
@@ -250,6 +307,9 @@ const Cardio = () => {
       await new Promise((resolve) => window.setTimeout(resolve, 1000));
     }
     setCountdown(null);
+    if ('Notification' in window && Notification.permission === 'default') {
+      await Notification.requestPermission();
+    }
     if (!startWatch()) return;
     startedAtRef.current = new Date();
     lastAnnouncedKmRef.current = 0;
@@ -335,6 +395,8 @@ const Cardio = () => {
   const km = distance / 1000;
   const pace = km > 0 ? seconds / km : 0;
 
+  runSwPayloadRef.current = { seconds, distance };
+
   const displayRoute = useMemo(() => smoothRouteForDisplay(route), [route]);
   const routeHasAlt = useMemo(
     () => route.some((p) => p.alt != null && Number.isFinite(p.alt)),
@@ -342,11 +404,42 @@ const Cardio = () => {
   );
   const livePositiveElevM = useMemo(() => computePositiveElevationGainM(route), [route]);
 
-  const connectHrSensor = () => {
-    toast({
-      title: 'Sensor de ritmo cardíaco',
-      description: 'Próximamente: vinculación Bluetooth (BLE) con pulsómetros externos.',
-    });
+  const handleHrFab = async () => {
+    if (hrBtBusy) return;
+    if (hrBtConnected && hrConnRef.current) return;
+    const bt = (navigator as { bluetooth?: unknown }).bluetooth;
+    if (!bt) {
+      toast({
+        title: 'Bluetooth no disponible',
+        description: 'Usa Chrome o Edge (HTTPS o localhost) con un pulsómetro BLE compatible.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setHrBtBusy(true);
+    try {
+      const conn = await connectHeartRateSensor(
+        (bpm) => setLiveHeartRate(bpm),
+        () => {
+          setHrBtConnected(false);
+          hrConnRef.current = null;
+          setLiveHeartRate(null);
+        },
+      );
+      hrConnRef.current = conn;
+      setHrBtConnected(true);
+      toast({ title: 'Sensor vinculado', description: 'Ritmo cardíaco por Bluetooth.' });
+    } catch (e: unknown) {
+      const err = e as { name?: string; message?: string };
+      if (err.name === 'NotFoundError') return;
+      toast({
+        title: 'No se pudo conectar',
+        description: err.message || 'Enciende el pulsómetro y acércalo.',
+        variant: 'destructive',
+      });
+    } finally {
+      setHrBtBusy(false);
+    }
   };
 
   // Monthly stats
@@ -607,18 +700,35 @@ const Cardio = () => {
             )}
           </div>
 
+          {/* FAB Bluetooth (mapa): gris = desconectado, verde neón = conectado */}
+          {countdown === null && (
+            <button
+              type="button"
+              onClick={handleHrFab}
+              disabled={hrBtBusy || (hrBtConnected && !!hrConnRef.current)}
+              title={hrBtConnected ? 'Pulsómetro vinculado' : 'Vincular pulsómetro BLE'}
+              className={`pointer-events-auto absolute right-3 top-3 z-[45] flex h-12 w-12 items-center justify-center rounded-full border shadow-lg backdrop-blur-md transition active:scale-95 disabled:opacity-60 ${
+                hrBtConnected
+                  ? 'border-transparent text-black'
+                  : 'border-border/70 bg-background/75 text-muted-foreground'
+              }`}
+              style={
+                hrBtConnected
+                  ? {
+                      background: '#39FF14',
+                      boxShadow: '0 0 22px rgba(57,255,20,0.65), 0 4px 14px rgba(0,0,0,0.35)',
+                    }
+                  : undefined
+              }
+            >
+              <Bluetooth className="h-5 w-5" strokeWidth={2.25} />
+            </button>
+          )}
+
           {/* Idle controls floating over map */}
           <div className="pointer-events-none absolute bottom-4 left-0 right-0 z-30 flex flex-col items-center gap-3">
             {phase === 'idle' && (
               <div className="pointer-events-auto flex flex-col items-center gap-3">
-                <button
-                  type="button"
-                  onClick={connectHrSensor}
-                  className="flex items-center gap-2 rounded-2xl border border-border bg-card/95 px-4 py-3 text-sm font-semibold text-foreground shadow-lg backdrop-blur-sm transition active:scale-[0.98]"
-                >
-                  <Bluetooth className="h-5 w-5 text-primary" />
-                  Conectar Sensor de Ritmo Cardíaco
-                </button>
                 <button
                   onClick={handleStart}
                   className="flex h-32 w-32 items-center justify-center rounded-full text-xl font-extrabold tracking-wider text-black shadow-2xl transition active:scale-95"

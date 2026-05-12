@@ -11,46 +11,34 @@ export type ProfileRow = {
   height?: number | null;
   activity_level?: string | null;
   fitness_goal?: string | null;
+  is_admin?: boolean | null;
 };
 
-export const isProfileIncomplete = (profile: ProfileRow | null) =>
-  !profile ||
-  !profile.first_name ||
-  !profile.last_name ||
-  !profile.date_of_birth ||
-  !profile.gender ||
-  !profile.weight ||
-  !profile.height ||
-  !profile.activity_level ||
-  !profile.fitness_goal;
-
-async function fetchProfileCompletion(userId: string): Promise<boolean> {
+async function fetchIsAdmin(userId: string): Promise<boolean> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('first_name, last_name, date_of_birth, gender, weight, height, activity_level, fitness_goal')
+    .select('is_admin')
     .eq('user_id', userId)
     .maybeSingle();
   if (error) {
-    console.warn('[auth] fetchProfileCompletion', error.message);
-    return true;
+    console.warn('[auth] fetchIsAdmin', error.message);
+    return false;
   }
-  return isProfileIncomplete(data as ProfileRow | null);
+  return (data as { is_admin?: boolean } | null)?.is_admin === true;
 }
 
 export type SignUpIdentity = {
   firstName: string;
   lastName: string;
   dateOfBirth: string;
+  gender: string;
 };
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  checkingOnboarding: boolean;
-  needsOnboarding: boolean;
-  refreshProfileCompletion: () => Promise<void>;
-  syncProfileCompletionFromRow: (profile: ProfileRow | null) => void;
+  isAdmin: boolean;
   signUp: (
     email: string,
     password: string,
@@ -66,24 +54,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
-
-  const refreshProfileCompletion = useCallback(async () => {
-    if (!user) {
-      setNeedsOnboarding(false);
-      return;
-    }
-    const missing = await fetchProfileCompletion(user.id);
-    setNeedsOnboarding(missing);
-  }, [user]);
-
-  const syncProfileCompletionFromRow = useCallback((profile: ProfileRow | null) => {
-    setNeedsOnboarding(isProfileIncomplete(profile));
-  }, []);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -100,18 +76,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     if (!user) {
-      setCheckingOnboarding(false);
-      setNeedsOnboarding(false);
+      setIsAdmin(false);
       return;
     }
 
     let active = true;
     (async () => {
-      setCheckingOnboarding(true);
-      const missing = await fetchProfileCompletion(user.id);
-      if (!active) return;
-      setNeedsOnboarding(missing);
-      setCheckingOnboarding(false);
+      const admin = await fetchIsAdmin(user.id);
+      if (active) setIsAdmin(admin);
     })();
 
     return () => {
@@ -120,7 +92,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user]);
 
   const signUp = async (email: string, password: string, identity?: SignUpIdentity) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -129,11 +101,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               first_name: identity.firstName.trim(),
               last_name: identity.lastName.trim(),
               date_of_birth: identity.dateOfBirth,
+              gender: identity.gender,
             }
           : undefined,
       },
     });
-    return { error: error as Error | null };
+    if (error) return { error: error as Error };
+
+    if (data.user && identity) {
+      const fn = identity.firstName.trim();
+      const ln = identity.lastName.trim();
+      const displayName = [fn, ln].filter(Boolean).join(' ');
+      const { error: profileError } = await supabase.from('profiles').upsert(
+        {
+          user_id: data.user.id,
+          first_name: fn,
+          last_name: ln,
+          date_of_birth: identity.dateOfBirth,
+          gender: identity.gender,
+          display_name: displayName || null,
+        },
+        { onConflict: 'user_id' },
+      );
+      if (profileError) return { error: new Error(profileError.message) };
+    }
+
+    return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
@@ -151,10 +144,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         user,
         session,
         loading,
-        checkingOnboarding,
-        needsOnboarding,
-        refreshProfileCompletion,
-        syncProfileCompletionFromRow,
+        isAdmin,
         signUp,
         signIn,
         signOut,

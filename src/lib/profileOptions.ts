@@ -1,4 +1,4 @@
-/** Valores almacenados en `profiles.activity_level` / `profiles.fitness_goal` (mismo criterio que Onboarding). */
+/** Valores almacenados en `profiles.activity_level` / `profiles.fitness_goal`. */
 export const ACTIVITY_LEVEL_OPTIONS = [
   { value: 'sedentario', label: 'Sedentario' },
   { value: 'ligero', label: 'Ligero' },

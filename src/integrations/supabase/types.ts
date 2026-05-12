@@ -334,6 +334,7 @@ export type Database = {
           gender: string | null
           height: number | null
           id: string
+          is_admin: boolean
           last_name: string | null
           step_goal: number
           target_weight: number | null
@@ -352,6 +353,7 @@ export type Database = {
           gender?: string | null
           height?: number | null
           id?: string
+          is_admin?: boolean
           last_name?: string | null
           step_goal?: number
           target_weight?: number | null
@@ -370,6 +372,7 @@ export type Database = {
           gender?: string | null
           height?: number | null
           id?: string
+          is_admin?: boolean
           last_name?: string | null
           step_goal?: number
           target_weight?: number | null

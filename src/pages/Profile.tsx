@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -18,8 +19,21 @@ import { calculateAge } from '@/lib/age';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
+const AdminButton = () => {
+  const navigate = useNavigate();
+  return (
+    <Button
+      type="button"
+      onClick={() => navigate('/admin')}
+      className="h-14 w-full rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-base font-bold text-white shadow-lg shadow-violet-500/25 transition hover:from-violet-500 hover:to-indigo-500"
+    >
+      Panel de Administración 🛡️
+    </Button>
+  );
+};
+
 const Profile = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme, setTheme } = useTheme();
@@ -272,6 +286,8 @@ const Profile = () => {
             </div>
           </div>
         </div>
+
+        {isAdmin && <AdminButton />}
 
         <Button
           onClick={() => setEvolutionOpen(true)}

@@ -14,6 +14,7 @@ const BottomNav = () => {
   const navigate = useNavigate();
 
   if (location.pathname.startsWith('/actividad/')) return null;
+  if (location.pathname === '/admin') return null;
 
   return (
     <nav

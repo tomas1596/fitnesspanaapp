@@ -5,6 +5,9 @@ const RGB_GREEN: [number, number, number] = [57, 255, 20];
 const RGB_YELLOW: [number, number, number] = [255, 235, 59];
 const RGB_RED: [number, number, number] = [220, 20, 60];
 
+/** Ventana fija: ritmo medio de los últimos 2 minutos (ms). */
+export const PACE_ROLLING_WINDOW_MS = 120_000;
+
 export type PaceHeatTheme = 'dark' | 'light';
 
 function boostContrast(rgb: [number, number, number], lightMode: boolean): [number, number, number] {
@@ -84,8 +87,41 @@ function segmentPaceSecPerKm(points: LatLng[], i: number, ref: number): number {
 }
 
 /**
+ * Ritmo medio (s/km) sobre la ruta en la ventana de los últimos `windowMs`
+ * milisegundos terminando en el punto `endIdx`.
+ */
+export function rollingAveragePaceSecPerKm(
+  points: LatLng[],
+  endIdx: number,
+  windowMs: number = PACE_ROLLING_WINDOW_MS,
+): number {
+  if (endIdx < 1) return 300;
+  const tEnd = points[endIdx].t;
+  const tCut = tEnd - windowMs;
+  let start = 0;
+  for (let i = 0; i <= endIdx; i += 1) {
+    if (points[i].t >= tCut) {
+      start = i;
+      break;
+    }
+  }
+  let dist = 0;
+  for (let i = start; i < endIdx; i += 1) {
+    dist += distM(points[i], points[i + 1]);
+  }
+  const dtMs = points[endIdx].t - points[start].t;
+  const dt = dtMs / 1000;
+  const ref = medianSegmentPace(points);
+  if (dist < 8 || dt < 1) {
+    return segmentPaceSecPerKm(points, endIdx, ref);
+  }
+  return (dt / dist) * 1000;
+}
+
+/**
  * Un mini-segmento Leaflet por cada par adyacente (punto[i]→punto[i+1]),
- * color sólido por velocidad/ritmo de ese tramo (degradé continuo al unirlos).
+ * color por ritmo medio móvil (últimos 2 min) en el punto final del tramo
+ * (muy sensible a cambios de ritmo).
  */
 export function segmentRouteByPaceGradient(
   points: LatLng[],
@@ -94,15 +130,20 @@ export function segmentRouteByPaceGradient(
 ): PaceHeatSegment[] {
   if (points.length < 2) return [];
 
-  const ref = refPaceSecPerKm > 0 && isFinite(refPaceSecPerKm) ? refPaceSecPerKm : medianSegmentPace(points);
-  const paces: number[] = [];
+  const ref =
+    refPaceSecPerKm > 0 && isFinite(refPaceSecPerKm) ? refPaceSecPerKm : medianSegmentPace(points);
+
+  const rollingPaces: number[] = [];
   for (let i = 1; i < points.length; i += 1) {
-    paces.push(segmentPaceSecPerKm(points, i, ref));
+    const p = rollingAveragePaceSecPerKm(points, i, PACE_ROLLING_WINDOW_MS);
+    rollingPaces.push(Number.isFinite(p) && p > 0 ? p : segmentPaceSecPerKm(points, i, ref));
   }
 
-  const pMin = Math.min(...paces, ref);
-  const pMax = Math.max(...paces, ref);
-  const pad = Math.max(3, (pMax - pMin) * 0.08);
+  const pMin = Math.min(...rollingPaces, ref);
+  const pMax = Math.max(...rollingPaces, ref);
+  const span = Math.max(pMax - pMin, 4);
+  /** Rango ajustado muy estrecho para que pequeños cambios de ritmo muevan el color. */
+  const pad = Math.max(1, span * 0.012);
   const lo = pMin - pad;
   const hi = pMax + pad;
 
@@ -110,7 +151,7 @@ export function segmentRouteByPaceGradient(
   for (let i = 1; i < points.length; i += 1) {
     const a = points[i - 1];
     const b = points[i];
-    const pace = paces[i - 1];
+    const pace = rollingPaces[i - 1];
     const hex = rgbToHex(...paceToRgb(pace, lo, hi, theme));
     out.push({
       positions: [
