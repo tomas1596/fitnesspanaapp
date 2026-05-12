@@ -1,3 +1,3 @@
-# Welcome to your Lovable project
+# Pana Fitness
 
-TODO: Document your project here
+Aplicación web de fitness (entreno, nutrición, cardio y perfil).

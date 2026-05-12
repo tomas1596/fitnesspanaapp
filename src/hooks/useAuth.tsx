@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { useState, useEffect, useLayoutEffect, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -38,6 +38,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  /** true hasta conocer is_admin del usuario actual (evita redirigir admins por un frame). */
+  isAdminLoading: boolean;
   isAdmin: boolean;
   signUp: (
     email: string,
@@ -55,6 +57,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdminLoading, setIsAdminLoading] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      setIsAdminLoading(false);
+      return;
+    }
+    setIsAdmin(false);
+    setIsAdminLoading(true);
+  }, [user]);
 
   useEffect(() => {
     const {
@@ -75,15 +88,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   useEffect(() => {
-    if (!user) {
-      setIsAdmin(false);
-      return;
-    }
+    if (!user) return;
 
     let active = true;
     (async () => {
       const admin = await fetchIsAdmin(user.id);
-      if (active) setIsAdmin(admin);
+      if (active) {
+        setIsAdmin(admin);
+        setIsAdminLoading(false);
+      }
     })();
 
     return () => {
@@ -144,6 +157,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         user,
         session,
         loading,
+        isAdminLoading,
         isAdmin,
         signUp,
         signIn,

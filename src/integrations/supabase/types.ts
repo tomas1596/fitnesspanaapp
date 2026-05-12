@@ -524,7 +524,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      admin_user_directory: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          user_id: string
+          email: string
+          first_name: string | null
+          last_name: string | null
+          avatar_url: string | null
+          registered_at: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

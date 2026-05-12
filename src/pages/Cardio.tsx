@@ -16,15 +16,9 @@ import {
   type LatLng,
 } from '@/lib/runAnalysis';
 import { estimateRunCalories, estimateRunSteps } from '@/lib/calories';
-import { RUN_SIMULATION_DEFAULT } from '@/config/runMode';
 import { fmtPace, fmtTime, NRC_GREEN } from '@/lib/runFormat';
 import { KmMilestoneMarkers } from '@/components/KmMilestoneMarkers';
 import { PaceHeatPolylines } from '@/components/PaceHeatPolylines';
-import {
-  generateVillegasKmExtension,
-  randomPaceSecPerKmVillegas,
-  randomSeedNearVillegas,
-} from '@/lib/villegasSim';
 import { postRunStopToSw, postRunTickToSw } from '@/lib/runTrackingSw';
 import { connectHeartRateSensor, tryReconnectStoredHeartRate, type HrConnection } from '@/lib/hrBluetooth';
 
@@ -106,6 +100,20 @@ const speakKmMilestones = (fromKm: number, toKm: number, distanceM: number, elap
 
 const MIN_RUN_METERS = 50;
 
+/** Mensaje legible según GeolocationPositionError.code (1 / 2 / 3). */
+function geoUserMessageFromError(err: GeolocationPositionError): string {
+  switch (err.code) {
+    case 1:
+      return 'Activá la ubicación para este sitio y del dispositivo (GPS) para ver el mapa y registrar tu ruta.';
+    case 2:
+      return 'No pudimos obtener tu posición. Comprobá que el GPS esté activo y salí al exterior si hace falta.';
+    case 3:
+      return 'El GPS tardó demasiado. Intentá de nuevo con mejor señal o al aire libre.';
+    default:
+      return 'No pudimos usar el GPS. Revisá permisos y que la ubicación esté activada.';
+  }
+}
+
 const playTone = (frequency: number, duration = 0.12, volume = 0.2) => {
   const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   if (!Ctx) return;
@@ -138,10 +146,10 @@ const Cardio = () => {
   const mapHeatTheme = resolved === 'dark' ? 'dark' : 'light';
 
   const [tab, setTab] = useState<'run' | 'history'>('run');
-  /** Solo efecto en dev: permite +1 km simulado. Producción = siempre GPS real. */
-  const [isSimulated, setIsSimulated] = useState(RUN_SIMULATION_DEFAULT);
 
   const [position, setPosition] = useState<[number, number] | null>(null);
+  /** Mensaje cuando falla la ubicación inicial (sin coordenadas falsas). */
+  const [geoError, setGeoError] = useState<string | null>(null);
   const [route, setRoute] = useState<LatLng[]>([]);
   const [phase, setPhase] = useState<'idle' | 'active' | 'paused'>('idle');
   const [seconds, setSeconds] = useState(0);
@@ -154,6 +162,8 @@ const Cardio = () => {
   const watchIdRef = useRef<number | null>(null);
   const tickRef = useRef<number | null>(null);
   const holdRef = useRef<number | null>(null);
+  const phaseRef = useRef<'idle' | 'active' | 'paused'>('idle');
+  const lastWatchErrToastAtRef = useRef(0);
 
   // History
   const [runs, setRuns] = useState<RunRow[]>([]);
@@ -228,24 +238,45 @@ const Cardio = () => {
     return () => window.clearInterval(id);
   }, [phase]);
 
-  // Initial geolocation lock
   useEffect(() => {
-    if (!navigator.geolocation) return;
+    phaseRef.current = phase;
+  }, [phase]);
+
+  const requestInitialPosition = useCallback(() => {
+    if (!navigator.geolocation) {
+      setGeoError('Tu navegador no permite geolocalización. Usá Chrome o Edge actualizado.');
+      return;
+    }
+    setGeoError(null);
     navigator.geolocation.getCurrentPosition(
-      (p) => setPosition([p.coords.latitude, p.coords.longitude]),
-      () => setPosition([19.4326, -99.1332]),
-      { enableHighAccuracy: true, timeout: 8000 }
+      (p) => {
+        setPosition([p.coords.latitude, p.coords.longitude]);
+        setGeoError(null);
+      },
+      (err) => {
+        setGeoError(geoUserMessageFromError(err as GeolocationPositionError));
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
     );
   }, []);
+
+  useEffect(() => {
+    requestInitialPosition();
+  }, [requestInitialPosition]);
 
   // Start GPS watch
   const startWatch = () => {
     if (!navigator.geolocation) {
-      toast({ title: 'GPS no disponible', variant: 'destructive' });
+      toast({
+        title: 'GPS no disponible',
+        description: 'Tu navegador no expone geolocalización.',
+        variant: 'destructive',
+      });
       return false;
     }
     watchIdRef.current = navigator.geolocation.watchPosition(
       (p) => {
+        setGeoError(null);
         const alt =
           p.coords.altitude != null && Number.isFinite(p.coords.altitude) ? p.coords.altitude : null;
         const point: LatLng = {
@@ -255,18 +286,32 @@ const Cardio = () => {
           alt,
         };
         setPosition([point.lat, point.lng]);
-        setRoute(prev => {
+        setRoute((prev) => {
           if (prev.length === 0) return [point];
           const last = prev[prev.length - 1];
           const d = distM(last, point);
           if (d < 3) return prev; // ignore noise
           if (p.coords.accuracy && p.coords.accuracy > 30) return prev;
-          setDistance(x => x + d);
+          setDistance((x) => x + d);
           return [...prev, point];
         });
       },
-      (err) => console.warn('geo err', err),
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+      (err) => {
+        const e = err as GeolocationPositionError;
+        console.warn('[cardio] geolocation', e.code, e.message);
+        const msg = geoUserMessageFromError(e);
+        const running = phaseRef.current === 'active' || phaseRef.current === 'paused';
+        if (running) {
+          const now = Date.now();
+          if (now - lastWatchErrToastAtRef.current > 25000) {
+            lastWatchErrToastAtRef.current = now;
+            toast({ title: 'Problema con el GPS', description: msg, variant: 'destructive' });
+          }
+        } else {
+          setGeoError(msg);
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 },
     );
     return true;
   };
@@ -288,7 +333,7 @@ const Cardio = () => {
     return () => { if (tickRef.current) window.clearInterval(tickRef.current); };
   }, [phase]);
 
-  // Aviso de voz al completar cada kilómetro entero (carrera en curso: activa o en pausa; incluye simulador +1km).
+  // Aviso de voz al completar cada kilómetro entero (carrera en curso: activa o en pausa).
   useEffect(() => {
     if (phase !== 'active' && phase !== 'paused') return;
     const completedKm = Math.floor(distance / 1000);
@@ -457,67 +502,31 @@ const Cardio = () => {
     return { km: totalKm, count: inMonth.length, time: totalTime, pace: avgPace };
   }, [runs]);
 
-  const devSimulateKm = () => {
-    const paceThisKm = randomPaceSecPerKmVillegas();
-    setRoute((prev) => {
-      let next: LatLng[];
-      if (prev.length === 0) {
-        const seed = randomSeedNearVillegas();
-        next = [seed, ...generateVillegasKmExtension(seed, paceThisKm)];
-      } else {
-        const origin = prev[prev.length - 1];
-        next = [...prev, ...generateVillegasKmExtension(origin, paceThisKm)];
-      }
-      const last = next[next.length - 1];
-      queueMicrotask(() => setPosition([last.lat, last.lng]));
-      return next;
-    });
-    setDistance((d) => d + 1000);
-    setSeconds((s) => s + paceThisKm);
-  };
-
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header tabs */}
       <div className="flex items-center justify-between px-4 pt-4">
         <h1 className="text-2xl font-bold">Modo Ruta</h1>
-        <div className="flex items-center gap-2">
-          {import.meta.env.DEV && (
-            <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
-              <input
-                type="checkbox"
-                className="accent-primary"
-                checked={isSimulated}
-                onChange={(e) => setIsSimulated(e.target.checked)}
-              />
-              Sim
-            </label>
-          )}
         <div className="flex items-center gap-1 rounded-full bg-card p-1">
           <button
+            type="button"
             onClick={() => setTab('run')}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${tab === 'run' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-          >Correr</button>
+          >
+            Correr
+          </button>
           <button
+            type="button"
             onClick={() => setTab('history')}
             className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition ${tab === 'history' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-          ><HistoryIcon className="h-3.5 w-3.5" /> Actividad</button>
-        </div>
+          >
+            <HistoryIcon className="h-3.5 w-3.5" /> Actividad
+          </button>
         </div>
       </div>
 
       {tab === 'run' ? (
         <div className="relative mt-3 h-[calc(100vh-180px)] overflow-hidden">
-          {import.meta.env.DEV && isSimulated && (phase === 'active' || phase === 'paused') && (
-            <button
-              type="button"
-              onClick={devSimulateKm}
-              className="absolute bottom-20 right-2 z-[60] rounded-md border border-border bg-card/95 px-2 py-1 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm"
-              title="Dev: +1 km con GPS simulado (General Villegas) y ritmo 4'30''–6'00''"
-            >
-              +1km
-            </button>
-          )}
           {/* Countdown overlay */}
           {countdown !== null && (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-background">
@@ -621,7 +630,18 @@ const Cardio = () => {
                     <Recenter center={position} />
                   </MapContainer>
                 ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Mapa no disponible</div>
+                  <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
+                    <p>{geoError ?? 'Obteniendo ubicación…'}</p>
+                    {geoError && (
+                      <button
+                        type="button"
+                        onClick={() => requestInitialPosition()}
+                        className="rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground"
+                      >
+                        Reintentar
+                      </button>
+                    )}
+                  </div>
                 )}
                 <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-background/80 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.25em] text-foreground backdrop-blur">
                   En pausa
@@ -694,8 +714,17 @@ const Cardio = () => {
                 <Recenter center={position} />
               </MapContainer>
             ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Obteniendo ubicación…
+              <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
+                <p>{geoError ?? 'Obteniendo ubicación…'}</p>
+                {geoError && (
+                  <button
+                    type="button"
+                    onClick={() => requestInitialPosition()}
+                    className="rounded-full border border-border bg-background/90 px-4 py-2 text-xs font-semibold text-foreground shadow-sm backdrop-blur"
+                  >
+                    Reintentar
+                  </button>
+                )}
               </div>
             )}
           </div>

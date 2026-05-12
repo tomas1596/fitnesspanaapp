@@ -9,15 +9,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import {
   LogOut, User, Activity, Flame, Beef, Droplets, Save, Camera, Lock,
-  Target, Plus, TrendingUp, Settings2, Sun, Moon, Pencil,
+  Target, Plus, TrendingUp, Settings2, Sun, Moon, Pencil, LayoutDashboard, HelpCircle,
 } from 'lucide-react';
 import StepsRing from '@/components/StepsRing';
 import EvolutionSheet from '@/components/EvolutionSheet';
+import { FAQBottomSheet } from '@/components/FAQBottomSheet';
 import { useTheme } from '@/hooks/useTheme';
 import { ACTIVITY_LEVEL_OPTIONS, FITNESS_GOAL_OPTIONS } from '@/lib/profileOptions';
 import { calculateAge } from '@/lib/age';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
+
+/** Convierte input de formulario a número para columnas numeric en `profiles` (null si vacío o inválido). */
+const parseProfileNumber = (raw: string): number | null => {
+  const t = String(raw).trim().replace(',', '.');
+  if (t === '') return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+};
 
 const AdminButton = () => {
   const navigate = useNavigate();
@@ -25,9 +34,10 @@ const AdminButton = () => {
     <Button
       type="button"
       onClick={() => navigate('/admin')}
-      className="h-14 w-full rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-base font-bold text-white shadow-lg shadow-violet-500/25 transition hover:from-violet-500 hover:to-indigo-500"
+      className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-violet-500/40 bg-violet-600/15 text-sm font-semibold text-violet-700 shadow-sm transition hover:bg-violet-600/25 dark:text-violet-300"
     >
-      Panel de Administración 🛡️
+      <LayoutDashboard className="h-4 w-4" />
+      Panel de Control
     </Button>
   );
 };
@@ -58,6 +68,7 @@ const Profile = () => {
   const [draftFirst, setDraftFirst] = useState('');
   const [draftLast, setDraftLast] = useState('');
   const [draftDob, setDraftDob] = useState('');
+  const [draftGender, setDraftGender] = useState('');
   const [savingIdentity, setSavingIdentity] = useState(false);
 
   const [steps, setSteps] = useState(0);
@@ -67,26 +78,35 @@ const Profile = () => {
   const [draftGoal, setDraftGoal] = useState('10000');
 
   const [evolutionOpen, setEvolutionOpen] = useState(false);
+  const [faqOpen, setFaqOpen] = useState(false);
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
     const today = todayStr();
-    const { data } = await supabase.from('profiles').select(
+    const meta = (user.user_metadata ?? {}) as Record<string, string | undefined>;
+    const { data, error } = await supabase.from('profiles').select(
       'first_name, last_name, date_of_birth, height, weight, gender, target_weight, avatar_url, step_goal, activity_level, fitness_goal',
-    ).eq('user_id', user.id).single();
+    ).eq('user_id', user.id).maybeSingle();
+    const pick = (db: string | null | undefined, metaKey: string) =>
+      (db != null && String(db).trim() !== '' ? String(db).trim() : '') || (meta[metaKey]?.trim() ?? '');
     if (data) {
-      setFirstName(data.first_name || '');
-      setLastName(data.last_name || '');
-      setDateOfBirth(data.date_of_birth || '');
+      setFirstName(pick(data.first_name, 'first_name'));
+      setLastName(pick(data.last_name, 'last_name'));
+      setDateOfBirth(pick(data.date_of_birth, 'date_of_birth'));
       setHeight(data.height?.toString() || '');
       setWeight(data.weight?.toString() || '');
-      setGender(data.gender || '');
+      setGender(pick(data.gender, 'gender'));
       setTargetWeight(data.target_weight?.toString() || '');
       setActivityLevel(data.activity_level || '');
       setFitnessGoal(data.fitness_goal || '');
       setAvatarUrl(data.avatar_url || null);
       setStepGoal(data.step_goal || 10000);
       setDraftGoal((data.step_goal || 10000).toString());
+    } else {
+      setFirstName(meta.first_name?.trim() ?? '');
+      setLastName(meta.last_name?.trim() ?? '');
+      setDateOfBirth(meta.date_of_birth?.trim() ?? '');
+      setGender(meta.gender?.trim() ?? '');
     }
     const { data: s } = await supabase.from('step_logs').select('*').eq('user_id', user.id).eq('log_date', today).maybeSingle();
     if (s) { setSteps(s.steps); setStepsId(s.id); } else { setSteps(0); setStepsId(null); }
@@ -98,6 +118,7 @@ const Profile = () => {
     setDraftFirst(firstName);
     setDraftLast(lastName);
     setDraftDob(dateOfBirth);
+    setDraftGender(gender);
     setEditProfileOpen(true);
   };
 
@@ -105,8 +126,12 @@ const Profile = () => {
     if (!user) return;
     const fn = draftFirst.trim();
     const ln = draftLast.trim();
-    if (!fn || !ln || !draftDob) {
-      toast({ title: 'Faltan datos', description: 'Nombre, apellido y fecha de nacimiento son obligatorios.', variant: 'destructive' });
+    if (!fn || !ln || !draftDob || !draftGender) {
+      toast({
+        title: 'Faltan datos',
+        description: 'Nombre, apellido, fecha de nacimiento y género son obligatorios.',
+        variant: 'destructive',
+      });
       return;
     }
     setSavingIdentity(true);
@@ -115,6 +140,7 @@ const Profile = () => {
       first_name: fn,
       last_name: ln,
       date_of_birth: draftDob,
+      gender: draftGender,
       display_name: displayName,
     }).eq('user_id', user.id);
     setSavingIdentity(false);
@@ -125,6 +151,7 @@ const Profile = () => {
     setFirstName(fn);
     setLastName(ln);
     setDateOfBirth(draftDob);
+    setGender(draftGender);
     setEditProfileOpen(false);
     toast({ title: 'Perfil actualizado' });
   };
@@ -132,31 +159,79 @@ const Profile = () => {
   const saveProfile = async () => {
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase.from('profiles').update({
-      height: height ? parseFloat(height) : null,
-      weight: weight ? parseFloat(weight) : null,
-      gender: gender || null,
-      target_weight: targetWeight ? parseFloat(targetWeight) : null,
-      activity_level: activityLevel || null,
-      fitness_goal: fitnessGoal || null,
-    }).eq('user_id', user.id);
+
+    const heightNum = parseProfileNumber(height);
+    const weightNum = parseProfileNumber(weight);
+    const targetWeightNum = parseProfileNumber(targetWeight);
+    const activity = activityLevel.trim() || null;
+    const fitness = fitnessGoal.trim() || null;
+    const avatar = avatarUrl?.trim() || null;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({
+        height: heightNum,
+        weight: weightNum,
+        target_weight: targetWeightNum,
+        activity_level: activity,
+        fitness_goal: fitness,
+        avatar_url: avatar,
+      })
+      .eq('user_id', user.id)
+      .select('height, weight, target_weight, activity_level, fitness_goal, avatar_url')
+      .maybeSingle();
+
     setSaving(false);
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+
+    const row = data;
+    if (row) {
+      setHeight(row.height != null ? String(row.height) : '');
+      setWeight(row.weight != null ? String(row.weight) : '');
+      setTargetWeight(row.target_weight != null ? String(row.target_weight) : '');
+      setActivityLevel(row.activity_level ?? '');
+      setFitnessGoal(row.fitness_goal ?? '');
+      setAvatarUrl(row.avatar_url ?? null);
+    } else {
+      setHeight(heightNum != null ? String(heightNum) : '');
+      setWeight(weightNum != null ? String(weightNum) : '');
+      setTargetWeight(targetWeightNum != null ? String(targetWeightNum) : '');
+      setActivityLevel(activityLevel);
+      setFitnessGoal(fitnessGoal);
+      setAvatarUrl(avatarUrl);
+    }
+
     toast({ title: 'Guardado', description: 'Datos actualizados.' });
   };
 
   const uploadAvatar = async (file: File) => {
     if (!user) return;
     setUploadingAvatar(true);
-    const ext = file.name.split('.').pop();
+    const ext = file.name.split('.').pop()?.replace(/[^a-z0-9]/gi, '') || 'jpg';
     const path = `${user.id}/avatar.${ext}`;
-    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); setUploadingAvatar(false); return; }
-    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
-    const url = `${publicUrl}?t=${Date.now()}`;
-    await supabase.from('profiles').update({ avatar_url: url }).eq('user_id', user.id);
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+    if (uploadError) {
+      toast({ title: 'Error al subir imagen', description: uploadError.message, variant: 'destructive' });
+      setUploadingAvatar(false);
+      return;
+    }
+    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+    const url = `${pub.publicUrl}?t=${Date.now()}`;
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: url })
+      .eq('user_id', user.id);
+    if (profileError) {
+      toast({ title: 'Error al guardar foto', description: profileError.message, variant: 'destructive' });
+      setUploadingAvatar(false);
+      return;
+    }
     setAvatarUrl(url);
     setUploadingAvatar(false);
+    toast({ title: 'Foto actualizada' });
   };
 
   const updateSteps = async (val: number) => {
@@ -307,16 +382,6 @@ const Profile = () => {
             <LabeledNum label="Peso (kg)" value={weight} onChange={setWeight} />
             <LabeledNum label="Peso meta (kg)" value={targetWeight} onChange={setTargetWeight} />
             <div className="col-span-2">
-              <label className="mb-1 block text-[11px] text-muted-foreground">Género</label>
-              <Select value={gender} onValueChange={setGender}>
-                <SelectTrigger className="h-10 rounded-xl border border-input bg-secondary text-sm"><SelectValue placeholder="Elegir" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="male">Masculino</SelectItem>
-                  <SelectItem value="female">Femenino</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="col-span-2">
               <label className="mb-1 block text-[11px] text-muted-foreground">Nivel de actividad</label>
               <Select value={activityLevel || undefined} onValueChange={setActivityLevel}>
                 <SelectTrigger className="h-10 rounded-xl border border-input bg-secondary text-sm">
@@ -365,6 +430,14 @@ const Profile = () => {
         )}
 
         <div className="rounded-2xl bg-card p-3">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setFaqOpen(true)}
+            className="h-10 w-full justify-start rounded-xl text-sm font-medium"
+          >
+            <HelpCircle className="mr-2 h-4 w-4 text-primary" /> Suscripción y Ayuda
+          </Button>
           <Button variant="ghost" onClick={() => setPasswordDialog(true)} className="h-10 w-full justify-start rounded-xl text-sm">
             <Lock className="mr-2 h-4 w-4" /> Cambiar Contraseña
           </Button>
@@ -375,6 +448,7 @@ const Profile = () => {
       </div>
 
       <EvolutionSheet open={evolutionOpen} onClose={() => setEvolutionOpen(false)} />
+      <FAQBottomSheet open={faqOpen} onOpenChange={setFaqOpen} />
 
       <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
         <DialogContent className="rounded-2xl border-0 bg-card">
@@ -393,6 +467,18 @@ const Profile = () => {
             <div>
               <label className="mb-1 block text-xs text-muted-foreground">Fecha de nacimiento</label>
               <Input type="date" value={draftDob} onChange={(e) => setDraftDob(e.target.value)} className="h-11 rounded-xl border border-input bg-secondary" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Género</label>
+              <Select value={draftGender} onValueChange={setDraftGender}>
+                <SelectTrigger className="h-11 rounded-xl border border-input bg-secondary">
+                  <SelectValue placeholder="Seleccionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="male">Masculino</SelectItem>
+                  <SelectItem value="female">Femenino</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <Button onClick={() => void saveIdentity()} disabled={savingIdentity} className="h-11 w-full rounded-xl font-semibold">
               {savingIdentity ? 'Guardando...' : 'Guardar cambios'}

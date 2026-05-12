@@ -18,6 +18,8 @@ const Auth = () => {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  /** Tras registro exitoso, espera 800 ms antes de dejar que <Navigate> mande al dashboard (tiempo al trigger). */
+  const [signUpRedirectHold, setSignUpRedirectHold] = useState(false);
 
   if (loading) {
     return (
@@ -27,7 +29,7 @@ const Auth = () => {
     );
   }
 
-  if (user) return <Navigate to="/" replace />;
+  if (user && !signUpRedirectHold) return <Navigate to="/" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,20 +45,27 @@ const Auth = () => {
       }
     }
 
-    const { error } = isLogin
-      ? await signIn(email, password)
-      : await signUp(email, password, {
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          dateOfBirth,
-          gender,
-        });
-
-    if (error) {
-      setError(error.message);
-    } else if (!isLogin) {
-      setSuccessMsg('¡Cuenta creada! Revisa tu email para confirmar.');
+    if (isLogin) {
+      const { error } = await signIn(email, password);
+      if (error) setError(error.message);
+    } else {
+      setSignUpRedirectHold(true);
+      const { error } = await signUp(email, password, {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        dateOfBirth,
+        gender,
+      });
+      if (error) {
+        setSignUpRedirectHold(false);
+        setError(error.message);
+      } else {
+        await new Promise((r) => setTimeout(r, 800));
+        setSignUpRedirectHold(false);
+        setSuccessMsg('¡Cuenta creada! Revisa tu email para confirmar.');
+      }
     }
+
     setSubmitting(false);
   };
 
@@ -150,6 +159,7 @@ const Auth = () => {
           type="button"
           onClick={() => {
             setIsLogin(!isLogin);
+            setSignUpRedirectHold(false);
             setError('');
             setSuccessMsg('');
           }}
