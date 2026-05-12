@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import BottomNav from "@/components/BottomNav";
 import Auth from "./pages/Auth";
 import Workout from "./pages/Workout";
@@ -14,6 +15,9 @@ import Cardio from "./pages/Cardio";
 import ActivityDetail from "./pages/ActivityDetail";
 import Profile from "./pages/Profile";
 import AdminPanel from "./pages/AdminPanel";
+import Paywall from "./pages/Paywall";
+import VerifiedAccount from "./pages/VerifiedAccount";
+import Terminos from "./pages/Terminos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,13 +44,30 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const ADMIN_EMAIL = 'thomzonlyskills@gmail.com';
+
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading, isAdmin, isAdminLoading } = useAuth();
   if (loading || isAdminLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
-  if (!isAdmin) return <Navigate to="/" replace />;
+  if (!isAdmin || user.email !== ADMIN_EMAIL) return <Navigate to="/" replace />;
   return <>{children}</>;
 };
+
+/** Bloquea rutas cuando la suscripción expiró; redirige a /paywall. */
+const SubscriptionGuard = ({ children }: { children: React.ReactNode }) => {
+  const sub = useSubscriptionStatus();
+  if (sub.status === 'loading') return null;
+  if (sub.status === 'expired') return <Navigate to="/paywall" replace />;
+  return <>{children}</>;
+};
+
+/** Ruta protegida por auth + suscripción activa. */
+const AppRoute = ({ children }: { children: React.ReactNode }) => (
+  <ProtectedRoute>
+    <SubscriptionGuard>{children}</SubscriptionGuard>
+  </ProtectedRoute>
+);
 
 const AppRoutes = () => {
   const { user, loading } = useAuth();
@@ -62,16 +83,21 @@ const AppRoutes = () => {
       <Routes>
         <Route path="/auth" element={<Auth />} />
         <Route path="/onboarding" element={<Navigate to="/" replace />} />
-        <Route path="/" element={<ProtectedRoute><Workout /></ProtectedRoute>} />
-        <Route path="/timer" element={<ProtectedRoute><Timer /></ProtectedRoute>} />
-        <Route path="/cardio" element={<ProtectedRoute><Cardio /></ProtectedRoute>} />
-        <Route path="/actividad/:id" element={<ProtectedRoute><ActivityDetail /></ProtectedRoute>} />
-        <Route path="/nutrition" element={<ProtectedRoute><Nutrition /></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/" element={<AppRoute><Workout /></AppRoute>} />
+        <Route path="/timer" element={<AppRoute><Timer /></AppRoute>} />
+        <Route path="/cardio" element={<AppRoute><Cardio /></AppRoute>} />
+        <Route path="/actividad/:id" element={<AppRoute><ActivityDetail /></AppRoute>} />
+        <Route path="/nutrition" element={<AppRoute><Nutrition /></AppRoute>} />
+        <Route path="/profile" element={<AppRoute><Profile /></AppRoute>} />
+        {/* /paywall y /verificado: sólo requieren auth, sin subscription guard */}
+        <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />
+        <Route path="/verificado" element={<ProtectedRoute><VerifiedAccount /></ProtectedRoute>} />
+        <Route path="/terminos" element={<ProtectedRoute><Terminos /></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
-      {user && <BottomNav />}
+      {/* Ocultar BottomNav en paywall y en la pantalla de bienvenida post-verificación */}
+      {user && !['/paywall', '/verificado', '/terminos'].includes(location.pathname) && <BottomNav />}
     </>
   );
 };

@@ -105,10 +105,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user]);
 
   const signUp = async (email: string, password: string, identity?: SignUpIdentity) => {
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
+        emailRedirectTo: `${window.location.origin}/verificado`,
         data: identity
           ? {
               first_name: identity.firstName.trim(),
@@ -121,24 +122,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
     if (error) return { error: error as Error };
 
-    if (data.user && identity) {
-      const fn = identity.firstName.trim();
-      const ln = identity.lastName.trim();
-      const displayName = [fn, ln].filter(Boolean).join(' ');
-      const { error: profileError } = await supabase.from('profiles').upsert(
-        {
-          user_id: data.user.id,
-          first_name: fn,
-          last_name: ln,
-          date_of_birth: identity.dateOfBirth,
-          gender: identity.gender,
-          display_name: displayName || null,
-        },
-        { onConflict: 'user_id' },
-      );
-      if (profileError) return { error: new Error(profileError.message) };
-    }
-
+    // El perfil se crea automáticamente via trigger en Supabase (handle_new_user).
+    // No hacemos insert manual aquí: con email confirmation activo no hay sesión
+    // todavía y RLS bloquearía el upsert.
     return { error: null };
   };
 
