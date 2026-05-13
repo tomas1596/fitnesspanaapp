@@ -10,9 +10,11 @@ import {
   ListTree,
   MapPinned,
   Mountain,
+  Share2,
   Timer,
   Trash2,
 } from 'lucide-react';
+import ShareSticker from '@/components/ShareSticker';
 import {
   Area,
   CartesianGrid,
@@ -99,7 +101,7 @@ export default function ActivityDetail() {
   const [row, setRow] = useState<ActivityRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [titleDraft, setTitleDraft] = useState('');
-  const [panel, setPanel] = useState<null | 'route' | 'more'>(null);
+  const [panel, setPanel] = useState<null | 'route' | 'more' | 'share'>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -317,6 +319,19 @@ export default function ActivityDetail() {
         <div className="mt-8 flex flex-col gap-3">
           <button
             type="button"
+            onClick={() => setPanel('share')}
+            className="flex w-full items-center justify-between rounded-2xl border border-[#22FF55]/30 bg-[#22FF55]/10 px-4 py-3.5 text-left transition hover:border-[#22FF55]/60"
+          >
+            <span className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#22FF55]/20">
+                <Share2 className="h-5 w-5 text-[#22FF55]" />
+              </span>
+              <span className="font-semibold text-foreground">Compartir actividad</span>
+            </span>
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          </button>
+          <button
+            type="button"
             onClick={() => setPanel('route')}
             className="flex w-full items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5 text-left transition hover:border-primary/40"
           >
@@ -343,6 +358,36 @@ export default function ActivityDetail() {
           </button>
         </div>
       </div>
+
+      {/* Share panel */}
+      {panel === 'share' && (
+        <div className="fixed inset-0 z-[100] flex flex-col bg-background">
+          <div className="flex shrink-0 items-center gap-2 border-b border-border/60 bg-background/95 px-2 py-2 backdrop-blur-md">
+            <button
+              type="button"
+              onClick={() => setPanel(null)}
+              className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-secondary"
+              aria-label="Cerrar"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <span className="text-sm font-semibold">Compartir actividad</span>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 overflow-y-auto px-4 py-8">
+            <p className="text-center text-xs text-muted-foreground">
+              Elige el tema y presiona <strong>Compartir</strong> para exportar tu sticker.
+            </p>
+            <div style={{ maxWidth: '100%', overflowX: 'auto', paddingBottom: 8 }}>
+              <ShareSticker
+                distanceKm={km}
+                durationSec={durationSec}
+                avgPaceSecPerKm={avgPace}
+                routePoints={routePts}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Route panel */}
       {panel === 'route' && (

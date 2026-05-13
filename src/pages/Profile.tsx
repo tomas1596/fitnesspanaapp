@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   LogOut, User, Activity, Flame, Beef, Droplets, Save, Camera, Lock,
   Target, Plus, TrendingUp, Settings2, Sun, Moon, Pencil, LayoutDashboard, HelpCircle,
-  FileText, Heart, Sparkles, AlertTriangle,
+  FileText, Heart, Sparkles, AlertTriangle, Loader2, Trash2, X, ZoomIn,
 } from 'lucide-react';
 import StepsRing from '@/components/StepsRing';
 import { FAQBottomSheet } from '@/components/FAQBottomSheet';
@@ -98,6 +98,8 @@ const Profile = () => {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarModalOpen, setAvatarModalOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [passwordDialog, setPasswordDialog] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
@@ -274,6 +276,28 @@ const Profile = () => {
     toast({ title: 'Foto actualizada' });
   };
 
+  const deleteAvatar = async () => {
+    if (!user) return;
+    setAvatarModalOpen(false);
+    setUploadingAvatar(true);
+    if (avatarUrl) {
+      const marker = '/storage/v1/object/public/avatars/';
+      const idx = avatarUrl.indexOf(marker);
+      if (idx !== -1) {
+        const storagePath = decodeURIComponent(avatarUrl.slice(idx + marker.length).split('?')[0]);
+        await supabase.storage.from('avatars').remove([storagePath]);
+      }
+    }
+    const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('user_id', user.id);
+    setUploadingAvatar(false);
+    if (error) {
+      toast({ title: 'Error al eliminar foto', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setAvatarUrl(null);
+    toast({ title: 'Foto eliminada' });
+  };
+
   const updateSteps = async (val: number) => {
     if (!user) return;
     const next = Math.max(0, val);
@@ -348,18 +372,35 @@ const Profile = () => {
         <div className="rounded-2xl bg-card p-4">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-                onChange={e => { if (e.target.files?.[0]) uploadAvatar(e.target.files[0]); }} />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) void uploadAvatar(file);
+                }}
+              />
               <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingAvatar}
+                type="button"
+                onClick={() => { if (!uploadingAvatar) setAvatarModalOpen(true); }}
                 className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-accent"
+                aria-label="Cambiar foto de perfil"
               >
-                {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> :
-                  <User className="h-6 w-6 text-muted-foreground" />}
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
-                  <Camera className="h-4 w-4 text-white" />
-                </div>
+                {avatarUrl
+                  ? <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+                  : <User className="h-6 w-6 text-muted-foreground" />}
+                {uploadingAvatar ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/55">
+                    <Loader2 className="h-5 w-5 animate-spin text-white" />
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
+                    <Camera className="h-4 w-4 text-white" />
+                  </div>
+                )}
               </button>
             </div>
             <div className="min-w-0 flex-1">
@@ -595,6 +636,84 @@ const Profile = () => {
 
       <FAQBottomSheet open={faqOpen} onOpenChange={setFaqOpen} />
 
+      {/* ── Avatar options modal ── */}
+      {avatarModalOpen && (
+        <div
+          className="fixed inset-0 z-[200] flex items-end justify-center backdrop-blur-sm bg-black/60 sm:items-center"
+          onClick={() => setAvatarModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm overflow-hidden rounded-t-3xl sm:rounded-3xl bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Preview */}
+            <div className="flex flex-col items-center gap-3 bg-muted/30 py-6">
+              <button
+                type="button"
+                aria-label="Ver foto completa"
+                onClick={() => avatarUrl && setLightboxOpen(true)}
+                className="group relative h-24 w-24 overflow-hidden rounded-full bg-accent ring-4 ring-card shadow-lg transition-transform active:scale-95"
+              >
+                {avatarUrl
+                  ? <img src={avatarUrl} alt="Foto de perfil" className="h-full w-full object-cover" />
+                  : <div className="flex h-full w-full items-center justify-center">
+                      <User className="h-10 w-10 text-muted-foreground" />
+                    </div>}
+                {avatarUrl && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/30">
+                    <ZoomIn className="h-6 w-6 text-white opacity-0 transition-opacity drop-shadow-lg group-hover:opacity-100" />
+                  </div>
+                )}
+              </button>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {avatarUrl ? 'Toca para ampliar' : 'Foto de perfil'}
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="divide-y divide-border">
+              <button
+                type="button"
+                onClick={() => { setAvatarModalOpen(false); fileInputRef.current?.click(); }}
+                className="flex w-full items-center gap-3 px-5 py-4 text-left text-sm font-semibold text-primary transition-colors hover:bg-primary/5 active:bg-primary/10"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                  <Camera className="h-4 w-4" />
+                </span>
+                Subir nueva foto
+              </button>
+
+              {avatarUrl && (
+                <button
+                  type="button"
+                  onClick={() => void deleteAvatar()}
+                  className="flex w-full items-center gap-3 px-5 py-4 text-left text-sm font-semibold text-destructive transition-colors hover:bg-destructive/5 active:bg-destructive/10"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                    <Trash2 className="h-4 w-4" />
+                  </span>
+                  Eliminar foto actual
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setAvatarModalOpen(false)}
+                className="flex w-full items-center justify-center px-5 py-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent active:bg-accent/80"
+                style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Avatar lightbox ── */}
+      {lightboxOpen && avatarUrl && (
+        <AvatarLightbox src={avatarUrl} onClose={() => setLightboxOpen(false)} />
+      )}
+
       {/* ── Tester welcome modal (shown once) ── */}
       <Dialog
         open={testerModalOpen}
@@ -748,3 +867,189 @@ const MiniStat = ({ icon: Icon, label, value }: { icon: typeof Activity; label: 
 );
 
 export default Profile;
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   AvatarLightbox — full-screen image viewer with pinch/wheel zoom + pan
+───────────────────────────────────────────────────────────────────────────── */
+function AvatarLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const dragStart = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null);
+  const pinchRef = useRef<{ dist: number } | null>(null);
+  const swipeRef = useRef<{ y: number } | null>(null);
+  const scaleRef = useRef(1);
+
+  const MIN = 1;
+  const MAX = 6;
+  const clamp = (v: number) => Math.min(MAX, Math.max(MIN, v));
+
+  const applyScale = (next: number) => {
+    const s = clamp(next);
+    scaleRef.current = s;
+    setScale(s);
+    if (s <= 1) setOffset({ x: 0, y: 0 });
+  };
+
+  /* Non-passive wheel listener so we can preventDefault (stops page scroll) */
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      applyScale(scaleRef.current * (e.deltaY > 0 ? 0.88 : 1.14));
+    };
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* Close on Escape */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  /* ── Mouse drag ── */
+  const onMouseDown = (e: React.MouseEvent) => {
+    if (scaleRef.current <= 1) return;
+    e.preventDefault();
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    dragStart.current = { px: e.clientX, py: e.clientY, ox: offset.x, oy: offset.y };
+  };
+
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingRef.current || !dragStart.current) return;
+    setOffset({
+      x: dragStart.current.ox + e.clientX - dragStart.current.px,
+      y: dragStart.current.oy + e.clientY - dragStart.current.py,
+    });
+  };
+
+  const onMouseUp = () => {
+    isDraggingRef.current = false;
+    setIsDragging(false);
+    dragStart.current = null;
+  };
+
+  /* ── Touch: pinch-to-zoom + pan + swipe-down-to-close ── */
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchRef.current = { dist: Math.hypot(dx, dy) };
+      swipeRef.current = null;
+    } else if (e.touches.length === 1) {
+      swipeRef.current = { y: e.touches[0].clientY };
+      if (scaleRef.current > 1) {
+        dragStart.current = {
+          px: e.touches[0].clientX,
+          py: e.touches[0].clientY,
+          ox: offset.x,
+          oy: offset.y,
+        };
+      }
+    }
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchRef.current) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const newDist = Math.hypot(dx, dy);
+      applyScale(scaleRef.current * (newDist / pinchRef.current.dist));
+      pinchRef.current.dist = newDist;
+    } else if (e.touches.length === 1 && scaleRef.current > 1 && dragStart.current) {
+      setOffset({
+        x: dragStart.current.ox + e.touches[0].clientX - dragStart.current.px,
+        y: dragStart.current.oy + e.touches[0].clientY - dragStart.current.py,
+      });
+    }
+  };
+
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length < 2) pinchRef.current = null;
+    /* Swipe-down to close only when not zoomed in */
+    if (swipeRef.current && scaleRef.current <= 1.05 && e.changedTouches.length === 1) {
+      const dy = e.changedTouches[0].clientY - swipeRef.current.y;
+      if (dy > 90) { onClose(); return; }
+    }
+    if (e.touches.length === 0) dragStart.current = null;
+    swipeRef.current = null;
+  };
+
+  /* Double-tap to reset zoom */
+  const lastTapRef = useRef(0);
+  const onTouchEndForDoubleTap = (e: React.TouchEvent) => {
+    onTouchEnd(e);
+    if (e.changedTouches.length !== 1) return;
+    const now = Date.now();
+    if (now - lastTapRef.current < 280) {
+      scaleRef.current <= 1.05 ? applyScale(2.5) : applyScale(1);
+    }
+    lastTapRef.current = now;
+  };
+
+  const cursor = scaleRef.current > 1 ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in';
+
+  return (
+    <div
+      className="fixed inset-0 z-[300] bg-black select-none"
+      onClick={onClose}
+    >
+      {/* Close button */}
+      <button
+        type="button"
+        aria-label="Cerrar visualizador"
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        className="absolute right-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition hover:bg-white/25 active:scale-90"
+        style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
+      >
+        <X className="h-5 w-5" />
+      </button>
+
+      {/* Zoom hint */}
+      {scale <= 1 && (
+        <p className="pointer-events-none absolute bottom-8 left-0 right-0 text-center text-xs text-white/40 select-none">
+          Pellizca para hacer zoom · Desliza abajo para cerrar
+        </p>
+      )}
+
+      {/* Image area */}
+      <div
+        ref={containerRef}
+        className="flex h-full w-full items-center justify-center overflow-hidden"
+        style={{ cursor, touchAction: 'none' }}
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEndForDoubleTap}
+      >
+        <img
+          src={src}
+          alt="Foto de perfil"
+          draggable={false}
+          style={{
+            transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+            transition: isDragging || pinchRef.current ? 'none' : 'transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94)',
+            maxWidth: '92vw',
+            maxHeight: '92vh',
+            objectFit: 'contain',
+            pointerEvents: 'none',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+          }}
+        />
+      </div>
+    </div>
+  );
+}
