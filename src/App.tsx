@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
-import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
+import { useSubscriptionStatus, SubscriptionProvider } from "@/hooks/useSubscriptionStatus";
 import { supabase } from "@/integrations/supabase/client";
 import BottomNav from "@/components/BottomNav";
 import Auth from "./pages/Auth";
@@ -186,11 +186,13 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <AuthProvider>
-          <BrowserRouter>
-            <BrandThemeApplier />
-            <ServiceWorkerCardioBridge />
-            <AppRoutes />
-          </BrowserRouter>
+          <SubscriptionProvider>
+            <BrowserRouter>
+              <BrandThemeApplier />
+              <ServiceWorkerCardioBridge />
+              <AppRoutes />
+            </BrowserRouter>
+          </SubscriptionProvider>
         </AuthProvider>
       </TooltipProvider>
     </ThemeProvider>

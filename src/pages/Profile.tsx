@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscriptionContext } from '@/hooks/useSubscriptionStatus';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   LogOut, User, Activity, Flame, Beef, Droplets, Save, Camera, Lock,
   Target, Plus, TrendingUp, Settings2, Sun, Moon, Pencil, LayoutDashboard, HelpCircle,
-  FileText, Heart,
+  FileText, Heart, Sparkles, AlertTriangle,
 } from 'lucide-react';
 import StepsRing from '@/components/StepsRing';
 import { FAQBottomSheet } from '@/components/FAQBottomSheet';
@@ -50,6 +51,40 @@ const Profile = () => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme, setTheme } = useTheme();
+
+  // ── Subscription context ───────────────────────────────────────────────
+  const {
+    state: sub,
+    notifiedTester,
+    notifiedPremium,
+    markTesterNotified,
+    markPremiumNotified,
+  } = useSubscriptionContext();
+
+  const isTester = sub.status === 'premium' && (sub as { role: string }).role === 'tester' && !isAdmin;
+  const isPremium = sub.status === 'premium' && (sub as { role: string }).role === 'premium';
+  const isTrial = sub.status === 'trial';
+  const isExpiredFree = sub.status === 'expired';
+  const premiumDaysLeft = isPremium
+    ? Math.max(0, Math.ceil(((sub as Extract<typeof sub, { status: 'premium' }>).until.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 0;
+
+  const [testerModalOpen, setTesterModalOpen] = useState(false);
+  const [premiumModalOpen, setPremiumModalOpen] = useState(false);
+
+  // Show one-time tester welcome modal
+  useEffect(() => {
+    if (isTester && !notifiedTester) {
+      setTesterModalOpen(true);
+    }
+  }, [isTester, notifiedTester]);
+
+  // Show one-time premium activation modal
+  useEffect(() => {
+    if (isPremium && !notifiedPremium) {
+      setPremiumModalOpen(true);
+    }
+  }, [isPremium, notifiedPremium]);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -331,6 +366,26 @@ const Profile = () => {
               <p className="text-lg font-semibold leading-tight text-foreground">
                 {fullName || 'Tu nombre'}
               </p>
+              {/* ── Role badge ── */}
+              <div className="mt-1">
+                {isAdmin ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2.5 py-0.5 text-[11px] font-bold text-blue-600 dark:text-blue-400">
+                    Admin 👑
+                  </span>
+                ) : isTester ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#39FF14]/15 px-2.5 py-0.5 text-[11px] font-bold text-[#22c55e] dark:text-[#39FF14]">
+                    Tester ∞
+                  </span>
+                ) : isPremium ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                    ✦ Premium · {premiumDaysLeft}d
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                    Free
+                  </span>
+                )}
+              </div>
               <p className="mt-0.5 text-sm text-muted-foreground">{ageLabel}</p>
             </div>
             <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0 rounded-xl" onClick={openEditProfile} aria-label="Editar perfil">
@@ -347,6 +402,47 @@ const Profile = () => {
               Modo Rosita para mi amor. Te amo. Gracias por tu apoyo incondicional.
             </p>
           </div>
+        )}
+
+        {/* ── Subscription banners (visible según rol, no para Admin) ── */}
+        {!isAdmin && (
+          <>
+            {/* Trial: days remaining */}
+            {isTrial && (
+              <div className="flex items-center gap-3 rounded-2xl border border-muted bg-muted/50 px-4 py-3">
+                <Sparkles className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  Versión de prueba: te quedan{' '}
+                  <span className="font-semibold text-foreground">
+                    {(sub as Extract<typeof sub, { status: 'trial' }>).daysLeft}{' '}
+                    {(sub as Extract<typeof sub, { status: 'trial' }>).daysLeft === 1 ? 'día' : 'días'}
+                  </span>
+                </p>
+              </div>
+            )}
+
+            {/* Premium expiry warning: ≤5 days left */}
+            {isPremium && premiumDaysLeft <= 5 && premiumDaysLeft > 0 && (
+              <div className="flex items-center gap-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-3">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                  Tu Premium vence pronto. Recuerda renovar para no perder acceso.
+                </p>
+              </div>
+            )}
+
+            {/* Expired: upgrade CTA */}
+            {isExpiredFree && (
+              <button
+                type="button"
+                onClick={() => navigate('/paywall')}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 px-4 py-3.5 text-sm font-bold text-white shadow-md transition hover:brightness-110 active:scale-[0.98]"
+              >
+                <Sparkles className="h-4 w-4" />
+                Mejorar a Premium
+              </button>
+            )}
+          </>
         )}
 
         <div className="rounded-2xl bg-card p-4">
@@ -493,6 +589,78 @@ const Profile = () => {
       </div>
 
       <FAQBottomSheet open={faqOpen} onOpenChange={setFaqOpen} />
+
+      {/* ── Tester welcome modal (shown once) ── */}
+      <Dialog
+        open={testerModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTesterModalOpen(false);
+            void markTesterNotified();
+          }
+        }}
+      >
+        <DialogContent className="rounded-2xl border-0 bg-card text-center">
+          <DialogHeader>
+            <DialogTitle className="text-center text-foreground">¡Bienvenido, Tester! 🎉</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pb-2 pt-1">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#39FF14]/15">
+              <span className="text-3xl">∞</span>
+            </div>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              Tenés <span className="font-semibold text-foreground">acceso de por vida</span> a todas las funciones de Pana Fitness.
+              <br />
+              ¡Gracias por testear y ayudarnos a mejorar la app! 🙌
+            </p>
+            <Button
+              className="h-11 w-full rounded-xl font-semibold"
+              onClick={() => {
+                setTesterModalOpen(false);
+                void markTesterNotified();
+              }}
+            >
+              ¡Entendido!
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Premium activation modal (shown once) ── */}
+      <Dialog
+        open={premiumModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPremiumModalOpen(false);
+            void markPremiumNotified();
+          }
+        }}
+      >
+        <DialogContent className="rounded-2xl border-0 bg-card text-center">
+          <DialogHeader>
+            <DialogTitle className="text-center text-foreground">¡Premium activado! ✦</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pb-2 pt-1">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/15">
+              <span className="text-3xl">⭐</span>
+            </div>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              Tu suscripción <span className="font-semibold text-amber-600 dark:text-amber-400">Premium está activa por 30 días</span>.
+              <br />
+              Tenés acceso completo a todos los entrenamientos y funciones de la app.
+            </p>
+            <Button
+              className="h-11 w-full rounded-xl bg-amber-500 font-semibold hover:bg-amber-600"
+              onClick={() => {
+                setPremiumModalOpen(false);
+                void markPremiumNotified();
+              }}
+            >
+              ¡Comenzar!
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
         <DialogContent className="rounded-2xl border-0 bg-card">

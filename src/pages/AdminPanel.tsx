@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Ban, Crown, Palette, Search, Shield, Star, User, UserPlus, Users } from 'lucide-react';
+import { ArrowLeft, Palette, Search, Shield, Star, User, UserPlus, Users } from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -19,38 +21,51 @@ type DirectoryRow = {
   avatar_url: string | null;
   registered_at: string;
   premium_until: string | null;
-  theme: string; // 'default' | 'pink'
+  theme: string;
+  // subscription fields (supplemented after RPC)
+  subscription_role: 'free' | 'premium' | 'tester' | null;
+  is_admin: boolean;
+  subscription_expires_at: string | null;
+  notified_tester: boolean;
+  notified_premium: boolean;
 };
 
-type SubStatus = 'trial' | 'premium' | 'lifetime' | 'expired';
-type PremiumAction = 30 | 'lifetime' | 'revoke';
+type SubStatus = 'admin' | 'tester' | 'premium' | 'trial' | 'expired';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function subLabel(
-  premiumUntil: string | null,
-  registeredAt: string,
-): { text: string; status: SubStatus } {
-  const now = new Date();
+function resolveStatus(row: DirectoryRow): { text: string; status: SubStatus } {
+  if (row.is_admin) return { text: 'Admin 👑', status: 'admin' };
 
-  if (premiumUntil) {
-    const until = new Date(premiumUntil);
-    if (until > now) {
-      if (until.getFullYear() >= 2049) return { text: 'Tester ∞', status: 'lifetime' };
-      const d = until.toLocaleDateString('es-AR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: '2-digit',
-      });
-      return { text: `Premium · ${d}`, status: 'premium' };
+  const role = row.subscription_role ?? 'free';
+
+  if (role === 'tester') return { text: 'Tester ∞', status: 'tester' };
+
+  if (role === 'premium') {
+    const raw = row.subscription_expires_at ?? row.premium_until;
+    if (raw) {
+      const until = new Date(raw);
+      if (until > new Date()) {
+        const d = until.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+        return { text: `Premium · ${d}`, status: 'premium' };
+      }
     }
-    return { text: 'Expirado', status: 'expired' };
+    // premium role but expired → treat as expired
   }
 
-  const reg = registeredAt ? new Date(registeredAt) : new Date();
+  // legacy premium_until (role=free but date still set)
+  if (row.premium_until) {
+    const pu = new Date(row.premium_until);
+    if (pu > new Date()) {
+      const d = pu.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+      return { text: `Premium · ${d}`, status: 'premium' };
+    }
+  }
+
+  const reg = row.registered_at ? new Date(row.registered_at) : new Date();
   const trialEnd = new Date(reg.getTime() + 7 * 24 * 60 * 60 * 1000);
-  if (now < trialEnd) {
-    const daysLeft = Math.max(1, Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+  if (new Date() < trialEnd) {
+    const daysLeft = Math.max(1, Math.ceil((trialEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
     return { text: `Prueba · ${daysLeft}d`, status: 'trial' };
   }
 
@@ -58,9 +73,10 @@ function subLabel(
 }
 
 const STATUS_CLS: Record<SubStatus, string> = {
-  trial: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+  admin: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+  tester: 'bg-[#39FF14]/15 text-emerald-700 dark:text-[#39FF14]',
   premium: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-  lifetime: 'bg-violet-500/15 text-violet-700 dark:text-violet-400',
+  trial: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
   expired: 'bg-red-500/15 text-red-600 dark:text-red-400',
 };
 
@@ -79,96 +95,217 @@ const registeredYmdLocal = (iso: string) => {
 const AdminPanel = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
 
   const [rows, setRows] = useState<DirectoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [toggling, setToggling] = useState<Set<string>>(new Set());
-  const [actionTarget, setActionTarget] = useState<DirectoryRow | null>(null);
+  const [themeTarget, setThemeTarget] = useState<DirectoryRow | null>(null);
 
   // ── Data ───────────────────────────────────────────────────────────────
 
   const loadDirectory = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: rpcError } = await supabase.rpc('admin_user_directory');
+
+    // 1. Base directory via RPC (runs SECURITY DEFINER — bypasses RLS)
+    const { data: dirData, error: rpcError } = await supabase.rpc('admin_user_directory');
     if (rpcError) {
       setError(rpcError.message);
       setRows([]);
-    } else {
-      setRows((data ?? []) as DirectoryRow[]);
+      setLoading(false);
+      return;
     }
+
+    const rawRows = (dirData ?? []) as Record<string, unknown>[];
+
+    // Log the raw RPC shape once so we can verify which fields it returns
+    if (rawRows.length > 0) {
+      console.log('🔍 admin_user_directory keys:', Object.keys(rawRows[0]));
+      console.log('🔍 admin_user_directory first row:', rawRows[0]);
+    }
+
+    // Build rows directly from RPC data.
+    // The RPC may or may not include subscription_role — we capture it if present.
+    // ID can be 'user_id' or 'id' depending on how the function was written.
+    const extractId = (r: Record<string, unknown>): string =>
+      (r.user_id as string) || (r.id as string) || '';
+
+    const merged: DirectoryRow[] = rawRows.map((r) => ({
+      user_id:               extractId(r),
+      email:                 (r.email               as string)  ?? '',
+      first_name:            (r.first_name           as string)  ?? null,
+      last_name:             (r.last_name            as string)  ?? null,
+      avatar_url:            (r.avatar_url           as string)  ?? null,
+      registered_at:         (r.registered_at        as string)  ?? '',
+      premium_until:         (r.premium_until        as string)  ?? null,
+      theme:                 (r.theme                as string)  ?? 'default',
+      // Subscription fields — present when admin_user_directory includes them
+      subscription_role:     ((r.subscription_role   as string)  ?? null) as DirectoryRow['subscription_role'],
+      subscription_expires_at: (r.subscription_expires_at as string) ?? null,
+      is_admin:              (r.is_admin             as boolean) ?? false,
+      notified_tester:       (r.notified_tester      as boolean) ?? false,
+      notified_premium:      (r.notified_premium     as boolean) ?? false,
+    }));
+
+    // 2. If admin_user_directory does NOT include subscription_role (all null),
+    //    try a direct profiles query as fallback.
+    //    NOTE: this only works if RLS has a policy allowing admin to read all rows.
+    //    If it returns 0 rows or only the admin's own row, you need to add the
+    //    subscription fields to admin_user_directory in Supabase instead.
+    const rpcIncludesSubs = rawRows.some((r) => r.subscription_role != null);
+    if (!rpcIncludesSubs && merged.length > 0) {
+      console.warn('⚠️ admin_user_directory no incluye subscription_role. Intentando query directa a profiles...');
+
+      const userIds = merged.map((r) => r.user_id).filter(Boolean);
+      const { data: subData, error: subError } = await supabase
+        .from('profiles')
+        .select('user_id, subscription_role, subscription_expires_at, is_admin, notified_tester, notified_premium')
+        .in('user_id', userIds);
+
+      if (subError) {
+        console.error('❌ profiles query error (probable causa: RLS bloqueó el acceso):', subError);
+      } else {
+        console.log(`✅ profiles query devolvió ${(subData ?? []).length} de ${userIds.length} filas`);
+      }
+
+      const subMap: Record<string, Partial<DirectoryRow>> = {};
+      for (const row of subData ?? []) {
+        const r = row as {
+          user_id: string;
+          subscription_role: string | null;
+          subscription_expires_at: string | null;
+          is_admin: boolean | null;
+          notified_tester: boolean | null;
+          notified_premium: boolean | null;
+        };
+        subMap[r.user_id] = {
+          subscription_role:      (r.subscription_role as DirectoryRow['subscription_role']) ?? null,
+          subscription_expires_at: r.subscription_expires_at ?? null,
+          is_admin:               r.is_admin === true,
+          notified_tester:        r.notified_tester === true,
+          notified_premium:       r.notified_premium === true,
+        };
+      }
+
+      for (const row of merged) {
+        if (subMap[row.user_id]) {
+          Object.assign(row, subMap[row.user_id]);
+        }
+      }
+    }
+
+    console.log('📋 Roles cargados:', merged.map((r) => ({ email: r.email, role: r.subscription_role })));
+
+    setRows(merged);
     setLoading(false);
   }, []);
 
   useEffect(() => { void loadDirectory(); }, [loadDirectory]);
 
-  // ── Actions ────────────────────────────────────────────────────────────
+  // ── Role change ────────────────────────────────────────────────────────
 
-  const handleSetPremium = useCallback(async (row: DirectoryRow, action: PremiumAction) => {
-    setActionTarget(null);
-    setToggling((prev) => new Set([...prev, row.user_id]));
+  const handleSetRole = useCallback(
+    async (row: DirectoryRow, newRole: 'free' | 'premium' | 'tester') => {
+      setToggling((prev) => new Set([...prev, row.user_id]));
 
-    let newPremiumUntil: string | null;
-    if (action === 'revoke') {
-      newPremiumUntil = null;
-    } else if (action === 'lifetime') {
-      newPremiumUntil = '2050-01-01T00:00:00Z';
-    } else {
-      const d = new Date();
-      d.setDate(d.getDate() + 30);
-      newPremiumUntil = d.toISOString();
-    }
+      const expiresAt =
+        newRole === 'premium'
+          ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          : null;
 
-    const { error: rpcError } = await supabase.rpc('set_user_premium', {
-      target_user_id: row.user_id,
-      new_premium_until: newPremiumUntil,
-    });
+      try {
+        const targetId = row.user_id;
+        console.log('🚀 Enviando ID a Supabase:', targetId, 'para el rol:', newRole);
 
-    if (rpcError) {
-      toast({ title: 'Error al actualizar', description: rpcError.message, variant: 'destructive' });
-    } else {
-      setRows((prev) =>
-        prev.map((r) => (r.user_id === row.user_id ? { ...r, premium_until: newPremiumUntil } : r)),
-      );
-      const msg =
-        action === 'revoke'
-          ? 'Acceso revocado'
-          : action === 'lifetime'
-            ? 'Pase de por vida asignado'
-            : '30 días asignados';
-      toast({ title: msg, description: row.email });
-    }
+        if (!targetId) {
+          throw new Error('user_id está vacío — verifica el campo que devuelve admin_user_directory');
+        }
 
-    setToggling((prev) => {
-      const next = new Set(prev);
-      next.delete(row.user_id);
-      return next;
-    });
-  }, [toast]);
+        const { error: rpcError } = await supabase.rpc('set_user_subscription_role', {
+          target_user_id: targetId,
+          new_role: newRole,
+          new_expires_at: expiresAt,
+        });
 
-  const handleToggleTheme = useCallback(async (row: DirectoryRow) => {
-    setActionTarget(null);
-    setToggling((prev) => new Set([...prev, row.user_id]));
-    const newTheme = row.theme === 'pink' ? 'default' : 'pink';
-    const { error: rpcError } = await supabase.rpc('set_user_theme', {
-      target_user_id: row.user_id,
-      new_theme: newTheme,
-    });
-    if (rpcError) {
-      toast({ title: 'Error al cambiar tema', description: rpcError.message, variant: 'destructive' });
-    } else {
-      setRows((prev) =>
-        prev.map((r) => (r.user_id === row.user_id ? { ...r, theme: newTheme } : r)),
-      );
-      toast({
-        title: newTheme === 'pink' ? '🌸 Modo Rosa VIP activado' : '🟢 Modo Normal restaurado',
-        description: row.email,
+        if (rpcError) throw rpcError;
+
+        setRows((prev) =>
+          prev.map((r) =>
+            r.user_id === row.user_id
+              ? {
+                  ...r,
+                  subscription_role: newRole,
+                  subscription_expires_at: expiresAt,
+                  notified_premium: newRole === 'premium' ? false : r.notified_premium,
+                  notified_tester: newRole === 'tester' ? false : r.notified_tester,
+                }
+              : r,
+          ),
+        );
+
+        const labels: Record<string, string> = {
+          free: 'Rol cambiado a Free',
+          premium: '30 días Premium asignados',
+          tester: 'Acceso Tester ∞ activado',
+        };
+        toast({ title: labels[newRole], description: row.email });
+      } catch (err) {
+        console.error('Error de Supabase RPC:', err);
+        const msg =
+          err != null && typeof err === 'object' && 'message' in err
+            ? String((err as { message: unknown }).message)
+            : typeof err === 'string'
+              ? err
+              : 'Error desconocido al actualizar';
+        toast({
+          title: 'Error al actualizar rol',
+          description: msg,
+          variant: 'destructive',
+        });
+      }
+
+      setToggling((prev) => {
+        const next = new Set(prev);
+        next.delete(row.user_id);
+        return next;
       });
-    }
-    setToggling((prev) => { const next = new Set(prev); next.delete(row.user_id); return next; });
-  }, [toast]);
+    },
+    [toast],
+  );
+
+  // ── Theme toggle ───────────────────────────────────────────────────────
+
+  const handleToggleTheme = useCallback(
+    async (row: DirectoryRow) => {
+      setThemeTarget(null);
+      setToggling((prev) => new Set([...prev, row.user_id]));
+      const newTheme = row.theme === 'pink' ? 'default' : 'pink';
+      const { error: rpcError } = await supabase.rpc('set_user_theme', {
+        target_user_id: row.user_id,
+        new_theme: newTheme,
+      });
+      if (rpcError) {
+        toast({ title: 'Error al cambiar tema', description: rpcError.message, variant: 'destructive' });
+      } else {
+        setRows((prev) =>
+          prev.map((r) => (r.user_id === row.user_id ? { ...r, theme: newTheme } : r)),
+        );
+        toast({
+          title: newTheme === 'pink' ? '🌸 Modo Rosa VIP activado' : '🟢 Modo Normal restaurado',
+          description: row.email,
+        });
+      }
+      setToggling((prev) => {
+        const next = new Set(prev);
+        next.delete(row.user_id);
+        return next;
+      });
+    },
+    [toast],
+  );
 
   // ── Derived ────────────────────────────────────────────────────────────
 
@@ -188,7 +325,18 @@ const AdminPanel = () => {
     [rows, todayYmd],
   );
   const activeCount = useMemo(
-    () => rows.filter((r) => r.premium_until && new Date(r.premium_until) > new Date()).length,
+    () =>
+      rows.filter((r) => {
+        if (r.is_admin) return true;
+        const role = r.subscription_role;
+        if (role === 'tester') return true;
+        if (role === 'premium' && r.subscription_expires_at) {
+          return new Date(r.subscription_expires_at) > new Date();
+        }
+        // legacy
+        if (r.premium_until && new Date(r.premium_until) > new Date()) return true;
+        return false;
+      }).length,
     [rows],
   );
 
@@ -217,8 +365,7 @@ const AdminPanel = () => {
         </div>
 
         <p className="text-sm text-muted-foreground">
-          Directorio de usuarios · Suscripciones gestionadas por fecha de vencimiento.
-          Hacé clic en el estado de un usuario para editar su acceso.
+          Directorio de usuarios · Cambiá el rol desde el selector en cada fila.
         </p>
 
         {/* Stats */}
@@ -279,7 +426,7 @@ const AdminPanel = () => {
                   <TableHead>Nombre</TableHead>
                   <TableHead className="hidden sm:table-cell">Email</TableHead>
                   <TableHead className="whitespace-nowrap">Registro</TableHead>
-                  <TableHead className="w-36 pr-4 text-right">Estado</TableHead>
+                  <TableHead className="w-44 pr-4 text-right">Rol</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -300,8 +447,9 @@ const AdminPanel = () => {
                           year: 'numeric',
                         })
                       : '—';
-                    const { text, status } = subLabel(r.premium_until, r.registered_at);
+                    const { text, status } = resolveStatus(r);
                     const isBusy = toggling.has(r.user_id);
+                    const isSelf = r.user_id === currentUser?.id;
 
                     return (
                       <TableRow key={r.user_id}>
@@ -326,19 +474,48 @@ const AdminPanel = () => {
                         <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                           {dateLabel}
                         </TableCell>
-                        <TableCell className="pr-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setActionTarget(r)}
-                            disabled={isBusy}
-                            title="Clic para editar suscripción"
-                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition active:scale-95 disabled:opacity-50 ${STATUS_CLS[status]}`}
-                          >
-                            {isBusy ? (
-                              <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                            ) : null}
-                            {text}
-                          </button>
+                        <TableCell className="pr-2 text-right">
+                          {/* Admin's own row: static badge, no self-edit */}
+                          {isSelf ? (
+                            <span
+                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_CLS[status]}`}
+                            >
+                              {text}
+                            </span>
+                          ) : isBusy ? (
+                            <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                              Guardando…
+                            </span>
+                          ) : (
+                            <div className="flex items-center justify-end gap-2">
+                              {/* Role selector */}
+                              <Select
+                                value={r.subscription_role || 'free'}
+                                onValueChange={(val) =>
+                                  void handleSetRole(r, val as 'free' | 'premium' | 'tester')
+                                }
+                              >
+                                <SelectTrigger className="h-8 w-28 rounded-xl border border-input bg-secondary text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="free">Free</SelectItem>
+                                  <SelectItem value="premium">Premium</SelectItem>
+                                  <SelectItem value="tester">Tester</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {/* Theme toggle */}
+                              <button
+                                type="button"
+                                title={r.theme === 'pink' ? 'Quitar Modo Rosa' : 'Activar Modo Rosa'}
+                                onClick={() => setThemeTarget(r)}
+                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary text-xs transition hover:bg-accent"
+                              >
+                                <Palette className={`h-3.5 w-3.5 ${r.theme === 'pink' ? 'text-pink-500' : 'text-muted-foreground'}`} />
+                              </button>
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -350,69 +527,30 @@ const AdminPanel = () => {
         </div>
       </div>
 
-      {/* ── Action Dialog ── */}
-      <Dialog open={!!actionTarget} onOpenChange={(open) => { if (!open) setActionTarget(null); }}>
+      {/* ── Theme confirmation dialog ── */}
+      <Dialog open={!!themeTarget} onOpenChange={(open) => { if (!open) setThemeTarget(null); }}>
         <DialogContent className="rounded-2xl border-border bg-card">
           <DialogHeader>
-            <DialogTitle className="text-foreground">Gestionar suscripción</DialogTitle>
-            <DialogDescription asChild>
-              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <span className="truncate">{actionTarget?.email}</span>
-                {actionTarget && (
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                      STATUS_CLS[subLabel(actionTarget.premium_until, actionTarget.registered_at).status]
-                    }`}
-                  >
-                    {subLabel(actionTarget.premium_until, actionTarget.registered_at).text}
-                  </span>
-                )}
-              </div>
+            <DialogTitle className="text-foreground">
+              {themeTarget?.theme === 'pink' ? 'Quitar Modo Rosa VIP' : 'Activar Modo Rosa VIP 🌸'}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              {themeTarget?.email}
             </DialogDescription>
           </DialogHeader>
-
           <div className="mt-2 flex flex-col gap-2">
             <Button
               variant="ghost"
-              className="h-11 w-full justify-start gap-3 rounded-xl bg-amber-500/10 font-semibold text-amber-700 hover:bg-amber-500/20 dark:text-amber-400"
-              onClick={() => actionTarget && void handleSetPremium(actionTarget, 30)}
+              className={`h-11 w-full justify-start gap-3 rounded-xl font-semibold ${
+                themeTarget?.theme === 'pink'
+                  ? 'bg-zinc-500/10 text-zinc-600 hover:bg-zinc-500/20 dark:text-zinc-400'
+                  : 'bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 dark:text-pink-400'
+              }`}
+              onClick={() => themeTarget && void handleToggleTheme(themeTarget)}
             >
-              <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
-              Dar 30 días
+              <Palette className={`h-4 w-4 ${themeTarget?.theme === 'pink' ? 'text-zinc-500' : 'text-pink-500'}`} />
+              {themeTarget?.theme === 'pink' ? 'Quitar Modo Rosa VIP' : 'Activar Modo Rosa VIP 🌸'}
             </Button>
-
-            <Button
-              variant="ghost"
-              className="h-11 w-full justify-start gap-3 rounded-xl bg-violet-500/10 font-semibold text-violet-700 hover:bg-violet-500/20 dark:text-violet-400"
-              onClick={() => actionTarget && void handleSetPremium(actionTarget, 'lifetime')}
-            >
-              <Crown className="h-4 w-4 text-violet-500" />
-              Pase de por vida (Tester)
-            </Button>
-
-            <Button
-              variant="ghost"
-              className="h-11 w-full justify-start gap-3 rounded-xl bg-red-500/10 font-semibold text-red-600 hover:bg-red-500/20 dark:text-red-400"
-              onClick={() => actionTarget && void handleSetPremium(actionTarget, 'revoke')}
-            >
-              <Ban className="h-4 w-4 text-red-500" />
-              Revocar acceso
-            </Button>
-
-            <div className="border-t border-border pt-1">
-              <Button
-                variant="ghost"
-                className={`h-11 w-full justify-start gap-3 rounded-xl font-semibold transition ${
-                  actionTarget?.theme === 'pink'
-                    ? 'bg-zinc-500/10 text-zinc-600 hover:bg-zinc-500/20 dark:text-zinc-400'
-                    : 'bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 dark:text-pink-400'
-                }`}
-                onClick={() => actionTarget && void handleToggleTheme(actionTarget)}
-              >
-                <Palette className={`h-4 w-4 ${actionTarget?.theme === 'pink' ? 'text-zinc-500' : 'text-pink-500'}`} />
-                {actionTarget?.theme === 'pink' ? 'Quitar Modo Rosa VIP' : 'Activar Modo Rosa VIP 🌸'}
-              </Button>
-            </div>
           </div>
         </DialogContent>
       </Dialog>
