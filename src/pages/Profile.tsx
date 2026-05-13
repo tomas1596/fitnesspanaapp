@@ -431,11 +431,16 @@ const Profile = () => {
               </div>
             )}
 
-            {/* Expired: upgrade CTA */}
-            {isExpiredFree && (
+            {/* Free (trial or expired): upgrade CTA */}
+            {(isTrial || isExpiredFree) && (
               <button
                 type="button"
-                onClick={() => navigate('/paywall')}
+                onClick={() =>
+                  toast({
+                    title: '¡Próximamente! 🚀',
+                    description: 'La suscripción Premium estará disponible muy pronto.',
+                  })
+                }
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 px-4 py-3.5 text-sm font-bold text-white shadow-md transition hover:brightness-110 active:scale-[0.98]"
               >
                 <Sparkles className="h-4 w-4" />

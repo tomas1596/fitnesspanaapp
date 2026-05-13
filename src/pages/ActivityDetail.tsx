@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { MapContainer, TileLayer, useMap } from 'react-leaflet';
+import { CircleMarker, MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -372,6 +372,22 @@ export default function ActivityDetail() {
                 <TileLayer url={tileUrl} attribution={TILE_ATTR} />
                 <PaceHeatPolylines points={displayRoutePts} avgPaceSecPerKm={avgPace} mapTheme={mapHeatTheme} />
                 <KmMilestoneMarkers points={displayRoutePts} mapTheme={mapHeatTheme} />
+                {/* Start dot — green */}
+                {poly.length > 0 && (
+                  <CircleMarker
+                    center={poly[0]}
+                    radius={8}
+                    pathOptions={{ fillColor: '#16a34a', color: '#ffffff', weight: 2.5, fillOpacity: 1 }}
+                  />
+                )}
+                {/* End dot — red */}
+                {poly.length > 1 && (
+                  <CircleMarker
+                    center={poly[poly.length - 1]}
+                    radius={8}
+                    pathOptions={{ fillColor: '#ef4444', color: '#ffffff', weight: 2.5, fillOpacity: 1 }}
+                  />
+                )}
                 <FitRouteBounds positions={poly} />
               </MapContainer>
             ) : (

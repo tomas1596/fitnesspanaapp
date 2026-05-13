@@ -147,3 +147,29 @@
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
   }
 }
+
+/* ── Light-mode primary readability ───────────────────────────────────────────
+   The neon green (#39FF14 / hsl 111 100% 54%) is stunning on dark backgrounds
+   but has a contrast ratio of ~1.5:1 on white — far below WCAG AA.
+
+   Strategy:
+   • bg-primary  (button fills)  → KEEPS neon. Dark foreground text on neon bg ✓
+   • text-primary (icons, labels) → overridden to #16a34a (Tailwind green-700)
+   • border-primary / ring-primary → same dark green for consistency
+
+   These rules are intentionally outside any @layer so they beat @layer utilities
+   in the cascade without needing !important.
+   Dark mode is unaffected (.dark selector wins over html:not(.dark)).
+──────────────────────────────────────────────────────────────────────────────── */
+html:not(.dark) .text-primary {
+  color: #16a34a;
+}
+
+html:not(.dark) .border-primary {
+  border-color: #16a34a;
+}
+
+html:not(.dark) .ring-primary {
+  --tw-ring-color: #16a34a;
+  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(var(--tw-ring-width) + var(--tw-ring-offset-width)) #16a34a;
+}

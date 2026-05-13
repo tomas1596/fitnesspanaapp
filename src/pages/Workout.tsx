@@ -160,7 +160,9 @@ const Workout = () => {
     setActiveDates(new Set((data || []).map((d) => d.workout_date)));
   }, [user]);
 
-  useEffect(() => { fetchActiveDates(); }, [fetchActiveDates, exercises.length]);
+  // fetchActiveDates is called explicitly after every add/delete that touches the DB.
+  // Depending on exercises.length was unreliable: it fired *before* the DB write completed.
+  useEffect(() => { fetchActiveDates(); }, [fetchActiveDates]);
 
   // Keep a fast Set of library names for checkbox visibility check
   const fetchLibraryNames = useCallback(async () => {
@@ -207,6 +209,7 @@ const Workout = () => {
     }
 
     setExercises((prev) => prev.map((e) => e.id === tempId ? { ...e, id: data.id } : e));
+    fetchActiveDates();
 
     // Save to library if requested (upsert to avoid duplicate errors)
     if (shouldSave) {
@@ -247,6 +250,7 @@ const Workout = () => {
     }
 
     setExercises((prev) => prev.map((e) => e.id === tempId ? { ...e, id: data.id } : e));
+    fetchActiveDates();
 
     // Refresh history for the added exercise
     fetchLastPerformances([name]).then((perf) =>
@@ -316,12 +320,29 @@ const Workout = () => {
   };
 
   const deleteExercise = async (exerciseId: string) => {
-    setExercises((prev) => prev.filter((e) => e.id !== exerciseId));
+    const remaining = exercises.filter((e) => e.id !== exerciseId);
+    setExercises(remaining);
+
+    // Optimistically remove the calendar dot when the last exercise for this date is gone.
+    // This gives instant visual feedback without waiting for the DB round-trip.
+    if (remaining.length === 0) {
+      setActiveDates((prev) => {
+        const next = new Set(prev);
+        next.delete(dateStr);
+        return next;
+      });
+    }
+
     if (exerciseId.startsWith('temp-')) return;
-    (async () => {
-      await supabase.from('exercise_sets').delete().eq('exercise_id', exerciseId);
-      await supabase.from('exercises').delete().eq('id', exerciseId);
-    })();
+
+    // Await both deletes so fetchActiveDates sees the DB in its final state.
+    await supabase.from('exercise_sets').delete().eq('exercise_id', exerciseId);
+    const { error } = await supabase.from('exercises').delete().eq('id', exerciseId);
+    if (error) {
+      toast({ title: 'Error al eliminar', description: error.message, variant: 'destructive' });
+    }
+    // Re-sync the full activeDates set from the DB (handles multi-delete edge cases).
+    fetchActiveDates();
   };
 
   const renameExercise = async (exerciseId: string, newName: string) => {
@@ -346,6 +367,7 @@ const Workout = () => {
     toast({ title: 'Plantilla cargada', description: `${rows.length} ejercicios agregados.` });
     setEnableEmptyDay(true);
     fetchExercises();
+    fetchActiveDates();
   };
 
   // ── Calendar grid ─────────────────────────────────────────────────────────

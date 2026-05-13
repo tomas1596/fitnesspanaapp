@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+import { CircleMarker, MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Bluetooth, History as HistoryIcon, Pause, Play, Square } from 'lucide-react';
@@ -164,6 +164,7 @@ const Cardio = () => {
   const [distance, setDistance] = useState(0); // meters
   const [holdProgress, setHoldProgress] = useState(0); // 0..1 for finish hold
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const startedAtRef = useRef<Date | null>(null);
   const lastAnnouncedKmRef = useRef(0);
 
@@ -368,12 +369,14 @@ const Cardio = () => {
   };
 
   const finishRun = async () => {
+    if (isSaving) return; // prevent double-fire from long-press
     stopWatch();
     const dur = seconds;
     const dist = distance;
     const km = dist / 1000;
     const pace = km > 0 ? Math.round(dur / km) : 0;
     setPhase('idle');
+
     if (dist < MIN_RUN_METERS) {
       speak('Carrera demasiado corta para guardar');
       toast({ title: 'Carrera demasiado corta', description: 'Menos de 50 metros. No se guardó.' });
@@ -382,33 +385,43 @@ const Cardio = () => {
       setLiveHeartRate(null);
       return;
     }
+
     successChime();
     speak('carrera finalizada');
+
     if (user) {
-      const kmSaved = dist / 1000;
-      const calories = estimateRunCalories(kmSaved);
-      const steps = estimateRunSteps(kmSaved);
-      const splitsPayload = computeKmSplits(route);
-      const elevationGain = computePositiveElevationGainM(route);
-      const hasAltSamples = route.some((p) => p.alt != null && Number.isFinite(p.alt));
-      const { error } = await supabase.from('activities').insert({
-        user_id: user.id,
-        started_at: (startedAtRef.current || new Date()).toISOString(),
-        duration_seconds: dur,
-        distance_meters: dist,
-        avg_pace_seconds_per_km: pace,
-        route_data: route as never,
-        splits: splitsPayload as never,
-        calories,
-        steps,
-        elevation_gain_m: hasAltSamples ? elevationGain : null,
-        avg_heart_rate: liveHeartRate,
-      });
-      if (!error) {
-        toast({ title: '¡Carrera guardada!', description: `${km.toFixed(2)} km · ${fmtTime(dur)}` });
-        fetchRuns();
+      setIsSaving(true);
+      try {
+        const kmSaved = dist / 1000;
+        const calories = estimateRunCalories(kmSaved);
+        const steps = estimateRunSteps(kmSaved);
+        const splitsPayload = computeKmSplits(route);
+        const elevationGain = computePositiveElevationGainM(route);
+        const hasAltSamples = route.some((p) => p.alt != null && Number.isFinite(p.alt));
+        const { error } = await supabase.from('activities').insert({
+          user_id: user.id,
+          started_at: (startedAtRef.current || new Date()).toISOString(),
+          duration_seconds: dur,
+          distance_meters: dist,
+          avg_pace_seconds_per_km: pace,
+          route_data: route as never,
+          splits: splitsPayload as never,
+          calories,
+          steps,
+          elevation_gain_m: hasAltSamples ? elevationGain : null,
+          avg_heart_rate: liveHeartRate,
+        });
+        if (error) {
+          toast({ title: 'Error al guardar', description: error.message, variant: 'destructive' });
+        } else {
+          toast({ title: '¡Carrera guardada!', description: `${km.toFixed(2)} km · ${fmtTime(dur)}` });
+          fetchRuns();
+        }
+      } finally {
+        setIsSaving(false);
       }
     }
+
     setRoute([]); setDistance(0); setSeconds(0);
     lastAnnouncedKmRef.current = 0;
     setLiveHeartRate(null);
@@ -504,6 +517,15 @@ const Cardio = () => {
 
   return (
     <div className="min-h-screen bg-background pb-24">
+      {/* ── Saving overlay ── */}
+      {isSaving && (
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-5 bg-background/95 backdrop-blur-sm">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
+          <p className="text-base font-semibold text-foreground">Guardando tu actividad…</p>
+          <p className="text-xs text-muted-foreground">No cierres la app</p>
+        </div>
+      )}
+
       {/* Header tabs */}
       <div className="flex items-center justify-between px-4 pt-4">
         <h1 className="text-2xl font-bold">Modo Ruta</h1>
@@ -821,6 +843,7 @@ const RunCard = ({ run }: { run: RunRow }) => {
   const date = new Date(run.started_at);
   const route = (run.route_data || []) as LatLng[];
   const displayRoute = useMemo(() => smoothRouteForDisplay(route), [route]);
+  const poly = useMemo(() => displayRoute.map((p) => [p.lat, p.lng] as [number, number]), [displayRoute]);
   const center: [number, number] | null = route.length > 0 ? [route[0].lat, route[0].lng] : null;
 
   return (
@@ -843,6 +866,22 @@ const RunCard = ({ run }: { run: RunRow }) => {
           >
             <TileLayer url={tileUrl} attribution={TILE_ATTR} />
             <PaceHeatPolylines points={displayRoute} avgPaceSecPerKm={run.avg_pace_seconds_per_km} mapTheme={mapHeatTheme} />
+            {/* Start dot */}
+            {poly.length > 0 && (
+              <CircleMarker
+                center={poly[0]}
+                radius={5}
+                pathOptions={{ fillColor: '#16a34a', color: '#ffffff', weight: 2, fillOpacity: 1 }}
+              />
+            )}
+            {/* End dot */}
+            {poly.length > 1 && (
+              <CircleMarker
+                center={poly[poly.length - 1]}
+                radius={5}
+                pathOptions={{ fillColor: '#ef4444', color: '#ffffff', weight: 2, fillOpacity: 1 }}
+              />
+            )}
           </MapContainer>
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Sin ruta</div>

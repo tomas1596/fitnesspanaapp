@@ -152,6 +152,23 @@ function playTransitionSound(sound: SoundOption) {
   else if (sound === 'whistle') playWhistle(ctx);
 }
 
+// ── Text-to-Speech helper ────────────────────────────────────────────────────
+
+/**
+ * Speaks a Spanish phrase using the Web Speech API.
+ * Cancels any pending utterance first so messages never overlap.
+ * Silent no-op when speechSynthesis is unavailable (e.g. some Android WebViews).
+ */
+function speak(text: string) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang   = 'es-ES';
+  u.rate   = 0.95;
+  u.volume = 1;
+  window.speechSynthesis.speak(u);
+}
+
 // ── Sound option metadata ────────────────────────────────────────────────────
 
 const SOUND_OPTIONS: { id: SoundOption; label: string; emoji: string }[] = [
@@ -204,14 +221,19 @@ const Timer = () => {
 
     setPhase(prev => {
       if (prev === 'prep') {
+        // First work round begins — announce start
+        speak('Comienza');
         setRemaining(active.work);
         return 'work';
       }
       if (prev === 'work') {
         if (round >= active.rounds) {
+          // Last round just finished — announce completion
+          speak('Ejercicio finalizado');
           setRemaining(0);
           return 'done';
         }
+        // Mid-circuit rest — no voice announcement
         setRemaining(active.rest);
         return 'rest';
       }
