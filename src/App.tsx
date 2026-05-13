@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
+import { supabase } from "@/integrations/supabase/client";
 import BottomNav from "@/components/BottomNav";
 import Auth from "./pages/Auth";
 import Workout from "./pages/Workout";
@@ -21,6 +22,65 @@ import Terminos from "./pages/Terminos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+// ── Brand theme (VIP Rosa / Verde neón) ──────────────────────────────────
+
+const BRAND_THEMES = {
+  default: {
+    '--brand-color': '#39FF14',
+    '--brand-color-dim': 'rgba(57, 255, 20, 0.13)',
+    '--brand-glow-sm': 'rgba(57, 255, 20, 0.33)',
+    '--brand-glow': 'rgba(57, 255, 20, 0.45)',
+    '--brand-glow-lg': 'rgba(57, 255, 20, 0.65)',
+  },
+  pink: {
+    '--brand-color': '#FF1493',
+    '--brand-color-dim': 'rgba(255, 20, 147, 0.13)',
+    '--brand-glow-sm': 'rgba(255, 20, 147, 0.33)',
+    '--brand-glow': 'rgba(255, 20, 147, 0.45)',
+    '--brand-glow-lg': 'rgba(255, 20, 147, 0.65)',
+  },
+} as const;
+
+function applyBrandTheme(name: keyof typeof BRAND_THEMES) {
+  const vars = BRAND_THEMES[name];
+  const root = document.documentElement;
+  for (const [k, v] of Object.entries(vars)) {
+    root.style.setProperty(k, v);
+  }
+}
+
+/**
+ * Componente sin UI: lee `profiles.theme` del usuario actual y aplica
+ * las CSS custom properties de marca en el elemento raíz del documento.
+ * Se resetea al verde por defecto cuando el usuario cierra sesión.
+ */
+const BrandThemeApplier = () => {
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) {
+      applyBrandTheme('default');
+      return;
+    }
+    let active = true;
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('theme')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!active) return;
+      const theme = (data as { theme?: string } | null)?.theme;
+      applyBrandTheme(theme === 'pink' ? 'pink' : 'default');
+    })();
+    return () => { active = false; };
+  }, [user]);
+
+  return null;
+};
+
+// ─────────────────────────────────────────────────────────────────────────
 
 /** Enfoca la app en /cardio al pulsar la notificación de carrera (mensaje desde el Service Worker). */
 const ServiceWorkerCardioBridge = () => {
@@ -109,6 +169,7 @@ const App = () => (
         <Toaster />
         <AuthProvider>
           <BrowserRouter>
+            <BrandThemeApplier />
             <ServiceWorkerCardioBridge />
             <AppRoutes />
           </BrowserRouter>

@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Ban, Crown, Search, Shield, Star, User, UserPlus, Users } from 'lucide-react';
+import { ArrowLeft, Ban, Crown, Palette, Search, Shield, Star, User, UserPlus, Users } from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -19,6 +19,7 @@ type DirectoryRow = {
   avatar_url: string | null;
   registered_at: string;
   premium_until: string | null;
+  theme: string; // 'default' | 'pink'
 };
 
 type SubStatus = 'trial' | 'premium' | 'lifetime' | 'expired';
@@ -145,6 +146,28 @@ const AdminPanel = () => {
       next.delete(row.user_id);
       return next;
     });
+  }, [toast]);
+
+  const handleToggleTheme = useCallback(async (row: DirectoryRow) => {
+    setActionTarget(null);
+    setToggling((prev) => new Set([...prev, row.user_id]));
+    const newTheme = row.theme === 'pink' ? 'default' : 'pink';
+    const { error: rpcError } = await supabase.rpc('set_user_theme', {
+      target_user_id: row.user_id,
+      new_theme: newTheme,
+    });
+    if (rpcError) {
+      toast({ title: 'Error al cambiar tema', description: rpcError.message, variant: 'destructive' });
+    } else {
+      setRows((prev) =>
+        prev.map((r) => (r.user_id === row.user_id ? { ...r, theme: newTheme } : r)),
+      );
+      toast({
+        title: newTheme === 'pink' ? '🌸 Modo Rosa VIP activado' : '🟢 Modo Normal restaurado',
+        description: row.email,
+      });
+    }
+    setToggling((prev) => { const next = new Set(prev); next.delete(row.user_id); return next; });
   }, [toast]);
 
   // ── Derived ────────────────────────────────────────────────────────────
@@ -375,6 +398,21 @@ const AdminPanel = () => {
               <Ban className="h-4 w-4 text-red-500" />
               Revocar acceso
             </Button>
+
+            <div className="border-t border-border pt-1">
+              <Button
+                variant="ghost"
+                className={`h-11 w-full justify-start gap-3 rounded-xl font-semibold transition ${
+                  actionTarget?.theme === 'pink'
+                    ? 'bg-zinc-500/10 text-zinc-600 hover:bg-zinc-500/20 dark:text-zinc-400'
+                    : 'bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 dark:text-pink-400'
+                }`}
+                onClick={() => actionTarget && void handleToggleTheme(actionTarget)}
+              >
+                <Palette className={`h-4 w-4 ${actionTarget?.theme === 'pink' ? 'text-zinc-500' : 'text-pink-500'}`} />
+                {actionTarget?.theme === 'pink' ? 'Quitar Modo Rosa VIP' : 'Activar Modo Rosa VIP 🌸'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -1,5 +1,9 @@
-/** NRC-style accent (fluorescent green) */
-export const NRC_GREEN = '#22FF55';
+/**
+ * Brand accent — apunta a la CSS custom property para que el Modo VIP Rosa
+ * (y cualquier otro tema futuro) se refleje automáticamente en todos los
+ * componentes que usen este valor en inline styles.
+ */
+export const NRC_GREEN = 'var(--brand-color)';
 
 export const fmtTime = (s: number) => {
   const h = Math.floor(s / 3600);

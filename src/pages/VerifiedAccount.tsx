@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Dumbbell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const NRC_GREEN = '#39FF14';
-
 export default function VerifiedAccount() {
   const navigate = useNavigate();
   const [visible, setVisible] = useState(false);
@@ -32,15 +30,15 @@ export default function VerifiedAccount() {
           {/* Halo animado */}
           <span
             className="absolute h-28 w-28 animate-ping rounded-full opacity-20"
-            style={{ backgroundColor: NRC_GREEN }}
+            style={{ backgroundColor: 'var(--brand-color)' }}
           />
           <div
             className="flex h-24 w-24 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${NRC_GREEN}22`, boxShadow: `0 0 32px ${NRC_GREEN}55` }}
+            style={{ backgroundColor: 'var(--brand-color-dim)', boxShadow: '0 0 32px var(--brand-glow-sm)' }}
           >
             <CheckCircle2
               className="h-12 w-12"
-              style={{ color: NRC_GREEN }}
+              style={{ color: 'var(--brand-color)' }}
               strokeWidth={1.75}
             />
           </div>
@@ -54,7 +52,7 @@ export default function VerifiedAccount() {
           <p className="text-sm leading-relaxed text-muted-foreground">
             Bienvenido a <span className="font-semibold text-foreground">Pana Fitness</span>.
             Tu período de prueba gratuito de&nbsp;
-            <span className="font-semibold" style={{ color: NRC_GREEN }}>
+            <span className="font-semibold" style={{ color: 'var(--brand-color)' }}>
               7 días
             </span>{' '}
             ya comenzó.
@@ -64,7 +62,7 @@ export default function VerifiedAccount() {
         {/* CTA */}
         <Button
           className="h-14 w-full rounded-2xl text-base font-bold tracking-wide"
-          style={{ background: NRC_GREEN, color: '#0b0f14' }}
+          style={{ background: 'var(--brand-color)', color: '#0b0f14' }}
           onClick={() => navigate('/', { replace: true })}
         >
           Comenzar a entrenar

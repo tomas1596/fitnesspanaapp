@@ -50,9 +50,13 @@ const Recenter = ({ center }: { center: [number, number] | null }) => {
   return null;
 };
 
+// Color fijo para el marcador de posición en el mapa.
+// Deliberadamente NO usa var(--brand-color) para que el tema VIP rosa
+// no afecte la legibilidad técnica del mapa de Leaflet.
+const MAP_POSITION_GREEN = '#39FF14';
 const dotIcon = L.divIcon({
   className: '',
-  html: `<div style="width:16px;height:16px;border-radius:9999px;background:${NRC_GREEN};border:3px solid #0b0f14;box-shadow:0 0 12px ${NRC_GREEN};"></div>`,
+  html: `<div style="width:16px;height:16px;border-radius:9999px;background:${MAP_POSITION_GREEN};border:3px solid #0b0f14;box-shadow:0 0 12px ${MAP_POSITION_GREEN};"></div>`,
   iconSize: [16, 16],
   iconAnchor: [8, 8],
 });
@@ -748,8 +752,8 @@ const Cardio = () => {
               style={
                 hrBtConnected
                   ? {
-                      background: '#39FF14',
-                      boxShadow: '0 0 22px rgba(57,255,20,0.65), 0 4px 14px rgba(0,0,0,0.35)',
+                      background: 'var(--brand-color)',
+                      boxShadow: '0 0 22px var(--brand-glow-lg), 0 4px 14px rgba(0,0,0,0.35)',
                     }
                   : undefined
               }
@@ -765,7 +769,7 @@ const Cardio = () => {
                 <button
                   onClick={handleStart}
                   className="flex h-32 w-32 items-center justify-center rounded-full text-xl font-extrabold tracking-wider text-black shadow-2xl transition active:scale-95"
-                  style={{ background: NRC_GREEN, boxShadow: '0 10px 40px rgba(57,255,20,0.45)' }}
+                  style={{ background: 'var(--brand-color)', boxShadow: '0 10px 40px var(--brand-glow)' }}
                 >
                   COMENZAR
                 </button>

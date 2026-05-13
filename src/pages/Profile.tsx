@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   LogOut, User, Activity, Flame, Beef, Droplets, Save, Camera, Lock,
   Target, Plus, TrendingUp, Settings2, Sun, Moon, Pencil, LayoutDashboard, HelpCircle,
-  FileText,
+  FileText, Heart,
 } from 'lucide-react';
 import StepsRing from '@/components/StepsRing';
 import { FAQBottomSheet } from '@/components/FAQBottomSheet';
@@ -81,13 +81,15 @@ const Profile = () => {
   const [draftGoal, setDraftGoal] = useState('10000');
 
   const [faqOpen, setFaqOpen] = useState(false);
+  /** Tema de marca leído de profiles.theme ('default' | 'pink') */
+  const [brandTheme, setBrandTheme] = useState<string>('default');
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
     const today = todayStr();
     const meta = (user.user_metadata ?? {}) as Record<string, string | undefined>;
     const { data, error } = await supabase.from('profiles').select(
-      'first_name, last_name, date_of_birth, height, weight, gender, target_weight, avatar_url, step_goal, activity_level, fitness_goal',
+      'first_name, last_name, date_of_birth, height, weight, gender, target_weight, avatar_url, step_goal, activity_level, fitness_goal, theme',
     ).eq('user_id', user.id).maybeSingle();
     const pick = (db: string | null | undefined, metaKey: string) =>
       (db != null && String(db).trim() !== '' ? String(db).trim() : '') || (meta[metaKey]?.trim() ?? '');
@@ -104,6 +106,7 @@ const Profile = () => {
       setAvatarUrl(data.avatar_url || null);
       setStepGoal(data.step_goal || 10000);
       setDraftGoal((data.step_goal || 10000).toString());
+      setBrandTheme((data as { theme?: string }).theme || 'default');
     } else {
       setFirstName(meta.first_name?.trim() ?? '');
       setLastName(meta.last_name?.trim() ?? '');
@@ -335,6 +338,16 @@ const Profile = () => {
             </Button>
           </div>
         </div>
+
+        {/* ── Banner Modo Rosita (solo para usuarios VIP) ── */}
+        {brandTheme === 'pink' && (
+          <div className="flex items-center gap-3 rounded-2xl border border-pink-300/60 bg-pink-100/50 px-4 py-3 dark:border-pink-500/30 dark:bg-pink-500/10">
+            <Heart className="h-5 w-5 shrink-0 fill-pink-500 text-pink-500" />
+            <p className="text-sm font-semibold text-pink-600 dark:text-pink-400">
+              Modo Rosita para mi amor ♥ Te amo
+            </p>
+          </div>
+        )}
 
         <div className="rounded-2xl bg-card p-4">
           <div className="flex items-center gap-4">

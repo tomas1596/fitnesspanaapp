@@ -214,7 +214,7 @@ const Timer = () => {
         {/* Top bar */}
         <div className="flex items-center justify-between">
           <h1 className={`text-xl font-bold ${fgDark ? 'text-black' : 'text-foreground'}`}>
-            Modo Arena
+            Timer
           </h1>
           <button
             onClick={() => setSettingsOpen(true)}

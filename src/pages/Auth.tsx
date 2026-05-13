@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,13 @@ const Auth = () => {
   const [successMsg, setSuccessMsg] = useState('');
   /** Tras registro exitoso, espera 800 ms antes de dejar que <Navigate> mande al dashboard (tiempo al trigger). */
   const [signUpRedirectHold, setSignUpRedirectHold] = useState(false);
+  /**
+   * iOS/Safari no muestra placeholder en <input type="date"> vacío.
+   * Solución: arrancar como type="text" (muestra placeholder) y
+   * convertirlo a type="date" en el foco para abrir el selector nativo.
+   */
+  const [dobInputType, setDobInputType] = useState<'text' | 'date'>('text');
+  const dobRef = useRef<HTMLInputElement>(null);
 
   if (loading) {
     return (
@@ -103,8 +110,19 @@ const Auth = () => {
             <div>
               <label className="mb-1 block text-xs text-muted-foreground">Fecha de nacimiento</label>
               <Input
-                type="date"
+                ref={dobRef}
+                type={dobInputType}
+                placeholder="Fecha de nacimiento"
                 value={dateOfBirth}
+                onFocus={() => {
+                  setDobInputType('date');
+                  // iOS requiere un tick para que el selector aparezca tras cambiar el type
+                  window.setTimeout(() => dobRef.current?.showPicker?.(), 0);
+                }}
+                onBlur={() => {
+                  // Si no hay valor, volver a text para que se vea el placeholder
+                  if (!dateOfBirth) setDobInputType('text');
+                }}
                 onChange={(e) => setDateOfBirth(e.target.value)}
                 required={!isLogin}
                 className="h-14 rounded-xl border-none bg-card text-foreground"
