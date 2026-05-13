@@ -107,23 +107,20 @@ const Auth = () => {
               autoComplete="family-name"
               className="h-14 rounded-xl border-none bg-card text-foreground placeholder:text-muted-foreground"
             />
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Fecha de nacimiento</label>
-              <Input
-                ref={dobRef}
-                type={dobInputType}
-                placeholder="Fecha de nacimiento"
-                value={dateOfBirth}
-                onTouchStart={() => setDobInputType('date')}
-                onFocus={() => setDobInputType('date')}
-                onBlur={() => {
-                  if (!dateOfBirth) setDobInputType('text');
-                }}
-                onChange={(e) => setDateOfBirth(e.target.value)}
-                required={!isLogin}
-                className="h-14 rounded-xl border-none bg-card text-foreground"
-              />
-            </div>
+            <Input
+              ref={dobRef}
+              type={dobInputType}
+              placeholder="Fecha de nacimiento"
+              value={dateOfBirth}
+              onTouchStart={() => setDobInputType('date')}
+              onFocus={() => setDobInputType('date')}
+              onBlur={() => {
+                if (!dateOfBirth) setDobInputType('text');
+              }}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+              required={!isLogin}
+              className="h-14 py-0 rounded-xl border-none bg-card text-foreground placeholder:text-muted-foreground appearance-none overflow-hidden [&::-webkit-datetime-edit]:p-0 [&::-webkit-date-and-time-value]:m-0 [&::-webkit-calendar-picker-indicator]:opacity-0"
+            />
             <div>
               <label className="mb-1 block text-xs text-muted-foreground">Género</label>
               <Select value={gender} onValueChange={setGender}>
