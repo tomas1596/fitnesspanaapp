@@ -159,7 +159,7 @@ const Timer = () => {
   const bg = (() => {
     if (paused) return '#DC2626'; // red
     if (phase === 'prep') return '#FACC15'; // yellow
-    if (phase === 'work') return '#22FF55'; // neon green
+    if (phase === 'work') return 'var(--brand-color)';
     if (phase === 'rest') return '#38BDF8'; // sky
     return 'hsl(var(--background))';
   })();
