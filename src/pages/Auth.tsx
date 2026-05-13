@@ -174,9 +174,21 @@ const Auth = () => {
             setError('');
             setSuccessMsg('');
           }}
-          className="w-full text-center text-sm text-muted-foreground"
+          className="mt-6 w-full text-center text-sm text-gray-400"
         >
-          {isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
+          {isLogin ? (
+            <>¿No tienes cuenta?{' '}
+              <span className="font-bold hover:underline" style={{ color: 'var(--brand-color)' }}>
+                Regístrate
+              </span>
+            </>
+          ) : (
+            <>¿Ya tienes cuenta?{' '}
+              <span className="font-bold hover:underline" style={{ color: 'var(--brand-color)' }}>
+                Inicia sesión
+              </span>
+            </>
+          )}
         </button>
       </form>
     </div>

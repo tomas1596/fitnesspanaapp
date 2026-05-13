@@ -48,8 +48,11 @@ const SwipeToDelete = ({ onDelete, children }: SwipeToDeleteProps) => {
 
   return (
     <div className="relative overflow-hidden rounded-xl">
-      <div className="absolute inset-0 flex items-center justify-end bg-destructive px-6">
-        <Trash2 className="h-5 w-5 text-destructive-foreground" />
+      <div className="absolute inset-0 flex items-center justify-end bg-destructive px-4">
+        <div className="flex items-center gap-1.5 text-destructive-foreground">
+          <Trash2 className="h-4 w-4" />
+          <span className="text-sm font-semibold">Eliminar</span>
+        </div>
       </div>
       <div
         ref={containerRef}

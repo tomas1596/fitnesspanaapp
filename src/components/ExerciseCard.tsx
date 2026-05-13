@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Flame, Trash2, MoreVertical, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +29,8 @@ interface ExerciseCardProps {
   name: string;
   muscleGroup: string;
   sets: ExerciseSet[];
+  lastPerformance?: { weight: number; reps: number };
+  autoFocusWeight?: boolean;
   onAddSet: (exerciseId: string) => void;
   onUpdateSet: (setId: string, field: 'reps' | 'weight' | 'rir' | 'to_failure', value: number | boolean) => void;
   onDeleteSet: (setId: string) => void;
@@ -50,6 +52,8 @@ const ExerciseCard = ({
   name,
   muscleGroup,
   sets,
+  lastPerformance,
+  autoFocusWeight,
   onAddSet,
   onUpdateSet,
   onDeleteSet,
@@ -59,6 +63,21 @@ const ExerciseCard = ({
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState(name);
 
+  // Refs for weight inputs (indexed by set position)
+  const weightRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Auto-focus last weight input when a new set is added and autoFocusWeight is true
+  useEffect(() => {
+    if (autoFocusWeight && sets.length > 0) {
+      const lastIdx = sets.length - 1;
+      const timer = setTimeout(() => {
+        weightRefs.current[lastIdx]?.focus();
+        weightRefs.current[lastIdx]?.select();
+      }, 120);
+      return () => clearTimeout(timer);
+    }
+  }, [sets.length, autoFocusWeight]);
+
   const handleSaveName = () => {
     const trimmed = editName.trim();
     if (trimmed && trimmed !== name) onRenameExercise(trimmed);
@@ -67,29 +86,54 @@ const ExerciseCard = ({
 
   return (
     <div className="rounded-xl bg-card p-4">
-      <div className="mb-3 flex items-start justify-between gap-2">
+      {/* Header */}
+      <div className="mb-1 flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-base font-semibold text-foreground">{name}</h3>
-          <span className={`mt-1 inline-block rounded-md px-2 py-0.5 text-xs font-medium ${muscleGroupColors[muscleGroup] || 'bg-muted text-muted-foreground'}`}>
+          <span
+            className={`mt-1 inline-block rounded-md px-2 py-0.5 text-xs font-medium ${
+              muscleGroupColors[muscleGroup] || 'bg-muted text-muted-foreground'
+            }`}
+          >
             {muscleGroup}
           </span>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 rounded-lg text-muted-foreground hover:bg-accent">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 rounded-lg text-muted-foreground hover:bg-accent"
+            >
               <MoreVertical className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="border-border bg-card">
-            <DropdownMenuItem onClick={() => { setEditName(name); setEditOpen(true); }} className="cursor-pointer text-foreground focus:bg-accent">
+            <DropdownMenuItem
+              onClick={() => { setEditName(name); setEditOpen(true); }}
+              className="cursor-pointer text-foreground focus:bg-accent"
+            >
               <Pencil className="mr-2 h-4 w-4" /> Editar nombre
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={onDeleteExercise} className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive">
+            <DropdownMenuItem
+              onClick={onDeleteExercise}
+              className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
+            >
               <Trash2 className="mr-2 h-4 w-4" /> Eliminar ejercicio
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Last performance hint */}
+      {lastPerformance && (
+        <p
+          className="mb-3 text-xs font-medium"
+          style={{ color: 'var(--brand-color)' }}
+        >
+          Último: {lastPerformance.weight}kg × {lastPerformance.reps}
+        </p>
+      )}
 
       {sets.length > 0 && (
         <div className="mb-3 space-y-2">
@@ -101,9 +145,14 @@ const ExerciseCard = ({
             <span className="text-center">🔥</span>
             <span></span>
           </div>
-          {sets.map((set) => (
-            <div key={set.id} className="grid grid-cols-[28px_1fr_1fr_44px_28px_28px] items-center gap-1.5 rounded-lg bg-accent p-2">
-              <span className="text-center text-sm font-medium text-muted-foreground">{set.set_number}</span>
+          {sets.map((set, index) => (
+            <div
+              key={set.id}
+              className="grid grid-cols-[28px_1fr_1fr_44px_28px_28px] items-center gap-1.5 rounded-lg bg-accent p-2"
+            >
+              <span className="text-center text-sm font-medium text-muted-foreground">
+                {set.set_number}
+              </span>
               <Input
                 type="number"
                 inputMode="numeric"
@@ -112,11 +161,13 @@ const ExerciseCard = ({
                 className="h-10 rounded-lg border-none bg-secondary text-center text-foreground"
               />
               <Input
+                ref={(el) => { weightRefs.current[index] = el; }}
                 type="number"
                 inputMode="decimal"
                 value={set.weight || ''}
                 onChange={(e) => onUpdateSet(set.id, 'weight', parseFloat(e.target.value) || 0)}
                 className="h-10 rounded-lg border-none bg-secondary text-center text-foreground"
+                style={{ caretColor: 'var(--brand-color)' }}
               />
               <Input
                 type="number"
@@ -138,7 +189,11 @@ const ExerciseCard = ({
                 }`}
                 aria-label="Al fallo"
               >
-                <Flame className={`h-4 w-4 ${set.to_failure ? 'text-destructive fill-destructive' : 'text-muted-foreground/40'}`} />
+                <Flame
+                  className={`h-4 w-4 ${
+                    set.to_failure ? 'fill-destructive text-destructive' : 'text-muted-foreground/40'
+                  }`}
+                />
               </button>
               <button
                 onClick={() => onDeleteSet(set.id)}

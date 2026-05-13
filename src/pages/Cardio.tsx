@@ -19,7 +19,8 @@ import { estimateRunCalories, estimateRunSteps } from '@/lib/calories';
 import { fmtPace, fmtTime, NRC_GREEN } from '@/lib/runFormat';
 import { KmMilestoneMarkers } from '@/components/KmMilestoneMarkers';
 import { PaceHeatPolylines } from '@/components/PaceHeatPolylines';
-import { postRunStopToSw, postRunTickToSw } from '@/lib/runTrackingSw';
+// Sticky-notification imports disabled (re-enable before App Store launch):
+// import { postRunStopToSw, postRunTickToSw } from '@/lib/runTrackingSw';
 import { connectHeartRateSensor, tryReconnectStoredHeartRate, type HrConnection } from '@/lib/hrBluetooth';
 
 type RunRow = {
@@ -227,24 +228,18 @@ const Cardio = () => {
     };
   }, []);
 
-  // Notificación persistente de carrera: solo mientras hay sesión activa o en pausa.
-  useEffect(() => {
-    if (phase === 'active' || phase === 'paused') return;
-    postRunStopToSw();
-  }, [phase]);
-
-  useEffect(() => {
-    if (phase !== 'active' && phase !== 'paused') return;
-    const tick = () => {
-      const { seconds: s, distance: d } = runSwPayloadRef.current;
-      const kmd = d / 1000;
-      const paceSec = kmd > 0 ? s / kmd : 0;
-      postRunTickToSw({ seconds: s, km: kmd, paceSecPerKm: paceSec });
-    };
-    tick();
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
-  }, [phase]);
+  // Sticky-notification effects disabled (re-enable before App Store launch):
+  // useEffect(() => {
+  //   if (phase === 'active' || phase === 'paused') return;
+  //   postRunStopToSw();
+  // }, [phase]);
+  //
+  // useEffect(() => {
+  //   if (phase !== 'active' && phase !== 'paused') return;
+  //   const tick = () => { ... postRunTickToSw(...) };
+  //   const id = window.setInterval(tick, 1000);
+  //   return () => window.clearInterval(id);
+  // }, [phase]);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -360,9 +355,6 @@ const Cardio = () => {
       await new Promise((resolve) => window.setTimeout(resolve, 1000));
     }
     setCountdown(null);
-    if ('Notification' in window && Notification.permission === 'default') {
-      await Notification.requestPermission();
-    }
     if (!startWatch()) return;
     startedAtRef.current = new Date();
     lastAnnouncedKmRef.current = 0;

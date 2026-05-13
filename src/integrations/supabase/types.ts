@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      exercises_library: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          muscle_group: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          muscle_group: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          muscle_group?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       body_measurements: {
         Row: {
           arms: number | null
