@@ -114,13 +114,9 @@ const Auth = () => {
                 type={dobInputType}
                 placeholder="Fecha de nacimiento"
                 value={dateOfBirth}
-                onFocus={() => {
-                  setDobInputType('date');
-                  // iOS requiere un tick para que el selector aparezca tras cambiar el type
-                  window.setTimeout(() => dobRef.current?.showPicker?.(), 0);
-                }}
+                onTouchStart={() => setDobInputType('date')}
+                onFocus={() => setDobInputType('date')}
                 onBlur={() => {
-                  // Si no hay valor, volver a text para que se vea el placeholder
                   if (!dateOfBirth) setDobInputType('text');
                 }}
                 onChange={(e) => setDateOfBirth(e.target.value)}
