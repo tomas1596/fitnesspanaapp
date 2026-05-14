@@ -1,8 +1,15 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { cn } from '@/lib/utils';
+
+/** Solo códigos 1D típicos de productos (OFF / retail). */
+const SCAN_FORMATS = [
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A,
+];
 
 export type NutritionBarcodeScannerProps = {
   active: boolean;
@@ -86,10 +93,11 @@ export function NutritionBarcodeScanner({
       });
       if (cancelled || !document.getElementById(regionId)) return;
 
-      /** Sin `formatsToSupport` — motor por defecto (mejor compatibilidad mientras depuramos). */
       const html5 = new Html5Qrcode(regionId, {
         verbose: false,
+        formatsToSupport: SCAN_FORMATS,
         useBarCodeDetectorIfSupported: true,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
       });
 
       try {
@@ -97,7 +105,12 @@ export function NutritionBarcodeScanner({
           { facingMode: 'environment' },
           {
             fps: 10,
-            qrbox: { width: 250, height: 150 },
+            /** Objetivo 300×100 (EAN); se comprime sólo si el visor es bajo o angosto. */
+            qrbox(viewfinderWidth, viewfinderHeight) {
+              const w = Math.min(300, Math.max(200, viewfinderWidth - 20));
+              const h = Math.min(100, Math.max(72, viewfinderHeight - 32));
+              return { width: w, height: h };
+            },
             disableFlip: false,
           },
           async (decodedText) => {
@@ -177,6 +190,11 @@ export function NutritionBarcodeScanner({
         className="mx-auto overflow-hidden rounded-2xl border border-border bg-black/90"
         style={{ minHeight: 'min(280px, 45vh)', width: '100%', maxWidth: 400 }}
       />
+      {active && (
+        <p className="mx-auto max-w-[400px] text-center text-[11px] leading-snug text-muted-foreground px-1">
+          Mantené el código recto, sin reflejos y a unos 15 cm de distancia
+        </p>
+      )}
       {active ? (
         <Button
           type="button"

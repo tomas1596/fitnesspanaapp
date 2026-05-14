@@ -10,8 +10,15 @@ export type OpenFoodFactsV2Product = {
   };
 };
 
+/** Payload mínimo: nombres + nutrimientos (incluye energy-kcal_100g, macros por 100g). */
+const OFF_FIELDS = 'product_name,product_name_es,nutriments';
+
 export function openFoodFactsProductUrl(barcode: string) {
-  return `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json`;
+  const u = new URL(
+    `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json`,
+  );
+  u.searchParams.set('fields', OFF_FIELDS);
+  return u.href;
 }
 
 export async function fetchOpenFoodFactsProduct(barcode: string): Promise<OpenFoodFactsV2Product> {
