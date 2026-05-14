@@ -18,6 +18,66 @@ const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
   video: { facingMode: 'environment' },
 };
 
+type ErrorWithZXingKind = Error & {
+  /** ZXing-ts: `ReaderException` subclasses exponen tipo vía `.getKind()`. */
+  getKind?: () => string;
+};
+
+function isBenignZXingDecodeError(error: Error): boolean {
+  const msg = (error.message || '').toLowerCase();
+  if (msg.includes('no multiformat readers')) return true;
+
+  const getKind = (error as ErrorWithZXingKind).getKind;
+  if (typeof getKind === 'function') {
+    const kind = getKind.call(error);
+    if (
+      kind === 'NotFoundException' ||
+      kind === 'ChecksumException' ||
+      kind === 'FormatException'
+    ) {
+      return true;
+    }
+  }
+
+  const n = error.name || '';
+  if (n === 'NotFoundException' || n === 'ChecksumException' || n === 'FormatException') return true;
+
+  return false;
+}
+
+function shouldReportHardwareError(error: Error): string | null {
+  if (error instanceof DOMException) {
+    switch (error.name) {
+      case 'NotAllowedError':
+      case 'PermissionDeniedError':
+      case 'SecurityError':
+        return 'Permiso de cámara denegado. Podés permitir el acceso en la configuración del navegador o cargar los datos a mano.';
+      case 'NotFoundError':
+        return 'No se detectó ninguna cámara en el dispositivo.';
+      case 'NotReadableError':
+      case 'AbortError':
+        return 'La cámara está en uso o no se puede abrir. Probá cerrar otras apps que la usen.';
+      case 'OverconstrainedError':
+        return 'No se pudo inicializar la cámara con la configuración actual.';
+      default:
+        break;
+    }
+  }
+
+  const m = (error.message || '').toLowerCase();
+  if (/permission\s*denied|not\s*allowed|user\s*denied|denied by system/i.test(m)) {
+    return 'Permiso de cámara denegado o bloqueado. Revisá ajustes del navegador o del sistema.';
+  }
+  if (/no camera|devices not found|could not find|no .*video input/i.test(m)) {
+    return 'No se encontró cámara disponible.';
+  }
+  if (/could not start video source|failed to allocate|device in use/i.test(m)) {
+    return 'No se pudo acceder a la cámara. Puede estar en uso por otra aplicación.';
+  }
+
+  return null;
+}
+
 /**
  * Lector ZXing (@zxing/library) vía `react-zxing`; suele comportarse mejor en iOS Safari que html5-qrcode.
  * `react-zxing` usa la callback `onResult` (equivale al flujo solicitado tipo onDecodeResult).
@@ -72,12 +132,15 @@ export function NutritionBarcodeScanner({
     },
     onError(error) {
       if (!active) return;
-      if (error.name === 'NotFoundException') return;
-      const msg =
-        error instanceof DOMException && error.name === 'NotAllowedError'
-          ? 'Permiso de cámara denegado. Podés permitir el acceso en la configuración del navegador o cargar los datos a mano.'
-          : error.message || 'No se pudo usar la cámara.';
-      onStartError?.(msg);
+
+      /** Cada fotograma sin código dispara estos errores; nunca molestar al usuario. */
+      if (isBenignZXingDecodeError(error)) return;
+
+      const hwMessage = shouldReportHardwareError(error);
+      if (hwMessage) {
+        onStartError?.(hwMessage);
+      }
+      /** Errores no clasificados: silenciar para no inundar la UI (el escaneo sigue en vivo). */
     },
   });
 
