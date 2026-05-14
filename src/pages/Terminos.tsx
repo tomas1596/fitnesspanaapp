@@ -48,10 +48,17 @@ const SECTIONS: Section[] = [
       'El usuario es responsable de mantener la confidencialidad de sus credenciales de acceso.',
       'La suscripción mensual se activa manualmente por el administrador tras verificar la transferencia de pago al alias de Mercado Pago indicado en la Aplicación.',
       'El período de prueba gratuito de 7 días se otorga una única vez por cuenta. Vencido dicho período, el acceso a nuevas funciones quedará suspendido hasta que se active una suscripción.',
+      'Una vez acreditado el pago y activada la suscripción mensual, no se realizarán reembolsos parciales ni totales por cancelación anticipada o falta de uso de la Aplicación.',
+      'Nos reservamos el derecho de suspender, desactivar o eliminar la cuenta de cualquier usuario que, a nuestra exclusiva discreción, viole estos Términos, realice un uso fraudulento del sistema o intente vulnerar la seguridad de la Aplicación, sin derecho a reembolso alguno.',
     ],
   },
   {
-    title: '5. Privacidad y Datos Personales',
+    title: '5. Exactitud de la Información Nutricional',
+    content:
+      'Los cálculos de macronutrientes, calorías y métricas de actividad física provistos por la Aplicación son estimaciones basadas en los datos ingresados. No garantizamos la exactitud absoluta de esta información. El usuario es responsable de verificar los valores nutricionales de los alimentos que consume.',
+  },
+  {
+    title: '6. Privacidad y Datos Personales',
     content: [
       'Los datos ingresados por el usuario (medidas corporales, registros de actividad, alimentos, etc.) son almacenados de forma segura en servidores de Supabase y se utilizan exclusivamente para brindar las funcionalidades de la Aplicación.',
       'No comercializamos ni cedemos datos personales a terceros con fines publicitarios.',
@@ -59,27 +66,27 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    title: '6. Propiedad Intelectual',
+    title: '7. Propiedad Intelectual',
     content:
       `Todos los derechos sobre el diseño, código fuente, marca y contenidos de ${APP_NAME} son propiedad exclusiva de sus desarrolladores. Queda prohibida la reproducción, distribución o modificación sin autorización expresa y por escrito.`,
   },
   {
-    title: '7. Modificaciones al Servicio y a los Términos',
+    title: '8. Modificaciones al Servicio y a los Términos',
     content:
       'Nos reservamos el derecho de modificar, suspender o discontinuar la Aplicación en cualquier momento sin previo aviso. Asimismo, estos Términos podrán ser actualizados periódicamente. El uso continuado de la Aplicación tras la publicación de cambios implica la aceptación de los nuevos términos.',
   },
   {
-    title: '8. Limitación de Responsabilidad',
+    title: '9. Limitación de Responsabilidad',
     content:
       `En la máxima medida permitida por la ley aplicable, ${APP_NAME} y sus responsables no serán liable por daños indirectos, incidentales, especiales o consecuentes que resulten del uso o la imposibilidad de uso de la Aplicación.`,
   },
   {
-    title: '9. Ley Aplicable',
+    title: '10. Ley Aplicable',
     content:
-      'Estos Términos se rigen por las leyes de la República Argentina. Cualquier controversia derivada de su interpretación o aplicación será sometida a la jurisdicción de los tribunales ordinarios de la Ciudad de Córdoba, Argentina.',
+      'Estos Términos se rigen por las leyes de la República Argentina. Cualquier controversia derivada de su interpretación o aplicación será sometida a la jurisdicción de los tribunales ordinarios competentes de General Villegas, Provincia de Buenos Aires, Argentina.',
   },
   {
-    title: '10. Contacto',
+    title: '11. Contacto',
     content: `Para consultas, reclamos o solicitudes relacionadas con estos Términos, podés comunicarte a: ${CONTACT_EMAIL} o ${CONTACT_PHONE}`,
   },
 ];
