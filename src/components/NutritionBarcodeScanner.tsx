@@ -1,15 +1,9 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { useZxing } from 'react-zxing';
+import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { cn } from '@/lib/utils';
-
-/** Solo códigos 1D típicos de productos (OFF / retail). */
-const SCAN_FORMATS = [
-  Html5QrcodeSupportedFormats.EAN_13,
-  Html5QrcodeSupportedFormats.EAN_8,
-  Html5QrcodeSupportedFormats.UPC_A,
-];
 
 export type NutritionBarcodeScannerProps = {
   active: boolean;
@@ -19,26 +13,14 @@ export type NutritionBarcodeScannerProps = {
   onStartError?: (message: string) => void;
 };
 
-/**
- * Liberación ordenada recomendada por html5-qrcode: stop asíncrono y luego clear.
- * Ignora errores (pista ya cerrada, etc.).
- */
-async function safeStopAndClear(camera: Html5Qrcode): Promise<void> {
-  try {
-    if (camera.isScanning) await camera.stop();
-  } catch {
-    /* ignorar — plataforma o estado inconsistente */
-  }
-  try {
-    camera.clear();
-  } catch {
-    /* ignorar */
-  }
-}
+const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
+  audio: false,
+  video: { facingMode: 'environment' },
+};
 
 /**
- * Lector html5-qrcode (cámara trasera cuando el dispositivo lo permite).
- * Pensado para PWAs en iOS Safari y Android Chrome.
+ * Lector ZXing (@zxing/library) vía `react-zxing`; suele comportarse mejor en iOS Safari que html5-qrcode.
+ * `react-zxing` usa la callback `onResult` (equivale al flujo solicitado tipo onDecodeResult).
  */
 export function NutritionBarcodeScanner({
   active,
@@ -47,167 +29,88 @@ export function NutritionBarcodeScanner({
   onDecoded,
   onStartError,
 }: NutritionBarcodeScannerProps) {
-  const reactId = useId();
-  const regionId = `nutrition-bc-${reactId.replace(/:/g, '')}`;
-  const instanceRef = useRef<Html5Qrcode | null>(null);
   const settledRef = useRef(false);
-  /** Mantener el hueco DOM montado hasta que stop+clear terminan (evita pantalla gris). */
-  const [isReleasingCamera, setIsReleasingCamera] = useState(false);
-  const [cancelBusy, setCancelBusy] = useState(false);
+  const [scanDonePause, setScanDonePause] = useState(false);
+  const onDecodedRef = useRef(onDecoded);
 
-  const showChrome = active || isReleasingCamera;
+  const hints = useMemo(
+    () =>
+      new Map<DecodeHintType, unknown>([
+        [
+          DecodeHintType.POSSIBLE_FORMATS,
+          [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A],
+        ],
+        [DecodeHintType.TRY_HARDER, true],
+      ]),
+    [],
+  );
 
-  useLayoutEffect(() => {
-    if (!active) {
-      if (instanceRef.current?.isScanning) setIsReleasingCamera(true);
-      else setIsReleasingCamera(false);
-    } else {
-      setIsReleasingCamera(false);
+  useEffect(() => {
+    onDecodedRef.current = onDecoded;
+  }, [onDecoded]);
+
+  useEffect(() => {
+    if (active) {
+      settledRef.current = false;
+      setScanDonePause(false);
     }
   }, [active]);
 
-  useEffect(() => {
-    settledRef.current = false;
-
-    /** El padre dejó de mostrar modo escaneo pero el efecto anterior puede seguir cerrando por cleanup. */
-    if (!active) {
-      void (async () => {
-        const inst = instanceRef.current;
-        if (!inst) {
-          setIsReleasingCamera(false);
-          return;
-        }
-        await safeStopAndClear(inst);
-        if (instanceRef.current === inst) instanceRef.current = null;
-        setIsReleasingCamera(false);
-      })();
-      return undefined;
-    }
-
-    let cancelled = false;
-    const timeouts: ReturnType<typeof setTimeout>[] = [];
-
-    const start = async () => {
-      await new Promise<void>((resolve) => {
-        timeouts.push(setTimeout(resolve, 150));
-      });
-      if (cancelled || !document.getElementById(regionId)) return;
-
-      const html5 = new Html5Qrcode(regionId, {
-        verbose: false,
-        formatsToSupport: SCAN_FORMATS,
-        useBarCodeDetectorIfSupported: true,
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-      });
-
-      try {
-        await html5.start(
-          { facingMode: 'environment' },
-          {
-            fps: 10,
-            /** Objetivo 300×100 (EAN); se comprime sólo si el visor es bajo o angosto. */
-            qrbox(viewfinderWidth, viewfinderHeight) {
-              const w = Math.min(300, Math.max(200, viewfinderWidth - 20));
-              const h = Math.min(100, Math.max(72, viewfinderHeight - 32));
-              return { width: w, height: h };
-            },
-            disableFlip: false,
-          },
-          async (decodedText) => {
-            const code = decodedText?.trim();
-            if (!code || cancelled || settledRef.current) return;
-            settledRef.current = true;
-            await safeStopAndClear(html5);
-            if (instanceRef.current === html5) instanceRef.current = null;
-            await onDecoded(code);
-          },
-          () => {},
-        );
-
-        if (cancelled) {
-          await safeStopAndClear(html5);
-          if (instanceRef.current === html5) instanceRef.current = null;
-          return;
-        }
-        instanceRef.current = html5;
-      } catch (e: unknown) {
-        if (cancelled) return;
-        const msg =
-          e instanceof DOMException && e.name === 'NotAllowedError'
-            ? 'Permiso de cámara denegado. Podés permitir el acceso en la configuración del navegador o cargar los datos a mano.'
-            : e instanceof Error
-              ? e.message || 'No se pudo iniciar la cámara.'
-              : 'No se pudo iniciar la cámara.';
-        try {
-          await safeStopAndClear(html5);
-        } catch {
-          /* no-op */
-        }
-        instanceRef.current = null;
-        onStartError?.(msg);
-      }
-    };
-
-    void start();
-
-    return () => {
-      cancelled = true;
-      timeouts.forEach(clearTimeout);
-      settledRef.current = false;
-      const inst = instanceRef.current;
-      instanceRef.current = null;
-      if (inst) void safeStopAndClear(inst);
-    };
-  }, [active, regionId, onDecoded, onStartError]);
-
-  if (!showChrome) return null;
-
-  const handleCancel = () => {
-    if (cancelBusy) return;
-    setCancelBusy(true);
-    settledRef.current = true;
-    const inst = instanceRef.current;
-    void (async () => {
-      try {
-        if (inst) await safeStopAndClear(inst);
-      } finally {
-        if (instanceRef.current === inst) instanceRef.current = null;
-        setCancelBusy(false);
-        onCancel();
-      }
-    })();
-  };
+  const { ref } = useZxing({
+    paused: !active || scanDonePause,
+    hints,
+    constraints: CAMERA_CONSTRAINTS,
+    /** Más intentos por segundo pueden ayudar en cámara movil lentilla; coste algo mayor de CPU. */
+    timeBetweenDecodingAttempts: 200,
+    onResult(result) {
+      if (!active || settledRef.current) return;
+      const text = result.getText()?.trim();
+      if (!text) return;
+      settledRef.current = true;
+      setScanDonePause(true);
+      void onDecodedRef.current(text);
+    },
+    onError(error) {
+      if (!active) return;
+      if (error.name === 'NotFoundException') return;
+      const msg =
+        error instanceof DOMException && error.name === 'NotAllowedError'
+          ? 'Permiso de cámara denegado. Podés permitir el acceso en la configuración del navegador o cargar los datos a mano.'
+          : error.message || 'No se pudo usar la cámara.';
+      onStartError?.(msg);
+    },
+  });
 
   return (
     <div className={cn('space-y-3', className)}>
       <p className="text-center text-sm text-muted-foreground">
-        {!active && isReleasingCamera
-          ? 'Cerrando la cámara…'
-          : 'Enfocá el código de barras del producto. Se usará la cámara trasera si está disponible.'}
+        Enfocá el código de barras del producto. Se usará la cámara trasera si está disponible.
       </p>
-      <div
-        id={regionId}
-        className="mx-auto overflow-hidden rounded-2xl border border-border bg-black/90"
-        style={{ minHeight: 'min(280px, 45vh)', width: '100%', maxWidth: 400 }}
-      />
-      {active && (
+      <div className="relative mx-auto aspect-[16/9] max-h-[min(40vh,280px)] w-full max-w-[400px] overflow-hidden rounded-2xl border border-border bg-black">
+        <video
+          ref={ref}
+          className="h-full w-full object-cover"
+          muted
+          playsInline
+          autoPlay
+          aria-hidden
+        />
+      </div>
+      {active ? (
         <p className="mx-auto max-w-[400px] text-center text-[11px] leading-snug text-muted-foreground px-1">
           Mantené el código recto, sin reflejos y a unos 15 cm de distancia
         </p>
-      )}
-      {active ? (
-        <Button
-          type="button"
-          variant="secondary"
-          className="w-full rounded-xl font-semibold"
-          disabled={cancelBusy}
-          onClick={handleCancel}
-        >
-          Cancelar escaneo
-        </Button>
       ) : (
-        <p className="sr-only">Cámara cerrándose.</p>
+        <p className="sr-only">Escáner inactivo.</p>
       )}
+      <Button
+        type="button"
+        variant="secondary"
+        className="w-full rounded-xl font-semibold"
+        onClick={onCancel}
+      >
+        Cancelar escaneo
+      </Button>
     </div>
   );
 }

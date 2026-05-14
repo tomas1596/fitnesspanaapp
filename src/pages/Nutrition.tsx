@@ -820,7 +820,7 @@ const Nutrition = () => {
           <div className="relative max-h-[min(58vh,520px)] space-y-4 overflow-y-auto px-6 pb-4">
             {foodScanPhase === 'scanning' && !editingFoodId ? (
               <NutritionBarcodeScanner
-                active
+                active={foodScanPhase === 'scanning'}
                 onCancel={() => setFoodScanPhase('off')}
                 onDecoded={handleOpenFoodFactsBarcode}
                 onStartError={handleBarcodeScannerPermissionError}
