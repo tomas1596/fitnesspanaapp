@@ -17,11 +17,23 @@ export function openFoodFactsProductUrl(barcode: string) {
 export async function fetchOpenFoodFactsProduct(barcode: string): Promise<OpenFoodFactsV2Product> {
   const res = await fetch(openFoodFactsProductUrl(barcode), {
     headers: {
+      'User-Agent': 'PanaFitness/1.0',
       Accept: 'application/json',
     },
   });
-  if (!res.ok) throw new Error(`OFF_HTTP_${res.status}`);
-  return (await res.json()) as OpenFoodFactsV2Product;
+
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    throw new Error('OFF_PARSE_JSON');
+  }
+
+  if (!res.ok) {
+    throw new Error(`OFF_HTTP_${res.status}`);
+  }
+
+  return body as OpenFoodFactsV2Product;
 }
 
 /** Redondeo a un decimal como string para inputs del formulario. */

@@ -297,6 +297,8 @@ const Nutrition = () => {
         return;
       }
 
+      console.log('Código detectado:', raw.trim());
+
       setFoodScanPhase('fetching');
       try {
         const data = await fetchOpenFoodFactsProduct(digits);

@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { cn } from '@/lib/utils';
 
 export type NutritionBarcodeScannerProps = {
@@ -11,13 +11,6 @@ export type NutritionBarcodeScannerProps = {
   onDecoded: (barcode: string) => void | Promise<void>;
   onStartError?: (message: string) => void;
 };
-
-/** Códigos de barras típicos de alimentación (retail). */
-const SUPERMARKET_BARCODE_FORMATS = [
-  Html5QrcodeSupportedFormats.EAN_13,
-  Html5QrcodeSupportedFormats.EAN_8,
-  Html5QrcodeSupportedFormats.UPC_A,
-];
 
 /**
  * Liberación ordenada recomendada por html5-qrcode: stop asíncrono y luego clear.
@@ -34,14 +27,6 @@ async function safeStopAndClear(camera: Html5Qrcode): Promise<void> {
   } catch {
     /* ignorar */
   }
-}
-
-/** Constraints de vídeo (`videoConstraints` del scan config; la librería los usa con getUserMedia). */
-function buildVideoConstraints(): MediaTrackConstraints {
-  return {
-    facingMode: 'environment',
-    advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet],
-  };
 }
 
 /**
@@ -101,25 +86,19 @@ export function NutritionBarcodeScanner({
       });
       if (cancelled || !document.getElementById(regionId)) return;
 
+      /** Sin `formatsToSupport` — motor por defecto (mejor compatibilidad mientras depuramos). */
       const html5 = new Html5Qrcode(regionId, {
         verbose: false,
-        formatsToSupport: SUPERMARKET_BARCODE_FORMATS,
         useBarCodeDetectorIfSupported: true,
       });
-
-      const videoConstraints = buildVideoConstraints();
 
       try {
         await html5.start(
           { facingMode: 'environment' },
           {
             fps: 10,
-            videoConstraints,
-            qrbox(viewfinderWidth, viewfinderHeight) {
-              const w = Math.floor(viewfinderWidth * 0.92);
-              const h = Math.min(160, Math.max(96, Math.floor(viewfinderHeight * 0.32)));
-              return { width: w, height: h };
-            },
+            qrbox: { width: 250, height: 150 },
+            disableFlip: false,
           },
           async (decodedText) => {
             const code = decodedText?.trim();
