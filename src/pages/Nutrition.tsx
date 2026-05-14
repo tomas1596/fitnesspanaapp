@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Minus, Droplets, Trash2, Sun, Sunset, Cookie, Moon, BookOpen, Search, Pencil, Apple } from 'lucide-react';
+import { Plus, Minus, Droplets, Trash2, Sun, Sunset, Cookie, Moon, BookOpen, Search, Pencil, Apple, Barcode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -19,6 +19,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
+import { NutritionBarcodeScanner, NutritionBarcodeScanLoadingOverlay } from '@/components/NutritionBarcodeScanner';
+import { fetchOpenFoodFactsProduct, mapOpenFoodFactsToNutritionFields } from '@/lib/openFoodFacts';
 import { calculateAge } from '@/lib/age';
 import { todayLocalYMD, localDayBoundsISO } from '@/lib/nutritionDay';
 
@@ -118,6 +120,9 @@ const Nutrition = () => {
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
   const [deleteFoodTarget, setDeleteFoodTarget] = useState<CustomFood | null>(null);
   const [deletingFood, setDeletingFood] = useState(false);
+
+  /** Escáner OFF / lectura QR / espera Open Food Facts dentro del modal de alimento. */
+  const [foodScanPhase, setFoodScanPhase] = useState<'off' | 'scanning' | 'fetching'>('off');
 
   const [mealPickerOpen, setMealPickerOpen] = useState(false);
   const [pickerMealType, setPickerMealType] = useState<MealType | null>(null);
@@ -279,7 +284,73 @@ const Nutrition = () => {
     base_fat: '',
   });
 
+  const handleOpenFoodFactsBarcode = useCallback(
+    async (raw: string) => {
+      const digits = raw.replace(/\D/g, '');
+      if (!digits || digits.length < 8) {
+        toast({
+          title: 'Código inválido',
+          description: 'No se reconoció un código de barras numérico. Probá de nuevo.',
+          variant: 'destructive',
+        });
+        setFoodScanPhase('off');
+        return;
+      }
+
+      setFoodScanPhase('fetching');
+      try {
+        const data = await fetchOpenFoodFactsProduct(digits);
+        const mapped = mapOpenFoodFactsToNutritionFields(data);
+        if (!mapped) {
+          toast({
+            title: 'Producto no encontrado',
+            description: 'Por favor, ingresa los datos manualmente.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        setNewFoodForm((prev) => ({
+          ...prev,
+          name: mapped.name || prev.name,
+          base_calories: mapped.base_calories || prev.base_calories,
+          base_protein: mapped.base_protein || prev.base_protein,
+          base_carbs: mapped.base_carbs || prev.base_carbs,
+          base_fat: mapped.base_fat || prev.base_fat,
+        }));
+        toast({
+          title: 'Producto cargado',
+          description: mapped.name
+            ? `«${mapped.name}» por 100 g. Revisá y ajustá si hace falta.`
+            : 'Macros por 100 g cargados desde Open Food Facts.',
+        });
+      } catch {
+        toast({
+          title: 'No se pudo buscar',
+          description: 'Revisá la conexión o ingresá los datos manualmente.',
+          variant: 'destructive',
+        });
+      } finally {
+        setFoodScanPhase('off');
+      }
+    },
+    [toast],
+  );
+
+  const handleBarcodeScannerPermissionError = useCallback(
+    (message: string) => {
+      toast({
+        title: 'Cámara',
+        description: message,
+        variant: 'destructive',
+      });
+      setFoodScanPhase('off');
+    },
+    [toast],
+  );
+
   const openNewFoodFromLibrary = () => {
+    setFoodScanPhase('off');
     setEditingFoodId(null);
     setNewFoodForm(emptyFoodForm());
     setNewFoodContext('library');
@@ -288,6 +359,7 @@ const Nutrition = () => {
   };
 
   const openEditFood = (f: CustomFood) => {
+    setFoodScanPhase('off');
     setEditingFoodId(f.id);
     setNewFoodContext(null);
     setQuickCreateMeal(null);
@@ -302,6 +374,7 @@ const Nutrition = () => {
   };
 
   const openNewFoodFromMealPicker = () => {
+    setFoodScanPhase('off');
     const meal = pickerMealType;
     if (!meal) return;
     setEditingFoodId(null);
@@ -713,6 +786,7 @@ const Nutrition = () => {
             setNewFoodContext(null);
             setQuickCreateMeal(null);
             setEditingFoodId(null);
+            setFoodScanPhase('off');
             setNewFoodForm(emptyFoodForm());
           }
         }}
@@ -724,92 +798,142 @@ const Nutrition = () => {
                 {editingFoodId ? 'Editar alimento' : 'Nuevo alimento'}
               </DialogTitle>
               <p className="text-sm leading-snug text-muted-foreground">
-                Ingresá los macronutrientes totales de este alimento.
+                {foodScanPhase === 'scanning' && !editingFoodId
+                  ? 'Escaneá el código de barras para cargar datos por 100 g desde Open Food Facts.'
+                  : 'Ingresá los macronutrientes totales de este alimento.'}
               </p>
             </DialogHeader>
           </div>
 
-          <div className="max-h-[min(58vh,520px)] space-y-4 overflow-y-auto px-6 pb-4">
-            <div>
-              <label htmlFor="new-food-name" className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                Nombre
-              </label>
-              <Input
-                id="new-food-name"
-                autoFocus
-                placeholder="Ej. Avena integral o Hamburguesa"
-                value={newFoodForm.name}
-                onChange={(e) => setNewFoodForm((p) => ({ ...p, name: e.target.value }))}
-                className={NUTRITION_FORM_INPUT_CLASS}
+          <div className="relative max-h-[min(58vh,520px)] space-y-4 overflow-y-auto px-6 pb-4">
+            {foodScanPhase === 'scanning' && !editingFoodId ? (
+              <NutritionBarcodeScanner
+                active
+                onCancel={() => setFoodScanPhase('off')}
+                onDecoded={handleOpenFoodFactsBarcode}
+                onStartError={handleBarcodeScannerPermissionError}
               />
-            </div>
+            ) : (
+              <div className="relative space-y-4">
+                <div
+                  className={
+                    foodScanPhase === 'fetching'
+                      ? 'pointer-events-none select-none space-y-4 opacity-60'
+                      : 'space-y-4'
+                  }
+                >
+                  <div>
+                    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+                      <label
+                        htmlFor="new-food-name"
+                        className="mb-0 block text-xs font-medium text-muted-foreground sm:mb-1.5 sm:flex-1"
+                      >
+                        Nombre
+                      </label>
+                      {!editingFoodId && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-11 shrink-0 gap-2 rounded-xl border-primary/35 font-semibold text-primary shadow-none hover:bg-primary/10"
+                          onClick={() => setFoodScanPhase('scanning')}
+                          disabled={foodScanPhase === 'fetching'}
+                        >
+                          <Barcode className="h-4 w-4" aria-hidden />
+                          Escanear producto
+                        </Button>
+                      )}
+                    </div>
+                    <Input
+                      id="new-food-name"
+                      autoFocus={foodScanPhase === 'off'}
+                      placeholder="Ej. Avena integral o Hamburguesa"
+                      value={newFoodForm.name}
+                      onChange={(e) => setNewFoodForm((p) => ({ ...p, name: e.target.value }))}
+                      className={NUTRITION_FORM_INPUT_CLASS}
+                    />
+                  </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="new-food-cals" className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                  Calorías (kcal)
-                </label>
-                <Input
-                  id="new-food-cals"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="0.1"
-                  placeholder="0"
-                  value={newFoodForm.base_calories}
-                  onChange={(e) => setNewFoodForm((p) => ({ ...p, base_calories: e.target.value }))}
-                  className={NUTRITION_FORM_INPUT_CLASS}
-                />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="new-food-cals" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Calorías (kcal)
+                      </label>
+                      <Input
+                        id="new-food-cals"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="0.1"
+                        placeholder="0"
+                        value={newFoodForm.base_calories}
+                        onChange={(e) =>
+                          setNewFoodForm((p) => ({ ...p, base_calories: e.target.value }))
+                        }
+                        className={NUTRITION_FORM_INPUT_CLASS}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="new-food-prot" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Proteínas (g)
+                      </label>
+                      <Input
+                        id="new-food-prot"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="0.1"
+                        placeholder="0"
+                        value={newFoodForm.base_protein}
+                        onChange={(e) =>
+                          setNewFoodForm((p) => ({ ...p, base_protein: e.target.value }))
+                        }
+                        className={NUTRITION_FORM_INPUT_CLASS}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="new-food-carbs" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Carbohidratos (g)
+                      </label>
+                      <Input
+                        id="new-food-carbs"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="0.1"
+                        placeholder="0"
+                        value={newFoodForm.base_carbs}
+                        onChange={(e) =>
+                          setNewFoodForm((p) => ({ ...p, base_carbs: e.target.value }))
+                        }
+                        className={NUTRITION_FORM_INPUT_CLASS}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="new-food-fat" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Grasas (g)
+                      </label>
+                      <Input
+                        id="new-food-fat"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="0.1"
+                        placeholder="0"
+                        value={newFoodForm.base_fat}
+                        onChange={(e) =>
+                          setNewFoodForm((p) => ({ ...p, base_fat: e.target.value }))
+                        }
+                        className={NUTRITION_FORM_INPUT_CLASS}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {foodScanPhase === 'fetching' ? <NutritionBarcodeScanLoadingOverlay /> : null}
               </div>
-              <div>
-                <label htmlFor="new-food-prot" className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                  Proteínas (g)
-                </label>
-                <Input
-                  id="new-food-prot"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="0.1"
-                  placeholder="0"
-                  value={newFoodForm.base_protein}
-                  onChange={(e) => setNewFoodForm((p) => ({ ...p, base_protein: e.target.value }))}
-                  className={NUTRITION_FORM_INPUT_CLASS}
-                />
-              </div>
-              <div>
-                <label htmlFor="new-food-carbs" className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                  Carbohidratos (g)
-                </label>
-                <Input
-                  id="new-food-carbs"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="0.1"
-                  placeholder="0"
-                  value={newFoodForm.base_carbs}
-                  onChange={(e) => setNewFoodForm((p) => ({ ...p, base_carbs: e.target.value }))}
-                  className={NUTRITION_FORM_INPUT_CLASS}
-                />
-              </div>
-              <div>
-                <label htmlFor="new-food-fat" className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                  Grasas (g)
-                </label>
-                <Input
-                  id="new-food-fat"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="0.1"
-                  placeholder="0"
-                  value={newFoodForm.base_fat}
-                  onChange={(e) => setNewFoodForm((p) => ({ ...p, base_fat: e.target.value }))}
-                  className={NUTRITION_FORM_INPUT_CLASS}
-                />
-              </div>
-            </div>
+            )}
+
           </div>
 
           <DialogFooter className="gap-3 border-t border-border/40 bg-card p-4 sm:justify-between">
@@ -825,7 +949,7 @@ const Nutrition = () => {
             <Button
               type="button"
               onClick={() => void saveNewFood()}
-              disabled={savingFood}
+              disabled={savingFood || foodScanPhase === 'fetching'}
               className="min-h-12 flex-1 rounded-xl bg-primary px-6 text-base font-semibold text-white shadow-none hover:bg-[color:var(--brand-hover)] disabled:opacity-60"
             >
               {savingFood

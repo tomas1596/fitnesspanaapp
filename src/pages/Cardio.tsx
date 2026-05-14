@@ -822,15 +822,19 @@ const Cardio = () => {
                   type="button"
                   onClick={handleStart}
                   className={cn(
-                    'flex h-36 w-36 shrink-0 items-center justify-center rounded-full border-2 border-transparent text-center',
+                    // Centrado duro del CTA sobre el mapa
+                    'flex h-36 w-36 shrink-0 flex-col items-center justify-center rounded-full border text-center',
                     'bg-primary text-primary-foreground transition duration-200 active:scale-[0.96]',
                     'hover:bg-[color:var(--brand-hover)]',
-                    resolved === 'dark'
-                      ? 'shadow-[0_0_16px_var(--brand-glow-lg),0_0_32px_var(--brand-glow),0_10px_28px_rgba(0,0,0,0.5)]'
-                      : 'border-primary shadow-sm',
+                    // Modo día: objeto flotante nítido (sin halo neón difuso); borde verde tipo neón definido
+                    'border-green-500',
+                    'shadow-[inset_0_1px_0_rgba(255,255,255,0.5),inset_0_-1px_1px_rgba(0,0,0,0.08),0_3px_5px_-1px_rgba(15,23,42,0.06),0_10px_20px_-4px_rgba(15,23,42,0.12),0_22px_44px_-10px_rgba(15,23,42,0.16)]',
+                    // Modo noche: mismo resplandor neón multicapa que antes (solo en .dark)
+                    'dark:border-transparent',
+                    'dark:shadow-[0_0_16px_var(--brand-glow-lg),0_0_32px_var(--brand-glow),0_10px_28px_rgba(0,0,0,0.5)]',
                   )}
                 >
-                  <span className="w-full text-center text-xl font-bold uppercase leading-tight tracking-wide text-zinc-950">
+                  <span className="flex w-full items-center justify-center px-3 text-xl font-bold uppercase leading-tight tracking-wide text-zinc-950">
                     COMENZAR
                   </span>
                 </button>
