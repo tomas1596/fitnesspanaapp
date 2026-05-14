@@ -20,13 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { NutritionBarcodeScanner, NutritionBarcodeScanLoadingOverlay } from '@/components/NutritionBarcodeScanner';
-import {
-  fetchOpenFoodFactsProduct,
-  mapOpenFoodFactsToNutritionFields,
-  nutritionValueToInputString,
-  type MacrosPer100g,
-  type OpenFoodFactsPackageTotal,
-} from '@/lib/openFoodFacts';
+import { fetchOpenFoodFactsProduct, mapOpenFoodFactsToNutritionFields, type MacrosPer100g, type OpenFoodFactsPackageTotal } from '@/lib/openFoodFacts';
 import { calculateAge } from '@/lib/age';
 import { todayLocalYMD, localDayBoundsISO } from '@/lib/nutritionDay';
 
@@ -74,6 +68,11 @@ const NUTRITION_FORM_INPUT_CLASS =
   'min-h-[48px] rounded-xl border-0 bg-zinc-100 px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/30 dark:bg-zinc-800';
 
 const roundMacro = (n: number) => Math.round(n * 100) / 100;
+
+/** Valores derivados mostrados en inputs (evita colas de decimales al multiplicar por cantidad). */
+const formatMacroDisplayKcal = (n: number) => (Number.isFinite(n) ? n.toFixed(1) : '');
+const formatMacroDisplayGrams = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '');
+const formatConsumedQtyDisplay = (n: number) => (Number.isFinite(n) ? n.toFixed(1) : '');
 
 const mapRowToCustomFood = (r: {
   id: string;
@@ -278,7 +277,7 @@ const Nutrition = () => {
 
   const consumedAmountEffective = useMemo(() => {
     const raw = consumedAmountInput.replace(',', '.').trim();
-    const n = Number(raw);
+    const n = parseFloat(raw);
     if (Number.isFinite(n) && n > 0) return n;
     return 100;
   }, [consumedAmountInput]);
@@ -286,7 +285,7 @@ const Nutrition = () => {
   const consumedScaleFactor = consumedAmountEffective / 100;
 
   const patchMacroDisplayToRef100 = (key: keyof MacrosPer100g, displayRaw: string) => {
-    const displayVal = Number(String(displayRaw).replace(',', '.')) || 0;
+    const displayVal = parseFloat(String(displayRaw).replace(',', '.')) || 0;
     const qty = Math.max(0.0001, consumedAmountEffective);
     setNewFoodMacrosRef100g((prev) => ({
       ...prev,
@@ -297,7 +296,7 @@ const Nutrition = () => {
   const scaledFromSelected = useMemo(() => {
     if (!selectedFood) return null;
     const raw = portionQty.replace(',', '.').trim();
-    const amt = Number(raw);
+    const amt = parseFloat(raw);
     const gramsOrMlEq = Number.isFinite(amt) && amt > 0 ? amt : 100;
     const m = gramsOrMlEq / 100;
     return {
@@ -338,7 +337,7 @@ const Nutrition = () => {
 
   const loadFullPackIntoConsumedAmount = useCallback(() => {
     if (!offPackageTotal) return;
-    setConsumedAmountInput(nutritionValueToInputString(offPackageTotal.amount));
+    setConsumedAmountInput(formatConsumedQtyDisplay(offPackageTotal.amount));
     setConsumedUnit(offPackageTotal.unit);
   }, [offPackageTotal]);
 
@@ -947,7 +946,7 @@ const Nutrition = () => {
                           type="number"
                           inputMode="decimal"
                           min={0}
-                          step="1"
+                          step="any"
                           placeholder="100"
                           value={consumedAmountInput}
                           onChange={(e) => setConsumedAmountInput(e.target.value)}
@@ -1012,7 +1011,7 @@ const Nutrition = () => {
                         min={0}
                         step="0.1"
                         placeholder="0"
-                        value={nutritionValueToInputString(newFoodMacrosRef100g.calories * consumedScaleFactor)}
+                        value={formatMacroDisplayKcal(newFoodMacrosRef100g.calories * consumedScaleFactor)}
                         onChange={(e) => patchMacroDisplayToRef100('calories', e.target.value)}
                         className={NUTRITION_FORM_INPUT_CLASS}
                       />
@@ -1028,7 +1027,7 @@ const Nutrition = () => {
                         min={0}
                         step="0.1"
                         placeholder="0"
-                        value={nutritionValueToInputString(newFoodMacrosRef100g.protein * consumedScaleFactor)}
+                        value={formatMacroDisplayGrams(newFoodMacrosRef100g.protein * consumedScaleFactor)}
                         onChange={(e) => patchMacroDisplayToRef100('protein', e.target.value)}
                         className={NUTRITION_FORM_INPUT_CLASS}
                       />
@@ -1044,7 +1043,7 @@ const Nutrition = () => {
                         min={0}
                         step="0.1"
                         placeholder="0"
-                        value={nutritionValueToInputString(newFoodMacrosRef100g.carbs * consumedScaleFactor)}
+                        value={formatMacroDisplayGrams(newFoodMacrosRef100g.carbs * consumedScaleFactor)}
                         onChange={(e) => patchMacroDisplayToRef100('carbs', e.target.value)}
                         className={NUTRITION_FORM_INPUT_CLASS}
                       />
@@ -1060,7 +1059,7 @@ const Nutrition = () => {
                         min={0}
                         step="0.1"
                         placeholder="0"
-                        value={nutritionValueToInputString(newFoodMacrosRef100g.fat * consumedScaleFactor)}
+                        value={formatMacroDisplayGrams(newFoodMacrosRef100g.fat * consumedScaleFactor)}
                         onChange={(e) => patchMacroDisplayToRef100('fat', e.target.value)}
                         className={NUTRITION_FORM_INPUT_CLASS}
                       />
@@ -1248,7 +1247,7 @@ const Nutrition = () => {
                     type="number"
                     inputMode="decimal"
                     min={0.01}
-                    step={0.1}
+                    step="any"
                     value={portionQty}
                     onChange={(e) => setPortionQty(e.target.value)}
                     className={NUTRITION_FORM_INPUT_CLASS}
@@ -1270,11 +1269,13 @@ const Nutrition = () => {
 
               <div className="rounded-xl border border-border/60 p-3">
                 <p className="text-[11px] font-medium text-muted-foreground">
-                  Total estimado ({nutritionValueToInputString(scaledFromSelected.consumedQty)} {portionUnit})
+                  Total estimado ({formatConsumedQtyDisplay(scaledFromSelected.consumedQty)} {portionUnit})
                 </p>
-                <p className="mt-1 text-lg font-bold tabular-nums text-foreground">{scaledFromSelected.calories} kcal</p>
+                <p className="mt-1 text-lg font-bold tabular-nums text-foreground">
+                  {formatMacroDisplayKcal(scaledFromSelected.calories)} kcal
+                </p>
                 <p className="text-xs tabular-nums text-muted-foreground">
-                  P{scaledFromSelected.protein}g · C{scaledFromSelected.carbs}g · G{scaledFromSelected.fat}g
+                  {`P${formatMacroDisplayGrams(scaledFromSelected.protein)}g · C${formatMacroDisplayGrams(scaledFromSelected.carbs)}g · G${formatMacroDisplayGrams(scaledFromSelected.fat)}g`}
                 </p>
               </div>
 
