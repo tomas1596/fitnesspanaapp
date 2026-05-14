@@ -83,10 +83,12 @@ function defaultTitleForDate(d: Date) {
   return label;
 }
 
-const DetailRow = ({ label, value }: { label: string; value: string }) => (
+const DetailRow = ({ label, value, isDark }: { label: string; value: string; isDark: boolean }) => (
   <div className="flex items-center justify-between border-b border-border py-3 last:border-0">
-    <span className="text-sm text-muted-foreground">{label}</span>
-    <span className="text-sm font-semibold tabular-nums text-foreground">{value}</span>
+    <span className={cn('text-sm', isDark ? 'text-muted-foreground' : 'text-zinc-500')}>{label}</span>
+    <span className={cn('text-sm font-semibold tabular-nums', isDark ? 'text-foreground' : 'text-zinc-950')}>
+      {value}
+    </span>
   </div>
 );
 
@@ -257,7 +259,7 @@ export default function ActivityDetail() {
         <button
           type="button"
           onClick={() => setDeleteOpen(true)}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-600 transition hover:bg-destructive/10 hover:text-destructive dark:text-muted-foreground"
           aria-label="Eliminar actividad"
         >
           <Trash2 className="h-5 w-5" />
@@ -308,27 +310,48 @@ export default function ActivityDetail() {
         </div>
 
         <div className="mt-8 grid grid-cols-3 gap-x-2 gap-y-5">
-          <MetricCell label="Ritmo prom." value={fmtPace(avgPace)} />
-          <MetricCell label="Tiempo" value={fmtTime(durationSec)} />
-          <MetricCell label="Calorías" value={String(estCalories)} />
-          <MetricCell label="Desnivel positivo" value={elevShort} />
-          <MetricCell label="FC prom" value={hrLabel} />
-          <MetricCell label="Cadencia" value={cadenceLabel} />
+          <MetricCell label="Ritmo prom." value={fmtPace(avgPace)} isDark={resolved === 'dark'} />
+          <MetricCell label="Tiempo" value={fmtTime(durationSec)} isDark={resolved === 'dark'} />
+          <MetricCell label="Calorías" value={String(estCalories)} isDark={resolved === 'dark'} />
+          <MetricCell label="Desnivel positivo" value={elevShort} isDark={resolved === 'dark'} />
+          <MetricCell label="FC prom" value={hrLabel} isDark={resolved === 'dark'} />
+          <MetricCell label="Cadencia" value={cadenceLabel} isDark={resolved === 'dark'} />
         </div>
 
         <div className="mt-8 flex flex-col gap-3">
           <button
             type="button"
             onClick={() => setPanel('share')}
-            className="flex w-full items-center justify-between rounded-2xl border border-[#22FF55]/30 bg-[#22FF55]/10 px-4 py-3.5 text-left transition hover:border-[#22FF55]/60"
+            className={cn(
+              'flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-left transition',
+              resolved === 'dark'
+                ? 'border border-[#22FF55]/30 bg-[#22FF55]/10 hover:border-[#22FF55]/60'
+                : 'border border-zinc-200 bg-white shadow-sm hover:border-zinc-300',
+            )}
           >
             <span className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#22FF55]/20">
-                <Share2 className="h-5 w-5 text-[#22FF55]" />
+              <span
+                className={cn(
+                  'flex h-10 w-10 items-center justify-center rounded-xl',
+                  resolved === 'dark' ? 'bg-[#22FF55]/20' : 'bg-zinc-100',
+                )}
+              >
+                <Share2
+                  className={cn('h-5 w-5', resolved === 'dark' ? 'text-[#22FF55]' : 'text-green-950')}
+                />
               </span>
-              <span className="font-semibold text-foreground">Compartir actividad</span>
+              <span
+                className={cn(
+                  'font-semibold',
+                  resolved === 'dark' ? 'text-foreground' : 'text-zinc-900',
+                )}
+              >
+                Compartir actividad
+              </span>
             </span>
-            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            <ChevronRight
+              className={cn('h-5 w-5', resolved === 'dark' ? 'text-muted-foreground' : 'text-zinc-500')}
+            />
           </button>
           <button
             type="button"
@@ -337,7 +360,9 @@ export default function ActivityDetail() {
           >
             <span className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary">
-                <MapPinned className="h-5 w-5 text-primary" />
+                <MapPinned
+                  className={cn('h-5 w-5', resolved === 'dark' ? 'text-primary' : 'text-zinc-800')}
+                />
               </span>
               <span className="font-semibold">Detalles de la ruta</span>
             </span>
@@ -350,7 +375,9 @@ export default function ActivityDetail() {
           >
             <span className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary">
-                <ListTree className="h-5 w-5 text-primary" />
+                <ListTree
+                  className={cn('h-5 w-5', resolved === 'dark' ? 'text-primary' : 'text-zinc-800')}
+                />
               </span>
               <span className="font-semibold">Más detalles</span>
             </span>
@@ -440,9 +467,36 @@ export default function ActivityDetail() {
             )}
 
             <div className="pointer-events-none absolute left-3 right-3 top-3 z-[500] flex flex-wrap gap-2">
-              <FloatStat label="Ritmo prom." value={fmtPace(avgPace)} icon={<Timer className="h-3.5 w-3.5 text-primary" />} />
-              <FloatStat label="Desnivel +" value={elevShort} icon={<Mountain className="h-3.5 w-3.5 text-primary" />} />
-              <FloatStat label="PPM" value={hrLabel} icon={<Heart className="h-3.5 w-3.5 text-primary" />} />
+              <FloatStat
+                isDark={resolved === 'dark'}
+                label="Ritmo prom."
+                value={fmtPace(avgPace)}
+                icon={
+                  <Timer
+                    className={cn('h-3.5 w-3.5', resolved === 'dark' ? 'text-primary' : 'text-zinc-800')}
+                  />
+                }
+              />
+              <FloatStat
+                isDark={resolved === 'dark'}
+                label="Desnivel +"
+                value={elevShort}
+                icon={
+                  <Mountain
+                    className={cn('h-3.5 w-3.5', resolved === 'dark' ? 'text-primary' : 'text-zinc-800')}
+                  />
+                }
+              />
+              <FloatStat
+                isDark={resolved === 'dark'}
+                label="PPM"
+                value={hrLabel}
+                icon={
+                  <Heart
+                    className={cn('h-3.5 w-3.5', resolved === 'dark' ? 'text-primary' : 'text-zinc-800')}
+                  />
+                }
+              />
             </div>
           </div>
 
@@ -554,14 +608,19 @@ export default function ActivityDetail() {
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4">
             <div className="rounded-2xl border border-border bg-card px-4">
-              <DetailRow label="Ritmo más rápido (por km)" value={fastest != null ? fmtPace(fastest) : '—'} />
-              <DetailRow label="Duración" value={fmtTime(durationSec)} />
+              <DetailRow
+                label="Ritmo más rápido (por km)"
+                value={fastest != null ? fmtPace(fastest) : '—'}
+                isDark={resolved === 'dark'}
+              />
+              <DetailRow label="Duración" value={fmtTime(durationSec)} isDark={resolved === 'dark'} />
               <DetailRow
                 label="Tiempo transcurrido"
                 value={`${started.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} – ${ended.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`}
+                isDark={resolved === 'dark'}
               />
-              <DetailRow label="Elevación (ganancia / pérdida)" value={elevLabel} />
-              <DetailRow label="Pasos (estimados)" value={String(displaySteps)} />
+              <DetailRow label="Elevación (ganancia / pérdida)" value={elevLabel} isDark={resolved === 'dark'} />
+              <DetailRow label="Pasos (estimados)" value={String(displaySteps)} isDark={resolved === 'dark'} />
             </div>
 
             <h3 className="mt-8 text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -623,23 +682,46 @@ export default function ActivityDetail() {
   );
 }
 
-function MetricCell({ label, value }: { label: string; value: string }) {
+function MetricCell({ label, value, isDark }: { label: string; value: string; isDark: boolean }) {
   return (
     <div className="text-center">
-      <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="mt-1 text-base font-bold tabular-nums text-foreground">{value}</div>
+      <div
+        className={cn(
+          'text-[10px] font-semibold uppercase tracking-widest',
+          isDark ? 'text-muted-foreground' : 'text-zinc-500',
+        )}
+      >
+        {label}
+      </div>
+      <div
+        className={cn(
+          'mt-1 text-base font-bold tabular-nums',
+          isDark ? 'text-foreground' : 'text-zinc-950',
+        )}
+      >
+        {value}
+      </div>
     </div>
   );
 }
 
-function FloatStat({ label, value, icon }: { label: string; value: string; icon: ReactNode }) {
+function FloatStat({ label, value, icon, isDark }: { label: string; value: string; icon: ReactNode; isDark: boolean }) {
   return (
     <div className="pointer-events-auto rounded-2xl bg-white/95 px-3 py-2 shadow-lg ring-1 ring-black/5 dark:bg-zinc-900/95 dark:ring-white/10">
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+      <div
+        className={cn(
+          'flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide',
+          isDark ? 'text-muted-foreground' : 'text-zinc-500',
+        )}
+      >
         {icon}
         {label}
       </div>
-      <div className="mt-0.5 text-sm font-extrabold tabular-nums text-foreground">{value}</div>
+      <div
+        className={cn('mt-0.5 text-sm font-extrabold tabular-nums', isDark ? 'text-foreground' : 'text-zinc-950')}
+      >
+        {value}
+      </div>
     </div>
   );
 }

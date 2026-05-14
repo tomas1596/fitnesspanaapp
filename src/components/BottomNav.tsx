@@ -2,11 +2,11 @@ import { Dumbbell, Timer, Footprints, Flame, User } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const tabs = [
-  { path: '/', icon: Dumbbell },
-  { path: '/timer', icon: Timer },
-  { path: '/cardio', icon: Footprints },
-  { path: '/nutrition', icon: Flame },
-  { path: '/profile', icon: User },
+  { path: '/', icon: Dumbbell, label: 'Entreno' },
+  { path: '/timer', icon: Timer, label: 'Timer' },
+  { path: '/cardio', icon: Footprints, label: 'Cardio' },
+  { path: '/nutrition', icon: Flame, label: 'Nutrición' },
+  { path: '/profile', icon: User, label: 'Perfil' },
 ];
 
 const BottomNav = () => {
@@ -18,22 +18,51 @@ const BottomNav = () => {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-lg"
+      className={[
+        'fixed bottom-0 left-0 right-0 z-50',
+        /* Light */ 'border-t border-zinc-200 bg-white shadow-[0_-1px_8px_rgba(0,0,0,0.06)]',
+        /* Dark  */ 'dark:border-white/[0.06] dark:bg-zinc-950/85 dark:backdrop-blur-xl dark:shadow-none',
+      ].join(' ')}
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
-      <div className="mx-auto flex max-w-lg items-center justify-around py-2.5">
-        {tabs.map(({ path, icon: Icon }) => {
+      <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-1.5">
+        {tabs.map(({ path, icon: Icon, label }) => {
           const active = location.pathname === path;
           return (
             <button
               key={path}
+              type="button"
               onClick={() => navigate(path)}
-              aria-label={path}
-              className={`flex items-center justify-center rounded-xl p-2 transition-colors ${
-                active ? 'text-primary' : 'text-muted-foreground'
-              }`}
+              aria-label={label}
+              className="group flex flex-col items-center gap-0.5 px-3 py-1.5 transition-all duration-300 active:scale-90"
             >
-              <Icon className="h-6 w-6" strokeWidth={active ? 2.4 : 2} />
+              <span
+                className={[
+                  'flex h-10 w-10 items-center justify-center rounded-2xl transition-all duration-300',
+                  active ? 'scale-110 bg-primary/10 dark:bg-primary/15' : 'scale-100 bg-transparent',
+                ].join(' ')}
+                style={active ? { boxShadow: '0 0 12px rgba(34,197,94,0.25)' } : undefined}
+              >
+                <Icon
+                  className={[
+                    'transition-all duration-300',
+                    active
+                      ? 'h-6 w-6 text-primary drop-shadow-[0_0_5px_rgba(34,197,94,0.5)]'
+                      : 'h-5 w-5 text-zinc-500 dark:text-muted-foreground/50',
+                  ].join(' ')}
+                  strokeWidth={active ? 2.5 : 1.8}
+                />
+              </span>
+              <span
+                className={[
+                  'text-[10px] font-semibold tracking-wide transition-all duration-300',
+                  active
+                    ? 'text-primary'
+                    : 'text-zinc-500 dark:text-muted-foreground/40',
+                ].join(' ')}
+              >
+                {label}
+              </span>
             </button>
           );
         })}

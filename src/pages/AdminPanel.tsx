@@ -352,7 +352,7 @@ const AdminPanel = () => {
             type="button"
             variant="ghost"
             size="icon"
-            className="h-10 w-10 shrink-0 rounded-xl"
+            className="h-10 w-10 shrink-0 rounded-xl border border-border/40 bg-card/80 backdrop-blur-sm transition-all duration-300 active:scale-90"
             onClick={() => navigate(-1)}
             aria-label="Volver"
           >
@@ -360,11 +360,11 @@ const AdminPanel = () => {
           </Button>
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <Shield className="h-7 w-7 shrink-0 text-violet-500" />
-            <h1 className="text-xl font-bold text-foreground">Panel de Control</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Panel de Control</h1>
           </div>
         </div>
 
-        <p className="text-sm text-muted-foreground">
+        <p className="text-xs font-medium text-muted-foreground/60">
           Directorio de usuarios · Cambiá el rol desde el selector en cada fila.
         </p>
 
@@ -377,15 +377,15 @@ const AdminPanel = () => {
               { Icon: Star, color: 'text-amber-500', label: 'Activos', value: activeCount },
             ] as const
           ).map(({ Icon, color, label, value }) => (
-            <div key={label} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Icon className={`h-4 w-4 shrink-0 ${color}`} />
-                <span className="text-xs font-medium uppercase tracking-wide">{label}</span>
+            <div key={label} className="rounded-2xl border border-border/40 bg-card/80 p-4 backdrop-blur-sm">
+              <div className="flex items-center gap-2">
+                <Icon className={`h-4 w-4 shrink-0 ${color} opacity-80`} />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">{label}</span>
               </div>
               {loading ? (
                 <Skeleton className="mt-2 h-8 w-16 rounded-lg" />
               ) : (
-                <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{value}</p>
+                <p className="mt-1 text-2xl font-extrabold tabular-nums text-foreground">{value}</p>
               )}
             </div>
           ))}
@@ -393,13 +393,13 @@ const AdminPanel = () => {
 
         {/* Search */}
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
           <Input
             type="search"
             placeholder="Buscar por nombre o email…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="h-11 rounded-xl border border-input bg-card pl-9 text-sm shadow-sm"
+            className="h-11 rounded-xl border border-border/40 bg-card/80 pl-9 text-sm backdrop-blur-sm"
             aria-label="Filtrar usuarios"
           />
         </div>
@@ -411,7 +411,7 @@ const AdminPanel = () => {
         )}
 
         {/* Table */}
-        <div className="rounded-2xl border border-border bg-card shadow-sm">
+        <div className="rounded-2xl border border-border/40 bg-card/80 backdrop-blur-sm">
           {loading ? (
             <div className="space-y-3 p-4">
               {[1, 2, 3].map((i) => (

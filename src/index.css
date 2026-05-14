@@ -6,54 +6,56 @@
 
 @layer base {
   :root {
-    /* Fondo gris muy claro (no blanco puro) para mejor descanso visual */
-    --background: 220 14% 94%;
-    --foreground: 220 13% 10%;
+    /* ── MODO DÍA: sistema de capas zinc ────────────────────────────────────
+       Capa 0 – fondo de página : zinc-100  #F4F4F5  (base gris suave)
+       Capa 1 – tarjetas/inputs : blanco    #FFFFFF  (flotan sobre el fondo)
+       Capa 2 – elementos activos: zinc-50  #FAFAFA  (hover/secondary)
+    ─────────────────────────────────────────────────────────────────────── */
+    --background: 240 5% 96%;          /* ≈ zinc-100 #F4F4F5               */
+    --foreground: 240 6% 10%;          /* ≈ zinc-900 #18181B               */
 
-    /* Tarjetas ligeramente elevadas respecto al fondo */
-    --card: 0 0% 100%;
-    --card-foreground: 220 13% 10%;
+    --card: 0 0% 100%;                 /* blanco puro — flota sobre bg     */
+    --card-foreground: 240 6% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 13% 10%;
+    --popover-foreground: 240 6% 10%;
 
-    --primary: 111 100% 54%;
-    --primary-foreground: 220 13% 8%;
+    --primary: 111 100% 54%;           /* verde neón (mantener para botones)*/
+    --primary-foreground: 240 6% 10%;  /* texto sobre botón verde = zinc-900*/
 
-    /* Campos: tono un poco más profundo que el fondo de página */
-    --secondary: 220 12% 91%;
-    --secondary-foreground: 220 13% 15%;
+    --secondary: 240 5% 94%;           /* zinc-100/200 para chips/botones  */
+    --secondary-foreground: 240 6% 25%;
 
-    --muted: 220 12% 91%;
-    --muted-foreground: 220 8% 40%;
+    --muted: 240 5% 93%;
+    --muted-foreground: 240 4% 46%;    /* ≈ zinc-500 — apoyo legible       */
 
-    --accent: 220 12% 88%;
-    --accent-foreground: 220 13% 10%;
+    --accent: 240 5% 91%;              /* hover sobre tarjeta blanca       */
+    --accent-foreground: 240 6% 10%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Bordes más visibles en modo día (inputs, cards, selects) */
-    --border: 220 12% 82%;
-    --input: 220 12% 78%;
-    --ring: 111 100% 54%;
+    /* Bordes ≈ zinc-200 (#E4E4E7): definen sin agredir */
+    --border: 240 6% 88%;
+    --input:  240 6% 88%;
+    --ring:   111 100% 54%;
 
     --radius: 0.75rem;
 
-    /* ── Brand accent color (overrideable via JS for VIP themes) ── */
+    /* ── Brand accent (overrideable via JS for VIP themes) ── */
     --brand-color: #39FF14;
     --brand-color-dim: rgba(57, 255, 20, 0.13);
     --brand-glow-sm: rgba(57, 255, 20, 0.33);
     --brand-glow: rgba(57, 255, 20, 0.45);
     --brand-glow-lg: rgba(57, 255, 20, 0.65);
 
-    --sidebar-background: 220 14% 94%;
-    --sidebar-foreground: 220 13% 15%;
+    --sidebar-background: 240 5% 96%;  /* igual que el fondo de página     */
+    --sidebar-foreground: 240 6% 25%;
     --sidebar-primary: 111 100% 54%;
-    --sidebar-primary-foreground: 220 13% 8%;
-    --sidebar-accent: 220 10% 94%;
-    --sidebar-accent-foreground: 220 13% 10%;
-    --sidebar-border: 220 12% 82%;
+    --sidebar-primary-foreground: 240 6% 10%;
+    --sidebar-accent: 240 5% 91%;
+    --sidebar-accent-foreground: 240 6% 10%;
+    --sidebar-border: 240 6% 88%;
     --sidebar-ring: 111 100% 54%;
   }
 
@@ -116,15 +118,18 @@
     overscroll-behavior: none;
   }
 
-  /* Modo día: recuadros tipo card con borde fino + sombra suave (patrón habitual en la app) */
-  html:not(.dark) .rounded-2xl.bg-card {
-    border: 1px solid hsl(var(--border) / 0.9);
-    box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.06);
+  /* Modo día: tarjetas blancas flotan sobre fondo zinc-100 con sombra suave */
+  html:not(.dark) .rounded-2xl.bg-card,
+  html:not(.dark) .rounded-3xl.bg-card {
+    border: 1px solid hsl(var(--border) / 0.8);
+    box-shadow: 0 1px 4px 0 rgb(0 0 0 / 0.06), 0 0 0 0.5px rgb(0 0 0 / 0.03);
+    background-color: hsl(0 0% 100%);  /* fuerza blanco aunque tenga /80 */
   }
 
   html:not(.dark) .rounded-xl.bg-card {
-    border: 1px solid hsl(var(--border) / 0.9);
-    box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+    border: 1px solid hsl(var(--border) / 0.8);
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 0 0 0.5px rgb(0 0 0 / 0.02);
+    background-color: hsl(0 0% 100%);
   }
 
   /* Hide scrollbar for mobile feel */
@@ -163,6 +168,11 @@
 ──────────────────────────────────────────────────────────────────────────────── */
 html:not(.dark) .text-primary {
   color: #16a34a;
+}
+
+/* Texto sobre botones bg-primary (verde neón) — zinc-900 para máx. contraste */
+html:not(.dark) .bg-primary {
+  color: #18181b;  /* zinc-900 */
 }
 
 html:not(.dark) .border-primary {

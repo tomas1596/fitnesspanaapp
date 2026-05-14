@@ -362,13 +362,13 @@ const Timer = () => {
 
         {/* Top bar */}
         <div className="flex items-center justify-between">
-          <h1 className={`text-xl font-bold ${fgDark ? 'text-black' : 'text-foreground'}`}>
+          <h1 className={`text-3xl font-extrabold tracking-tight ${fgDark ? 'text-black' : 'text-foreground'}`}>
             Timer
           </h1>
           <button
             onClick={() => setSettingsOpen(true)}
-            className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-              fgDark ? 'bg-black/10 text-black' : 'bg-card text-foreground'
+            className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 active:scale-90 ${
+              fgDark ? 'bg-black/10 text-black' : 'border border-border/40 bg-card/80 text-foreground backdrop-blur-sm'
             }`}
             aria-label="Configurar"
           >
@@ -378,8 +378,8 @@ const Timer = () => {
 
         {/* Active preset chip */}
         <div className="mt-3">
-          <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${
-            fgDark ? 'bg-black/15 text-black' : 'bg-card text-muted-foreground'
+          <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold tracking-wide ${
+            fgDark ? 'bg-black/15 text-black' : 'border border-border/40 bg-card/70 text-muted-foreground backdrop-blur-sm'
           }`}>
             {active?.name ?? '—'}
           </span>
@@ -410,8 +410,8 @@ const Timer = () => {
             variant="ghost"
             size="icon"
             onClick={reset}
-            className={`h-14 w-14 rounded-2xl ${
-              fgDark ? 'bg-black/10 text-black hover:bg-black/20' : 'bg-card text-foreground hover:bg-accent'
+            className={`h-14 w-14 rounded-2xl transition-all duration-300 active:scale-90 ${
+              fgDark ? 'bg-black/10 text-black hover:bg-black/20' : 'border border-border/40 bg-card/80 text-foreground backdrop-blur-sm hover:bg-accent'
             }`}
           >
             <RotateCcw className="h-6 w-6" />
@@ -419,9 +419,10 @@ const Timer = () => {
 
           <button
             onClick={isRunning ? pause : start}
-            className={`flex h-20 w-20 items-center justify-center rounded-full shadow-lg transition-transform active:scale-95 ${
-              fgDark ? 'bg-black text-white' : 'bg-primary text-primary-foreground'
+            className={`flex h-20 w-20 items-center justify-center rounded-full transition-all duration-300 active:scale-95 ${
+              fgDark ? 'bg-black text-white shadow-lg' : 'bg-primary text-primary-foreground'
             }`}
+            style={!fgDark ? { boxShadow: '0 0 24px rgba(34,197,94,0.5), 0 4px 20px rgba(0,0,0,0.25)' } : undefined}
             aria-label={isRunning ? 'Pausar' : 'Iniciar'}
           >
             {isRunning ? <Pause className="h-9 w-9" /> : <Play className="ml-1 h-9 w-9" />}
@@ -433,15 +434,15 @@ const Timer = () => {
 
       {/* ── Settings Dialog (timer list + sound picker) ───────────────────── */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-h-[85vh] overflow-y-auto border border-white/10 bg-zinc-900/95 backdrop-blur-xl">
           <DialogHeader>
-            <DialogTitle>Temporizadores</DialogTitle>
+            <DialogTitle className="text-xl font-extrabold tracking-tight">Temporizadores</DialogTitle>
           </DialogHeader>
 
           {/* Sound selector */}
-          <div className="rounded-xl border border-border bg-card p-3">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
             <div className="mb-2 flex items-center gap-2">
-              <Volume2 className="h-4 w-4 text-primary" />
+              <Volume2 className="h-4 w-4 text-primary/70" />
               <p className="text-sm font-semibold text-foreground">Sonido de alerta</p>
             </div>
             <div className="flex gap-2">
@@ -449,11 +450,12 @@ const Timer = () => {
                 <button
                   key={id}
                   onClick={() => handleSoundChange(id)}
-                  className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-2.5 text-xs font-semibold transition-all ${
+                  className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-2.5 text-xs font-semibold transition-all duration-300 active:scale-95 ${
                     selectedSound === id
-                      ? 'bg-primary text-primary-foreground shadow-md'
-                      : 'bg-secondary text-secondary-foreground hover:bg-accent'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-white/5 text-secondary-foreground hover:bg-white/10'
                   }`}
+                  style={selectedSound === id ? { boxShadow: '0 0 12px rgba(34,197,94,0.35)' } : undefined}
                 >
                   <span className="text-lg leading-none">{emoji}</span>
                   <span className="leading-tight">{label}</span>
@@ -467,8 +469,8 @@ const Timer = () => {
             {presets.map(p => (
               <div
                 key={p.id}
-                className={`flex items-center justify-between rounded-xl border p-3 ${
-                  p.id === activePresetId ? 'border-primary bg-primary/5' : 'border-border bg-card'
+                className={`flex items-center justify-between rounded-xl border p-3 transition-all duration-200 ${
+                  p.id === activePresetId ? 'border-primary/50 bg-primary/8' : 'border-white/8 bg-white/5'
                 }`}
               >
                 <button

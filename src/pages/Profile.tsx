@@ -519,7 +519,14 @@ const Profile = () => {
           </div>
         </div>
 
-        {isAdmin && user?.email === ADMIN_EMAIL && <AdminButton />}
+        {hasData && (
+          <div className="grid grid-cols-4 gap-2">
+            <MiniStat icon={Activity} label="IMC" value={imc.toFixed(1)} />
+            <MiniStat icon={Flame} label="kcal" value={tdee.toString()} />
+            <MiniStat icon={Beef} label="Prot" value={`${proteinGoal}g`} />
+            <MiniStat icon={Droplets} label="Agua" value={`${hydrationL}L`} />
+          </div>
+        )}
 
         <div className="rounded-2xl bg-card p-4">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Datos & objetivos</h2>
@@ -528,9 +535,9 @@ const Profile = () => {
             <LabeledNum label="Peso (kg)" value={weight} onChange={setWeight} />
             <LabeledNum label="Peso meta (kg)" value={targetWeight} onChange={setTargetWeight} />
             <div className="col-span-2">
-              <label className="mb-1 block text-[11px] text-muted-foreground">Nivel de actividad</label>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Nivel de actividad</label>
               <Select value={activityLevel || undefined} onValueChange={setActivityLevel}>
-                <SelectTrigger className="h-10 rounded-xl border border-input bg-secondary text-sm">
+                <SelectTrigger className="h-10 rounded-xl border border-zinc-200 bg-white text-sm transition-colors focus:border-primary focus:ring-0 dark:border-border dark:bg-secondary">
                   <SelectValue placeholder="Elegir nivel" />
                 </SelectTrigger>
                 <SelectContent>
@@ -541,9 +548,9 @@ const Profile = () => {
               </Select>
             </div>
             <div className="col-span-2">
-              <label className="mb-1 block text-[11px] text-muted-foreground">Objetivo fitness</label>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Objetivo fitness</label>
               <Select value={fitnessGoal || undefined} onValueChange={setFitnessGoal}>
-                <SelectTrigger className="h-10 rounded-xl border border-input bg-secondary text-sm">
+                <SelectTrigger className="h-10 rounded-xl border border-zinc-200 bg-white text-sm transition-colors focus:border-primary focus:ring-0 dark:border-border dark:bg-secondary">
                   <SelectValue placeholder="Elegir objetivo" />
                 </SelectTrigger>
                 <SelectContent>
@@ -561,19 +568,17 @@ const Profile = () => {
                 weightDiff < 0 ? `${Math.abs(weightDiff).toFixed(1)} kg bajo la meta` : '¡En tu meta! 🎉'}
             </p>
           )}
-          <Button onClick={saveProfile} disabled={saving} className="mt-3 h-11 w-full rounded-xl text-sm font-semibold">
+          <Button
+            onClick={saveProfile}
+            disabled={saving}
+            className="mt-3 h-11 w-full rounded-xl text-sm font-bold text-black transition-all duration-300 active:scale-95 dark:text-primary-foreground"
+            style={{ boxShadow: '0 0 16px rgba(34,197,94,0.25)' }}
+          >
             <Save className="mr-2 h-4 w-4" /> {saving ? 'Guardando...' : 'Guardar'}
           </Button>
         </div>
 
-        {hasData && (
-          <div className="grid grid-cols-4 gap-2">
-            <MiniStat icon={Activity} label="IMC" value={imc.toFixed(1)} />
-            <MiniStat icon={Flame} label="kcal" value={tdee.toString()} />
-            <MiniStat icon={Beef} label="Prot" value={`${proteinGoal}g`} />
-            <MiniStat icon={Droplets} label="Agua" value={`${hydrationL}L`} />
-          </div>
-        )}
+        {isAdmin && user?.email === ADMIN_EMAIL && <AdminButton />}
 
         {/* ── Suscripción ── */}
         <div className="rounded-2xl bg-card p-3">
@@ -852,17 +857,28 @@ const Profile = () => {
 
 const LabeledNum = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => (
   <div>
-    <label className="mb-1 block text-[11px] text-muted-foreground">{label}</label>
-    <Input type="number" inputMode="decimal" value={value} onChange={e => onChange(e.target.value)}
-      className="h-10 rounded-xl border border-input bg-secondary text-sm" />
+    <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</label>
+    <Input
+      type="number"
+      inputMode="decimal"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className={[
+        'h-10 rounded-xl text-sm transition-colors duration-200',
+        'border border-zinc-200 bg-white text-foreground',
+        'focus-visible:border-primary focus-visible:ring-0 focus-visible:ring-offset-0',
+        'dark:border-border dark:bg-secondary',
+        'dark:focus-visible:border-primary',
+      ].join(' ')}
+    />
   </div>
 );
 
 const MiniStat = ({ icon: Icon, label, value }: { icon: typeof Activity; label: string; value: string }) => (
-  <div className="rounded-xl bg-card p-2 text-center">
-    <Icon className="mx-auto mb-1 h-4 w-4 text-primary" />
+  <div className="rounded-xl bg-white p-2 text-center shadow-sm dark:bg-card/80 dark:shadow-none dark:border dark:border-border/40">
+    <Icon className="mx-auto mb-1 h-4 w-4 text-primary/80" />
     <p className="text-sm font-bold text-foreground">{value}</p>
-    <p className="text-[10px] text-muted-foreground">{label}</p>
+    <p className="text-[10px] text-muted-foreground/70">{label}</p>
   </div>
 );
 

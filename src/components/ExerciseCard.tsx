@@ -85,13 +85,13 @@ const ExerciseCard = ({
   };
 
   return (
-    <div className="rounded-xl bg-card p-4">
+    <div className="rounded-2xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
       {/* Header */}
       <div className="mb-1 flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-base font-semibold text-foreground">{name}</h3>
+          <h3 className="truncate text-base font-bold tracking-tight text-foreground">{name}</h3>
           <span
-            className={`mt-1 inline-block rounded-md px-2 py-0.5 text-xs font-medium ${
+            className={`mt-1.5 inline-block rounded-md px-2 py-0.5 text-[11px] font-semibold tracking-wide ${
               muscleGroupColors[muscleGroup] || 'bg-muted text-muted-foreground'
             }`}
           >
@@ -103,7 +103,7 @@ const ExerciseCard = ({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 shrink-0 rounded-lg text-muted-foreground hover:bg-accent"
+              className="h-8 w-8 shrink-0 rounded-lg text-muted-foreground/50 hover:bg-accent hover:text-foreground"
             >
               <MoreVertical className="h-4 w-4" />
             </Button>
@@ -128,8 +128,8 @@ const ExerciseCard = ({
       {/* Last performance hint */}
       {lastPerformance && (
         <p
-          className="mb-3 text-xs font-medium"
-          style={{ color: 'var(--brand-color)' }}
+          className="mb-3 text-xs font-semibold"
+          style={{ color: 'var(--brand-color)', opacity: 0.85 }}
         >
           Último: {lastPerformance.weight}kg × {lastPerformance.reps}
         </p>
@@ -137,7 +137,7 @@ const ExerciseCard = ({
 
       {sets.length > 0 && (
         <div className="mb-3 space-y-2">
-          <div className="grid grid-cols-[28px_1fr_1fr_44px_28px_28px] gap-1.5 px-1 text-xs text-muted-foreground">
+          <div className="grid grid-cols-[28px_1fr_1fr_44px_28px_28px] gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/50">
             <span>#</span>
             <span>Reps</span>
             <span>Peso</span>
@@ -210,9 +210,9 @@ const ExerciseCard = ({
       <Button
         variant="ghost"
         onClick={() => onAddSet(id)}
-        className="h-10 w-full rounded-lg text-sm text-primary hover:bg-primary/10 hover:text-primary"
+        className="h-10 w-full rounded-xl text-sm font-semibold text-primary/70 hover:bg-primary/10 hover:text-primary"
       >
-        <Plus className="mr-1 h-4 w-4" /> Agregar Serie
+        <Plus className="mr-1 h-4 w-4 opacity-70" /> Agregar Serie
       </Button>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>

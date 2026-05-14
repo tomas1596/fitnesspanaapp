@@ -1,13 +1,86 @@
 import { useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/hooks/useTheme';
 import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Dumbbell } from 'lucide-react';
+
+/* ─── Theme-aware style tokens ──────────────────────────────────────────────
+   Computed once per render based on resolved theme.
+   Using inline objects / string vars keeps the JSX readable.
+──────────────────────────────────────────────────────────────────────────── */
+function useAuthStyles(isDark: boolean) {
+  const pageBg = isDark
+    ? 'bg-gradient-to-b from-zinc-950 via-zinc-900 to-black'
+    : 'bg-zinc-100';
+
+  const titleColor = isDark ? 'text-white' : 'text-zinc-900';
+  const subtitleColor = isDark ? 'text-white/40' : 'text-zinc-500';
+
+  const card = isDark
+    ? 'border border-white/10 bg-zinc-900/50 shadow-2xl backdrop-blur-xl'
+    : 'border border-zinc-200 bg-white shadow-sm';
+
+  const inputCls = [
+    'h-14 rounded-xl text-sm transition-all duration-200',
+    'focus-visible:ring-0 focus-visible:ring-offset-0',
+    'focus-visible:border-primary',
+    isDark
+      ? 'border border-white/10 bg-white/8 text-white placeholder:text-zinc-500 caret-primary'
+      : 'border border-zinc-300 bg-white text-zinc-900 placeholder:text-zinc-500 caret-primary',
+  ].join(' ');
+
+  const selectTriggerCls = [
+    'h-14 rounded-xl text-sm transition-all duration-200 focus:ring-0 focus:ring-offset-0',
+    isDark
+      ? 'border border-white/10 bg-white/8 text-white'
+      : 'border border-zinc-300 bg-white text-zinc-900',
+  ].join(' ');
+
+  const selectContentCls = isDark
+    ? 'border-white/10 bg-zinc-900 text-white'
+    : 'border-zinc-200 bg-white text-zinc-900';
+
+  const selectItemCls = isDark
+    ? 'cursor-pointer text-white focus:bg-white/10 focus:text-white'
+    : 'cursor-pointer text-zinc-900 focus:bg-zinc-100 focus:text-zinc-900';
+
+  const toggleTextCls = isDark
+    ? 'text-zinc-400 hover:text-zinc-200'
+    : 'text-zinc-600 hover:text-zinc-900';
+
+  const btnTextCls = isDark ? 'text-primary-foreground' : 'text-black';
+
+  return {
+    pageBg,
+    titleColor,
+    subtitleColor,
+    card,
+    inputCls,
+    selectTriggerCls,
+    selectContentCls,
+    selectItemCls,
+    toggleTextCls,
+    btnTextCls,
+  };
+}
+
+/* ─── Component ──────────────────────────────────────────────────────────── */
 
 const Auth = () => {
   const { user, loading, signIn, signUp } = useAuth();
+  const { resolved } = useTheme();
+  const isDark = resolved === 'dark';
+  const S = useAuthStyles(isDark);
+
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,20 +91,14 @@ const Auth = () => {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
-  /** Tras registro exitoso, espera 800 ms antes de dejar que <Navigate> mande al dashboard (tiempo al trigger). */
   const [signUpRedirectHold, setSignUpRedirectHold] = useState(false);
-  /**
-   * iOS/Safari no muestra placeholder en <input type="date"> vacío.
-   * Solución: arrancar como type="text" (muestra placeholder) y
-   * convertirlo a type="date" en el foco para abrir el selector nativo.
-   */
   const [dobInputType, setDobInputType] = useState<'text' | 'date'>('text');
   const dobRef = useRef<HTMLInputElement>(null);
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Dumbbell className="h-8 w-8 animate-pulse text-primary" />
+      <div className={`flex min-h-screen items-center justify-center ${S.pageBg}`}>
+        <Dumbbell className="h-8 w-8 animate-pulse" style={{ color: 'var(--brand-color)' }} />
       </div>
     );
   }
@@ -77,95 +144,128 @@ const Auth = () => {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6">
+    <div className={`flex min-h-screen flex-col items-center justify-center px-5 py-10 ${S.pageBg}`}>
+
+      {/* ── Logo ── */}
       <div className="mb-8 flex flex-col items-center gap-3">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
-          <Dumbbell className="h-8 w-8 text-primary-foreground" />
+        <div
+          className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary"
+          style={{ boxShadow: isDark
+            ? '0 0 32px rgba(34,197,94,0.50), 0 0 72px rgba(34,197,94,0.15)'
+            : '0 0 24px rgba(34,197,94,0.35), 0 4px 16px rgba(0,0,0,0.10)',
+          }}
+        >
+          <Dumbbell className="h-8 w-8 text-black" />
         </div>
-        <h1 className="text-2xl font-bold text-foreground">Pana Fitness</h1>
-        <p className="text-sm text-muted-foreground">Tu compañero de fitness</p>
+        <h1 className={`text-2xl font-extrabold tracking-tight ${S.titleColor}`}>
+          Pana Fitness
+        </h1>
+        <p className={`text-sm ${S.subtitleColor}`}>Tu compañero de fitness</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
-        {!isLogin && (
-          <>
-            <Input
-              type="text"
-              placeholder="Nombre"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              required={!isLogin}
-              autoComplete="given-name"
-              className="h-14 rounded-xl border-none bg-card text-foreground placeholder:text-muted-foreground"
-            />
-            <Input
-              type="text"
-              placeholder="Apellido"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              required={!isLogin}
-              autoComplete="family-name"
-              className="h-14 rounded-xl border-none bg-card text-foreground placeholder:text-muted-foreground"
-            />
-            <Input
-              ref={dobRef}
-              type={dobInputType}
-              placeholder="Fecha de nacimiento"
-              value={dateOfBirth}
-              onTouchStart={() => setDobInputType('date')}
-              onFocus={() => setDobInputType('date')}
-              onBlur={() => {
-                if (!dateOfBirth) setDobInputType('text');
-              }}
-              onChange={(e) => setDateOfBirth(e.target.value)}
-              required={!isLogin}
-              className="h-14 py-0 rounded-xl border-none bg-card text-foreground placeholder:text-muted-foreground appearance-none overflow-hidden [&::-webkit-datetime-edit]:p-0 [&::-webkit-date-and-time-value]:m-0 [&::-webkit-calendar-picker-indicator]:opacity-0"
-            />
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Género</label>
+      {/* ── Glass card ── */}
+      <div className={`w-full max-w-sm rounded-3xl p-7 ${S.card}`}>
+        <h2 className={`mb-6 text-lg font-bold tracking-tight ${S.titleColor}`}>
+          {isLogin ? 'Iniciar Sesión' : 'Crear cuenta'}
+        </h2>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+
+          {/* ── Register-only fields ── */}
+          {!isLogin && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  type="text"
+                  placeholder="Nombre"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                  autoComplete="given-name"
+                  className={S.inputCls}
+                />
+                <Input
+                  type="text"
+                  placeholder="Apellido"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
+                  autoComplete="family-name"
+                  className={S.inputCls}
+                />
+              </div>
+
+              <Input
+                ref={dobRef}
+                type={dobInputType}
+                placeholder="Fecha de nacimiento"
+                value={dateOfBirth}
+                onTouchStart={() => setDobInputType('date')}
+                onFocus={() => setDobInputType('date')}
+                onBlur={() => { if (!dateOfBirth) setDobInputType('text'); }}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+                required
+                className={`${S.inputCls} appearance-none overflow-hidden py-0 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-date-and-time-value]:m-0 [&::-webkit-datetime-edit]:p-0`}
+              />
+
               <Select value={gender} onValueChange={setGender}>
-                <SelectTrigger className="h-14 rounded-xl border-none bg-card text-foreground">
+                <SelectTrigger className={S.selectTriggerCls}>
                   <SelectValue placeholder="Seleccionar género" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="male">Masculino</SelectItem>
-                  <SelectItem value="female">Femenino</SelectItem>
+                <SelectContent className={S.selectContentCls}>
+                  <SelectItem value="male" className={S.selectItemCls}>Masculino</SelectItem>
+                  <SelectItem value="female" className={S.selectItemCls}>Femenino</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-          </>
-        )}
-        <Input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          autoComplete="email"
-          className="h-14 rounded-xl border-none bg-card text-foreground placeholder:text-muted-foreground"
-        />
-        <Input
-          type="password"
-          placeholder="Contraseña"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          minLength={6}
-          autoComplete={isLogin ? 'current-password' : 'new-password'}
-          className="h-14 rounded-xl border-none bg-card text-foreground placeholder:text-muted-foreground"
-        />
+            </>
+          )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        {successMsg && <p className="text-sm text-primary">{successMsg}</p>}
+          {/* ── Common fields ── */}
+          <Input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            className={S.inputCls}
+          />
+          <Input
+            type="password"
+            placeholder="Contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={6}
+            autoComplete={isLogin ? 'current-password' : 'new-password'}
+            className={S.inputCls}
+          />
 
-        <Button
-          type="submit"
-          disabled={submitting}
-          className="h-14 w-full rounded-xl text-base font-semibold"
-        >
-          {submitting ? '...' : isLogin ? 'Iniciar Sesión' : 'Crear Cuenta'}
-        </Button>
+          {error && (
+            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
+              {error}
+            </p>
+          )}
+          {successMsg && (
+            <p className="rounded-lg bg-primary/10 px-3 py-2 text-sm font-medium text-primary">
+              {successMsg}
+            </p>
+          )}
 
+          <Button
+            type="submit"
+            disabled={submitting}
+            className={`h-14 w-full rounded-xl text-base font-bold tracking-tight transition-all duration-300 active:scale-95 ${S.btnTextCls}`}
+            style={{ boxShadow: isDark
+              ? '0 0 20px rgba(34,197,94,0.40), 0 4px 20px rgba(0,0,0,0.35)'
+              : '0 0 16px rgba(34,197,94,0.30), 0 4px 12px rgba(0,0,0,0.08)',
+            }}
+          >
+            {submitting ? '…' : isLogin ? 'Iniciar Sesión' : 'Crear Cuenta'}
+          </Button>
+        </form>
+
+        {/* ── Toggle login / register ── */}
         <button
           type="button"
           onClick={() => {
@@ -174,23 +274,23 @@ const Auth = () => {
             setError('');
             setSuccessMsg('');
           }}
-          className="mt-6 w-full text-center text-sm text-gray-400"
+          className={`mt-6 w-full text-center text-sm transition-colors duration-300 ${S.toggleTextCls}`}
         >
           {isLogin ? (
             <>¿No tienes cuenta?{' '}
-              <span className="font-bold hover:underline" style={{ color: 'var(--brand-color)' }}>
+              <span className="font-bold" style={{ color: 'var(--brand-color)' }}>
                 Regístrate
               </span>
             </>
           ) : (
             <>¿Ya tienes cuenta?{' '}
-              <span className="font-bold hover:underline" style={{ color: 'var(--brand-color)' }}>
+              <span className="font-bold" style={{ color: 'var(--brand-color)' }}>
                 Inicia sesión
               </span>
             </>
           )}
         </button>
-      </form>
+      </div>
     </div>
   );
 };

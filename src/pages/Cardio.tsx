@@ -527,20 +527,26 @@ const Cardio = () => {
       )}
 
       {/* Header tabs */}
-      <div className="flex items-center justify-between px-4 pt-4">
-        <h1 className="text-2xl font-bold">Modo Ruta</h1>
-        <div className="flex items-center gap-1 rounded-full bg-card p-1">
+      <div className="flex items-center justify-between px-4 pt-5">
+        <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Modo Ruta</h1>
+        <div className="flex items-center gap-1 rounded-full border border-border/40 bg-card/70 p-1 backdrop-blur-sm">
           <button
             type="button"
             onClick={() => setTab('run')}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${tab === 'run' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+            className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 active:scale-95 ${
+              tab === 'run' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground/60 hover:text-foreground'
+            }`}
+            style={tab === 'run' ? { boxShadow: '0 0 10px rgba(34,197,94,0.4)' } : undefined}
           >
             Correr
           </button>
           <button
             type="button"
             onClick={() => setTab('history')}
-            className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition ${tab === 'history' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+            className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 active:scale-95 ${
+              tab === 'history' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground/60 hover:text-foreground'
+            }`}
+            style={tab === 'history' ? { boxShadow: '0 0 10px rgba(34,197,94,0.4)' } : undefined}
           >
             <HistoryIcon className="h-3.5 w-3.5" /> Actividad
           </button>
@@ -793,9 +799,12 @@ const Cardio = () => {
         </div>
       ) : (
         <div className="px-4 pt-4">
-          <div className="rounded-2xl bg-card p-5 text-center">
-            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Km del mes</div>
-            <div className="text-6xl font-extrabold tabular-nums text-primary">{monthStats.km.toFixed(2)}</div>
+          <div className="rounded-2xl border border-border/40 bg-card/80 p-5 text-center backdrop-blur-sm">
+            <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">Km del mes</div>
+            <div className="text-6xl font-extrabold tabular-nums text-primary"
+              style={{ textShadow: '0 0 20px rgba(34,197,94,0.3)' }}>
+              {monthStats.km.toFixed(2)}
+            </div>
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2">
             <StatCard label="Carreras" value={String(monthStats.count)} />
@@ -803,10 +812,10 @@ const Cardio = () => {
             <StatCard label="Tiempo" value={fmtTime(monthStats.time)} />
           </div>
 
-          <h2 className="mt-5 text-sm font-semibold text-muted-foreground">Actividad reciente</h2>
-          <div className="mt-2 space-y-2">
+          <h2 className="mt-5 text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Actividad reciente</h2>
+          <div className="mt-2 space-y-3">
             {runs.length === 0 && (
-              <p className="rounded-2xl bg-card p-6 text-center text-sm text-muted-foreground">
+              <p className="rounded-2xl border border-border/40 bg-card/80 p-6 text-center text-xs font-medium text-muted-foreground/60 backdrop-blur-sm">
                 Aún no hay carreras registradas.
               </p>
             )}
@@ -821,9 +830,9 @@ const Cardio = () => {
 };
 
 const StatCard = ({ label, value }: { label: string; value: string }) => (
-  <div className="rounded-2xl bg-card p-3 text-center">
-    <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-    <div className="mt-1 text-base font-bold tabular-nums">{value}</div>
+  <div className="rounded-2xl border border-border/40 bg-card/80 p-3 text-center backdrop-blur-sm">
+    <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">{label}</div>
+    <div className="mt-1 text-base font-extrabold tabular-nums text-foreground">{value}</div>
   </div>
 );
 
@@ -849,7 +858,7 @@ const RunCard = ({ run }: { run: RunRow }) => {
   return (
     <Link
       to={`/actividad/${run.id}`}
-      className="block overflow-hidden rounded-2xl bg-card ring-offset-background transition hover:ring-2 hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="block overflow-hidden rounded-2xl border border-border/40 bg-card/80 backdrop-blur-sm ring-offset-background transition-all duration-300 hover:border-primary/40 hover:ring-2 hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.98]"
     >
       <div className="h-32 w-full bg-secondary">
         {center ? (

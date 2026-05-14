@@ -441,19 +441,19 @@ const Workout = () => {
     <div className="min-h-screen bg-background px-4 pb-24 pt-6">
       <div className="mx-auto max-w-lg">
         {/* Header */}
-        <div className="mb-3 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-foreground">Entrenamiento</h1>
+        <div className="mb-4 flex items-center justify-between">
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Entrenamiento</h1>
           <Button
             onClick={() => setTemplatesOpen(true)}
             variant="ghost"
-            className="h-9 rounded-xl bg-card px-3 text-sm font-medium text-foreground hover:bg-accent"
+            className="h-9 rounded-xl border border-border/50 bg-card/80 px-3 text-sm font-medium text-foreground backdrop-blur-sm hover:bg-accent"
           >
-            <Library className="mr-1.5 h-4 w-4 text-primary" /> Mi Biblioteca
+            <Library className="mr-1.5 h-4 w-4 text-primary/60" /> Mi Biblioteca
           </Button>
         </div>
 
         {/* Date selector */}
-        <div className="mb-4 flex items-center justify-center rounded-2xl bg-card px-2 py-2">
+        <div className="mb-5 flex items-center justify-center rounded-2xl border border-border/40 bg-card/70 px-2 py-2 backdrop-blur-sm">
           <Popover
             open={calOpen}
             onOpenChange={(v) => {
@@ -479,18 +479,18 @@ const Workout = () => {
         </div>
 
         {showEmptyPastState ? (
-          <div className="flex flex-col items-center py-16 text-center">
-            <p className="text-sm text-muted-foreground">No registraste entrenamiento</p>
+          <div className="flex flex-col items-center py-20 text-center">
+            <p className="text-xs font-medium text-muted-foreground/60">No registraste entrenamiento este día</p>
             <Button
               onClick={() => setEnableEmptyDay(true)}
               variant="ghost"
-              className="mt-3 h-9 rounded-xl bg-card px-4 text-sm font-medium text-primary hover:bg-accent"
+              className="mt-3 h-9 rounded-xl border border-border/40 bg-card/70 px-4 text-sm font-medium text-primary backdrop-blur-sm hover:bg-accent"
             >
               <Plus className="mr-1.5 h-4 w-4" /> Cargar rutina
             </Button>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             {exercises.map((ex) => (
               <ExerciseCard
                 key={ex.id}
@@ -509,23 +509,23 @@ const Workout = () => {
             ))}
 
             {hydrated && exercises.length === 0 && !addingExercise && (isToday || enableEmptyDay) && (
-              <p className="py-10 text-center text-sm text-muted-foreground">
-                Agrega tu primer ejercicio
+              <p className="py-12 text-center text-xs font-medium text-muted-foreground/50 tracking-wide">
+                Agrega tu primer ejercicio para comenzar
               </p>
             )}
 
             {/* Inline add-exercise form */}
             {addingExercise ? (
-              <div className="space-y-2 rounded-2xl bg-card p-4">
+              <div className="space-y-3 rounded-2xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-foreground">Nuevo ejercicio</h4>
+                  <h4 className="text-sm font-semibold tracking-tight text-foreground">Nuevo ejercicio</h4>
                   <button
                     onClick={() => {
                       setAddingExercise(false);
                       setNewExName('');
                       setNewExGroup('');
                     }}
-                    className="rounded-lg p-1 text-muted-foreground hover:bg-accent"
+                    className="rounded-lg p-1 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
                     aria-label="Cancelar"
                   >
                     <X className="h-4 w-4" />
@@ -585,7 +585,10 @@ const Workout = () => {
               (isToday || enableEmptyDay || exercises.length > 0) && (
                 <Button
                   onClick={() => setAddingExercise(true)}
-                  className="h-14 w-full rounded-2xl text-base font-semibold shadow-lg shadow-primary/25"
+                  className="h-14 w-full rounded-2xl text-base font-bold tracking-tight"
+                  style={{
+                    boxShadow: '0 0 20px rgba(34,197,94,0.35), 0 4px 16px rgba(0,0,0,0.2)',
+                  }}
                 >
                   <Plus className="mr-2 h-5 w-5" /> Agregar Ejercicio
                 </Button>
@@ -597,18 +600,18 @@ const Workout = () => {
         {showWorkoutUI && (exercises.length > 0 || isToday) && (
           <button
             onClick={() => setReportOpen(true)}
-            className="mt-4 flex w-full items-center justify-between rounded-2xl bg-card p-4 transition-colors hover:bg-accent"
+            className="mt-5 flex w-full items-center justify-between rounded-2xl border border-border/40 bg-card/70 p-5 backdrop-blur-sm transition-colors hover:bg-accent/70"
           >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-                <FileText className="h-5 w-5 text-primary" />
+            <div className="flex items-center gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10">
+                <FileText className="h-5 w-5 text-primary/70" />
               </div>
               <div className="text-left">
-                <p className="text-sm font-semibold text-foreground">Ver Reporte del Día</p>
-                <p className="text-xs text-muted-foreground">Bitácora, nutrición y descanso</p>
+                <p className="text-sm font-semibold tracking-tight text-foreground">Ver Reporte del Día</p>
+                <p className="text-xs text-muted-foreground/60">Bitácora, nutrición y descanso</p>
               </div>
             </div>
-            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            <ChevronRight className="h-4 w-4 text-muted-foreground/40" />
           </button>
         )}
       </div>

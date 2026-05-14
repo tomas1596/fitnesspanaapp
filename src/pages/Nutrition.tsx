@@ -504,21 +504,21 @@ const Nutrition = () => {
   return (
     <div className="min-h-screen bg-background px-4 pb-24 pt-6">
       <div className="mx-auto max-w-lg">
-        <h1 className="mb-3 text-2xl font-bold text-foreground">Nutrición</h1>
+        <h1 className="mb-4 text-3xl font-extrabold tracking-tight text-foreground">Nutrición</h1>
 
         <Tabs value={nutritionTab} onValueChange={setNutritionTab} className="w-full">
-          <TabsList className="mb-4 grid h-11 w-full grid-cols-2 rounded-xl bg-secondary p-1">
-            <TabsTrigger value="diario" className="rounded-lg text-sm font-semibold data-[state=active]:bg-card">
+          <TabsList className="mb-5 grid h-11 w-full grid-cols-2 rounded-xl border border-border/40 bg-card/60 p-1 backdrop-blur-sm">
+            <TabsTrigger value="diario" className="rounded-lg text-sm font-bold data-[state=active]:bg-card data-[state=active]:shadow-sm">
               Diario
             </TabsTrigger>
-            <TabsTrigger value="biblioteca" className="gap-1.5 rounded-lg text-sm font-semibold data-[state=active]:bg-card">
-              <BookOpen className="h-3.5 w-3.5" />
+            <TabsTrigger value="biblioteca" className="gap-1.5 rounded-lg text-sm font-bold data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              <BookOpen className="h-3.5 w-3.5 opacity-60" />
               Mis alimentos
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="diario" className="mt-0 space-y-4">
-            <div className="rounded-2xl bg-card p-5">
+            <div className="rounded-2xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
               <div className="flex items-center gap-5">
                 <div className="relative h-32 w-32 shrink-0">
                   <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
@@ -556,7 +556,7 @@ const Nutrition = () => {
                 const sumProt = items.reduce((s, f) => s + f.protein, 0);
                 const Icon = m.icon;
                 return (
-                  <div key={m.key} className="rounded-2xl bg-card p-4">
+                  <div key={m.key} className="rounded-2xl border border-border/40 bg-card/80 p-4 backdrop-blur-sm">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex min-w-0 items-center gap-2.5">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary">
@@ -573,7 +573,8 @@ const Nutrition = () => {
                         type="button"
                         size="icon"
                         onClick={() => openMealFoodPicker(m.key)}
-                        className="h-9 w-9 shrink-0 rounded-xl"
+                        className="h-9 w-9 shrink-0 rounded-xl transition-all duration-300 active:scale-90"
+                        style={{ boxShadow: '0 0 10px rgba(34,197,94,0.25)' }}
                         aria-label={`Añadir a ${m.label}`}
                       >
                         <Plus className="h-4 w-4" />
@@ -604,10 +605,10 @@ const Nutrition = () => {
               })}
             </div>
 
-            <div className="rounded-2xl bg-card p-4">
+            <div className="rounded-2xl border border-border/40 bg-card/80 p-4 backdrop-blur-sm">
               <div className="mb-3 flex items-center gap-2">
-                <Droplets className="h-4 w-4 text-primary" />
-                <h2 className="text-sm font-semibold text-foreground">Hidratación</h2>
+                <Droplets className="h-4 w-4 text-primary/70" />
+                <h2 className="text-sm font-bold tracking-tight text-foreground">Hidratación</h2>
               </div>
               <div className="flex items-center justify-between">
                 <div>
@@ -631,8 +632,8 @@ const Nutrition = () => {
               </div>
             </div>
 
-            <div className="rounded-2xl bg-card p-4">
-              <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bienestar de hoy</h2>
+            <div className="rounded-2xl border border-border/40 bg-card/80 p-4 backdrop-blur-sm">
+              <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground/70">Bienestar de hoy</h2>
               <div className="space-y-3">
                 <HalfStarRating label="Calidad de Sueño" value={sleepQuality} onChange={(v) => updateRecovery('sleep_quality', v)} />
                 <HalfStarRating label="Nivel de Energía" value={energyLevel} onChange={(v) => updateRecovery('energy_level', v)} />
@@ -641,7 +642,11 @@ const Nutrition = () => {
           </TabsContent>
 
           <TabsContent value="biblioteca" className="mt-0 space-y-4">
-            <Button onClick={openNewFoodFromLibrary} className="h-11 w-full rounded-xl text-base font-semibold">
+            <Button
+              onClick={openNewFoodFromLibrary}
+              className="h-11 w-full rounded-xl text-base font-bold tracking-tight transition-all duration-300 active:scale-95"
+              style={{ boxShadow: '0 0 16px rgba(34,197,94,0.3)' }}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Nuevo alimento
             </Button>
@@ -653,7 +658,7 @@ const Nutrition = () => {
             ) : (
               <ul className="space-y-2">
                 {customFoods.map((f) => (
-                  <li key={f.id} className="flex gap-1 rounded-2xl bg-card p-2 pr-1">
+                  <li key={f.id} className="flex gap-1 rounded-2xl border border-border/40 bg-card/80 p-2 pr-1 backdrop-blur-sm">
                     <button
                       type="button"
                       onClick={() => openCalculatorFromLibrary(f)}
