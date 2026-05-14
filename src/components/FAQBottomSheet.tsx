@@ -55,7 +55,7 @@ const FAQ_ITEMS: { question: string; answer: ReactNode }[] = [
       <>
         El pago es por transferencia directa vía Mercado Pago al alias{' '}
         <span className="inline-flex items-center gap-1 align-middle">
-          <span className="rounded-md bg-pink-500/10 px-2 py-0.5 font-mono text-sm font-semibold text-pink-700 dark:bg-pink-500/15 dark:text-pink-400">
+          <span className="rounded-md bg-primary/10 px-2 py-0.5 font-mono text-sm font-semibold text-primary dark:bg-primary/15 dark:text-primary">
             {MP_ALIAS}
           </span>
           <CopyAliasButton />
@@ -153,12 +153,12 @@ export function FAQBottomSheet({ open, onOpenChange }: Props) {
             rel="noopener noreferrer"
             className={cn(
               'mt-6 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-bold transition active:scale-[0.99]',
-              'border-2 border-[#FF1493] bg-[#FF1493]/12 text-zinc-900 shadow-[0_0_24px_rgba(236,72,153,0.22)]',
-              'hover:bg-[#FF1493]/20 dark:text-zinc-50 dark:shadow-[0_0_28px_rgba(255,20,147,0.28)]',
+              'border-2 border-primary bg-primary/15 text-zinc-900 shadow-[0_0_24px_var(--brand-glow-sm)]',
+              'hover:bg-primary/25 dark:text-zinc-50 dark:shadow-[0_0_28px_var(--brand-glow-sm)]',
             )}
             style={{ marginBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
           >
-            <MessageCircle className="h-5 w-5 shrink-0 text-pink-600 dark:text-[#FF1493]" aria-hidden />
+            <MessageCircle className="h-5 w-5 shrink-0 text-primary" aria-hidden />
             Contacto directo
           </a>
         </div>

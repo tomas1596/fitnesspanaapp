@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useBrandColorHex } from '@/hooks/useBrandColorHex';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/hooks/useTheme';
@@ -59,9 +60,7 @@ const Recenter = ({ center }: { center: [number, number] | null }) => {
   return null;
 };
 
-// Color fijo para el marcador de posición en el mapa.
-// Deliberadamente NO usa var(--brand-color) para que el tema VIP rosa
-// no afecte la legibilidad técnica del mapa de Leaflet.
+// Color fijo para el marcador de posición en el mapa (no sigue `--brand-color`).
 const MAP_POSITION_GREEN = '#39FF14';
 const dotIcon = L.divIcon({
   className: '',
@@ -157,6 +156,7 @@ const Cardio = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const { resolved } = useTheme();
+  useBrandColorHex(); // re-render al cambiar tema VIP para heatmap / previews
   const basemapTheme = resolved === 'dark' ? 'dark' : 'light';
   const mapBg = readableMapFallbackBg(basemapTheme);
   const mapHeatTheme = resolved === 'dark' ? 'dark' : 'light';
@@ -545,7 +545,7 @@ const Cardio = () => {
               className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 active:scale-95 ${
                 tab === 'run' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground/60 hover:text-foreground'
               }`}
-              style={tab === 'run' ? { boxShadow: '0 0 10px rgba(255,20,147,0.4)' } : undefined}
+              style={tab === 'run' ? { boxShadow: '0 0 10px var(--brand-glow-sm)' } : undefined}
             >
               Correr
             </button>
@@ -555,7 +555,7 @@ const Cardio = () => {
               className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 active:scale-95 ${
                 tab === 'history' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground/60 hover:text-foreground'
               }`}
-              style={tab === 'history' ? { boxShadow: '0 0 10px rgba(255,20,147,0.4)' } : undefined}
+              style={tab === 'history' ? { boxShadow: '0 0 10px var(--brand-glow-sm)' } : undefined}
             >
               <HistoryIcon className="h-3.5 w-3.5" /> Actividad
             </button>
@@ -611,7 +611,7 @@ const Cardio = () => {
                 <div className="flex w-full flex-col items-center justify-center text-center">
                   <div className="flex items-baseline justify-center gap-1 sm:gap-2">
                     <span
-                      className="font-extrabold tabular-nums tracking-tight drop-shadow-sm dark:drop-shadow-[0_0_32px_rgba(255,20,147,0.35)]"
+                      className="font-extrabold tabular-nums tracking-tight drop-shadow-sm dark:drop-shadow-[0_0_32px_var(--brand-glow)]"
                       style={{ color: BRAND_COLOR, fontSize: 'clamp(5.5rem, 32vw, 11rem)', lineHeight: 0.88 }}
                     >
                       {km.toFixed(2).replace('.', ',')}
@@ -822,16 +822,16 @@ const Cardio = () => {
                   type="button"
                   onClick={handleStart}
                   className={cn(
-                    'flex h-36 w-36 shrink-0 flex-col items-center justify-center rounded-full border-2 border-transparent text-center',
-                    'bg-[#FF1493] text-zinc-950 transition duration-200 active:scale-[0.96]',
-                    'hover:bg-[#FF4DA6]',
+                    'flex h-36 w-36 shrink-0 items-center justify-center rounded-full border-2 border-transparent text-center',
+                    'bg-primary text-primary-foreground transition duration-200 active:scale-[0.96]',
+                    'hover:bg-[color:var(--brand-hover)]',
                     resolved === 'dark'
-                      ? 'shadow-[0_0_16px_rgba(255,20,147,0.85),0_0_32px_rgba(255,20,147,0.45),0_10px_28px_rgba(0,0,0,0.5)]'
-                      : 'border-pink-500 shadow-sm',
+                      ? 'shadow-[0_0_16px_var(--brand-glow-lg),0_0_32px_var(--brand-glow),0_10px_28px_rgba(0,0,0,0.5)]'
+                      : 'border-primary shadow-sm',
                   )}
                 >
-                  <span className="max-w-[94%] px-1 text-[10px] font-black uppercase leading-snug tracking-[0.14em] text-zinc-950">
-                    <span className="block">COMENZAR</span>
+                  <span className="w-full text-center text-xl font-bold uppercase leading-tight tracking-wide text-zinc-950">
+                    COMENZAR
                   </span>
                 </button>
               </div>
@@ -844,8 +844,8 @@ const Cardio = () => {
             className={cn(
               'rounded-2xl border bg-card/80 p-5 text-center backdrop-blur-sm',
               resolved === 'dark'
-                ? 'border-pink-500/30 shadow-[0_0_40px_rgba(236,72,153,0.15)]'
-                : 'border-pink-600/25 ring-1 ring-pink-500/30',
+                ? 'border-primary/30 shadow-[0_0_40px_var(--brand-color-dim)]'
+                : 'border-primary/25 ring-1 ring-primary/30',
             )}
           >
             <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">Km del mes</div>
@@ -854,8 +854,8 @@ const Cardio = () => {
                 className={cn(
                   'text-5xl font-extrabold tabular-nums tracking-tight sm:text-6xl',
                   resolved === 'dark'
-                    ? 'text-pink-400 [text-shadow:0_0_22px_rgba(244,114,182,0.5)]'
-                    : 'text-pink-600',
+                    ? 'text-primary [text-shadow:0_0_22px_var(--brand-glow)]'
+                    : 'text-primary',
                 )}
               >
                 {monthStats.km.toFixed(2).replace('.', ',')}
@@ -863,7 +863,7 @@ const Cardio = () => {
               <span
                 className={cn(
                   'text-lg font-bold uppercase tracking-wider sm:text-xl',
-                  resolved === 'dark' ? 'text-pink-400/80' : 'text-pink-600/90',
+                  resolved === 'dark' ? 'text-primary/80' : 'text-primary/90',
                 )}
               >
                 km
@@ -909,6 +909,7 @@ const Metric = ({ label, value, big, primary }: { label: string; value: string; 
 
 const RunCard = ({ run }: { run: RunRow }) => {
   const { resolved } = useTheme();
+  const brandHex = useBrandColorHex();
   const basemapTheme = resolved === 'dark' ? 'dark' : 'light';
   const mapBg = readableMapFallbackBg(basemapTheme);
   const mapHeatTheme = resolved === 'dark' ? 'dark' : 'light';
@@ -944,7 +945,7 @@ const RunCard = ({ run }: { run: RunRow }) => {
               <CircleMarker
                 center={poly[0]}
                 radius={5}
-                pathOptions={{ fillColor: '#FF1493', color: '#ffffff', weight: 2, fillOpacity: 1 }}
+                pathOptions={{ fillColor: brandHex, color: '#ffffff', weight: 2, fillOpacity: 1 }}
               />
             )}
             {/* End dot */}

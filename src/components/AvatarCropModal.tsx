@@ -5,6 +5,7 @@ import 'react-easy-crop/react-easy-crop.css';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Loader2 } from 'lucide-react';
+import { useBrandColorHex } from '@/hooks/useBrandColorHex';
 import { useTheme } from '@/hooks/useTheme';
 import { blobFromCircularCrop } from '@/lib/avatarCrop';
 import { cn } from '@/lib/utils';
@@ -25,6 +26,7 @@ const ZOOM_SLIDER_STEP = 0.02;
  */
 export function AvatarCropModal({ imageSrc, open, onCancel, onApply }: AvatarCropModalProps) {
   const { resolved } = useTheme();
+  const brandHex = useBrandColorHex();
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const croppedPixelsRef = useRef<Area | null>(null);
@@ -58,12 +60,12 @@ export function AvatarCropModal({ imageSrc, open, onCancel, onApply }: AvatarCro
         : 'rgba(15, 23, 42, 0.48)';
     return {
       cropAreaStyle: {
-        border: '2px solid #FF1493',
+        border: `2px solid ${brandHex}`,
         boxShadow: `0 0 0 9999em ${overlay}`,
       } as CSSProperties,
       containerBg: resolved === 'dark' ? '#18181b' : '#f4f4f5',
     };
-  }, [resolved]);
+  }, [resolved, brandHex]);
 
   const handleApply = async () => {
     if (!imageSrc || applying) return;
@@ -162,8 +164,8 @@ export function AvatarCropModal({ imageSrc, open, onCancel, onApply }: AvatarCro
             onValueChange={([z]) => setZoom(z)}
             className="py-1"
             trackClassName="bg-zinc-600 dark:bg-zinc-400/35"
-            rangeClassName="bg-[#FF1493]"
-            thumbClassName="border-[#FF1493] bg-white shadow-md focus-visible:ring-[#FF1493]/50 dark:bg-zinc-950 dark:focus-visible:ring-[#FF1493]/45"
+            rangeClassName="bg-primary"
+            thumbClassName="border-primary bg-white shadow-md focus-visible:ring-primary/50 dark:bg-zinc-950 dark:focus-visible:ring-primary/45"
           />
         </div>
 
@@ -182,9 +184,9 @@ export function AvatarCropModal({ imageSrc, open, onCancel, onApply }: AvatarCro
             disabled={applying}
             onClick={() => void handleApply()}
             className={cn(
-              'h-11 flex-1 rounded-xl border-0 font-semibold text-zinc-950 shadow-lg transition',
-              'bg-[#FF1493] hover:bg-[#FF4DA6]',
-              'shadow-[0_0_22px_rgba(255,20,147,0.45)]',
+              'h-11 flex-1 rounded-xl border-0 font-semibold text-primary-foreground shadow-lg transition',
+              'bg-primary hover:bg-[color:var(--brand-hover)]',
+              'shadow-[0_0_22px_var(--brand-glow)]',
             )}
           >
             {applying ? (

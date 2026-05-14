@@ -32,7 +32,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
-import { useTheme } from '@/hooks/useTheme';
+import { useBrandColorHex } from '@/hooks/useBrandColorHex';
 import {
   buildPerformanceSeries,
   computeKmSplits,
@@ -85,7 +85,7 @@ function defaultTitleForDate(d: Date) {
 }
 
 const NEON_ICON =
-  'text-pink-500 [&>svg]:drop-shadow-[0_0_10px_rgba(236,72,153,0.35)] dark:text-[#FF1493] dark:[&>svg]:drop-shadow-[0_0_12px_rgba(255,20,147,0.4)]';
+  'text-primary [&>svg]:drop-shadow-[0_0_10px_var(--brand-glow-sm)] dark:text-primary dark:[&>svg]:drop-shadow-[0_0_12px_var(--brand-glow)]';
 
 const DetailRow = ({ label, value }: { label: string; value: string }) => (
   <div className="flex items-center justify-between border-b border-zinc-200/80 py-3 last:border-0 dark:border-white/10">
@@ -95,6 +95,7 @@ const DetailRow = ({ label, value }: { label: string; value: string }) => (
 );
 
 export default function ActivityDetail() {
+  const brandHex = useBrandColorHex();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -432,7 +433,7 @@ export default function ActivityDetail() {
                   <CircleMarker
                     center={poly[0]}
                     radius={8}
-                    pathOptions={{ fillColor: '#FF1493', color: '#ffffff', weight: 2.5, fillOpacity: 1 }}
+                    pathOptions={{ fillColor: brandHex, color: '#ffffff', weight: 2.5, fillOpacity: 1 }}
                   />
                 )}
                 {/* End dot — red */}
@@ -461,9 +462,9 @@ export default function ActivityDetail() {
                   <ComposedChart data={perfSeries} margin={{ top: 6, right: 10, left: 0, bottom: 4 }}>
                     <defs>
                       <linearGradient id="paceNeonFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#FF1493" stopOpacity={0.35} />
-                        <stop offset="55%" stopColor="#db2777" stopOpacity={0.12} />
-                        <stop offset="100%" stopColor="#db2777" stopOpacity={0} />
+                        <stop offset="0%" stopColor="var(--brand-color)" stopOpacity={0.35} />
+                        <stop offset="55%" stopColor="var(--brand-chart-mid)" stopOpacity={0.12} />
+                        <stop offset="100%" stopColor="var(--brand-chart-mid)" stopOpacity={0} />
                       </linearGradient>
                       <linearGradient id="elevFillSubtle" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#71717a" stopOpacity={0.2} />
@@ -624,13 +625,13 @@ export default function ActivityDetail() {
                         className={cn(
                           'flex items-center gap-2 px-4 py-3 tabular-nums',
                           isPb &&
-                            'bg-pink-500/[0.09] dark:bg-pink-400/[0.12]',
+                            'bg-primary/[0.09] dark:bg-primary/[0.12]',
                         )}
                       >
                         <span className="flex w-14 shrink-0 items-center gap-1 font-semibold text-zinc-900 dark:text-zinc-50">
                           {isPb && (
                             <Zap
-                              className="h-3.5 w-3.5 shrink-0 text-pink-500 dark:text-[#FF1493]"
+                              className="h-3.5 w-3.5 shrink-0 text-primary"
                               aria-label="Parcial más rápido"
                             />
                           )}
@@ -645,7 +646,7 @@ export default function ActivityDetail() {
                         <span
                           className={cn(
                             'w-16 shrink-0 text-right text-xs font-bold tabular-nums',
-                            faster && 'text-pink-500 dark:text-[#FF1493]',
+                            faster && 'text-primary',
                             slower && 'text-red-500 dark:text-red-400',
                             delta === 0 && 'text-zinc-400',
                           )}

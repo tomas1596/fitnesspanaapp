@@ -25,7 +25,7 @@ export function ThemeSegmentedControl({ value, onChange }: Props) {
     >
       <div className="pointer-events-none absolute inset-y-1 left-1 right-1" aria-hidden>
         <div
-          className="h-full w-1/3 rounded-full bg-pink-500 shadow-md transition-transform duration-300 ease-out dark:shadow-pink-500/25"
+          className="h-full w-1/3 rounded-full bg-primary shadow-md transition-transform duration-300 ease-out dark:shadow-[0_4px_12px_var(--brand-glow-sm)]"
           style={{ transform: `translateX(${idx * 100}%)` }}
         />
       </div>

@@ -83,7 +83,7 @@ export default function Paywall() {
                   <p className="text-sm font-medium text-foreground">{step.title}</p>
                   {step.n === 1 && (
                     <div className="mt-2 flex items-center gap-2">
-                      <span className="flex-1 truncate rounded-lg bg-pink-500/10 px-3 py-1.5 font-mono text-sm font-semibold text-pink-700 dark:text-pink-400">
+                      <span className="flex-1 truncate rounded-lg bg-primary/10 px-3 py-1.5 font-mono text-sm font-semibold text-primary">
                         {MP_ALIAS}
                       </span>
                       <button

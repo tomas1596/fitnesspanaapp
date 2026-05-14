@@ -44,7 +44,7 @@ const muscleGroupColors: Record<string, string> = {
   Piernas: 'bg-orange-500/20 text-orange-400',
   Brazos: 'bg-purple-500/20 text-purple-400',
   Hombros: 'bg-yellow-500/20 text-yellow-400',
-  Core: 'bg-pink-500/20 text-pink-400',
+  Core: 'bg-teal-500/20 text-teal-400',
 };
 
 const ExerciseCard = ({
@@ -188,7 +188,7 @@ const ExerciseCard = ({
                 className={
                   set.to_failure
                     ? 'flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive transition-colors hover:bg-destructive/25'
-                    : 'flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-pink-500/10 text-pink-600 transition-colors hover:bg-pink-500/20 dark:bg-pink-500/20 dark:text-pink-400 dark:hover:bg-pink-500/30'
+                    : 'flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20'
                 }
                 aria-label="Al fallo"
               >
@@ -196,7 +196,7 @@ const ExerciseCard = ({
                   className={
                     set.to_failure
                       ? 'h-4 w-4 fill-destructive text-destructive'
-                      : 'h-4 w-4 text-pink-600 dark:text-pink-400'
+                      : 'h-4 w-4 text-primary'
                   }
                   strokeWidth={2}
                 />
@@ -218,7 +218,7 @@ const ExerciseCard = ({
         type="button"
         variant="ghost"
         onClick={() => onAddSet(id)}
-        className="h-12 w-full rounded-xl border-0 bg-pink-500/10 text-sm font-semibold text-pink-600 shadow-none hover:bg-pink-500/20 dark:bg-pink-500/20 dark:text-pink-400 dark:hover:bg-pink-500/30"
+        className="h-12 w-full rounded-xl border-0 bg-primary/10 text-sm font-semibold text-primary shadow-none hover:bg-primary/20"
       >
         <Plus className="mr-2 h-4 w-4" strokeWidth={2} /> Agregar serie
       </Button>

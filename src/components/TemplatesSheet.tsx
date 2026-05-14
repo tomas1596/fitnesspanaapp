@@ -360,7 +360,7 @@ const TemplatesSheet = ({ open, onClose, onApplyTemplate, onAddExercise }: Templ
                 <Button
                   onClick={() => setView('create')}
                   variant="ghost"
-                  className="mt-3 h-12 w-full rounded-xl border-0 bg-pink-500/10 text-base font-semibold text-pink-700 shadow-none hover:bg-pink-500/20 dark:bg-pink-500/20 dark:text-pink-400 dark:hover:bg-pink-500/30"
+                  className="mt-3 h-12 w-full rounded-xl border-0 bg-primary/10 text-base font-semibold text-primary shadow-none hover:bg-primary/20 dark:bg-primary/20 dark:text-primary dark:hover:bg-primary/30"
                 >
                   <Plus className="mr-1 h-4 w-4" /> Nueva plantilla
                 </Button>
@@ -432,7 +432,7 @@ const TemplatesSheet = ({ open, onClose, onApplyTemplate, onAddExercise }: Templ
                 <Button
                   onClick={saveTemplate}
                   disabled={!newName.trim() || draftExercises.length === 0}
-                  className="h-14 w-full rounded-2xl border-0 bg-pink-500 text-base font-semibold text-white shadow-none hover:bg-pink-600"
+                  className="h-14 w-full rounded-2xl border-0 bg-primary text-base font-semibold text-primary-foreground shadow-none hover:bg-[color:var(--brand-hover)]"
                 >
                   Guardar plantilla
                 </Button>
@@ -496,7 +496,7 @@ const TemplatesSheet = ({ open, onClose, onApplyTemplate, onAddExercise }: Templ
                 </div>
                 <Button
                   onClick={applyTemplate}
-                  className="h-14 w-full rounded-2xl border-0 bg-pink-500 text-base font-semibold text-white shadow-none hover:bg-pink-600"
+                  className="h-14 w-full rounded-2xl border-0 bg-primary text-base font-semibold text-primary-foreground shadow-none hover:bg-[color:var(--brand-hover)]"
                 >
                   <Play className="mr-2 h-4 w-4" /> Cargar al día actual
                 </Button>

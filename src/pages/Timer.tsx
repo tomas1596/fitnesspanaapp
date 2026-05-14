@@ -183,7 +183,7 @@ const SOUND_OPTIONS: { id: SoundOption; label: string; emoji: string }[] = [
 // ── Component ────────────────────────────────────────────────────────────────
 
 const timerInputClass =
-  'rounded-xl border-zinc-200 bg-zinc-100 text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-pink-500/40 dark:border-white/10 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500';
+  'rounded-xl border-zinc-200 bg-zinc-100 text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-primary/40 dark:border-white/10 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500';
 
 const Timer = () => {
   const { resolved } = useTheme();
@@ -438,8 +438,8 @@ const Timer = () => {
               fgDark
                 ? 'bg-zinc-950 text-white shadow-[0_10px_32px_rgba(0,0,0,0.45)] ring-2 ring-black/20'
                 : resolved === 'dark'
-                  ? 'bg-[#FF1493] text-zinc-950 shadow-[0_0_36px_rgba(255,20,147,0.55),0_10px_28px_rgba(0,0,0,0.5)] ring-2 ring-pink-400/45 hover:bg-[#FF4DA6]'
-                  : 'bg-[#FF1493] text-zinc-950 shadow-sm ring-0 hover:bg-[#FF4DA6]',
+                  ? 'bg-primary text-primary-foreground shadow-[0_0_36px_var(--brand-glow-lg),0_10px_28px_rgba(0,0,0,0.5)] ring-2 ring-primary/45 hover:bg-[color:var(--brand-hover)] dark:text-black'
+                  : 'bg-primary text-primary-foreground shadow-sm ring-0 hover:bg-[color:var(--brand-hover)] dark:text-black',
             )}
             aria-label={isRunning ? 'Pausar' : 'Iniciar'}
           >
@@ -468,7 +468,7 @@ const Timer = () => {
           {/* Sound selector */}
           <div className="rounded-2xl border border-zinc-200/80 bg-zinc-100/90 p-3 dark:border-white/10 dark:bg-zinc-800/60">
             <div className="mb-2 flex items-center gap-2">
-              <Volume2 className="h-4 w-4 text-pink-600 dark:text-[#FF1493]" />
+              <Volume2 className="h-4 w-4 text-primary" />
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Sonido de alerta</p>
             </div>
             <div className="flex gap-2">
@@ -484,8 +484,8 @@ const Timer = () => {
                       'dark:bg-zinc-900/80',
                       sel &&
                         (resolved === 'dark'
-                          ? 'border-2 border-[#FF1493] bg-pink-500/15 text-zinc-100 shadow-[0_0_22px_rgba(255,20,147,0.45)]'
-                          : 'border-2 border-pink-500 bg-pink-500/10 text-zinc-900 shadow-sm'),
+                          ? 'border-2 border-primary bg-primary/15 text-zinc-100 shadow-[0_0_22px_var(--brand-glow)] dark:text-white'
+                          : 'border-2 border-primary bg-primary/10 text-zinc-900 shadow-sm'),
                       !sel &&
                         'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800/80',
                     )}
@@ -507,7 +507,7 @@ const Timer = () => {
                   'flex items-center justify-between rounded-xl border border-zinc-200/80 px-3 py-2.5 transition-all duration-200',
                   'dark:border-white/10',
                   p.id === activePresetId
-                    ? 'bg-pink-500/10 dark:bg-pink-500/15'
+                    ? 'bg-primary/10 dark:bg-primary/15'
                     : 'bg-zinc-50/95 dark:bg-zinc-800/50',
                 )}
               >
@@ -553,7 +553,7 @@ const Timer = () => {
             <Button
               type="button"
               onClick={openNewPreset}
-              className="mt-1 h-12 w-full rounded-xl border-0 bg-[#FF1493] px-4 py-3 text-base font-bold text-zinc-950 shadow-md shadow-pink-500/20 transition hover:bg-[#FF4DA6] hover:shadow-lg hover:shadow-pink-500/30 active:scale-[0.98] dark:text-black"
+              className="mt-1 h-12 w-full rounded-xl border-0 bg-primary px-4 py-3 text-base font-bold text-primary-foreground shadow-md shadow-[0_8px_20px_var(--brand-glow-sm)] transition hover:bg-[color:var(--brand-hover)] hover:shadow-[0_10px_28px_var(--brand-glow)] active:scale-[0.98] dark:text-black"
             >
               <Plus className="mr-2 h-4 w-4" /> Añadir nuevo temporizador
             </Button>
@@ -635,7 +635,7 @@ const Timer = () => {
                 </Button>
                 <Button
                   onClick={savePreset}
-                  className="flex-1 rounded-xl border-0 bg-[#FF1493] font-bold text-zinc-950 shadow-md shadow-pink-500/20 hover:bg-[#FF4DA6] dark:text-black"
+                  className="flex-1 rounded-xl border-0 bg-primary font-bold text-primary-foreground shadow-md shadow-[0_6px_18px_var(--brand-glow-sm)] hover:bg-[color:var(--brand-hover)] dark:text-black"
                 >
                   Guardar
                 </Button>

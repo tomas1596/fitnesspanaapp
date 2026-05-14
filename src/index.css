@@ -20,7 +20,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 6% 10%;
 
-    --primary: 328 100% 54%;           /* rosa neón (Deep Pink) */
+    --primary: 109 100% 54%;           /* verde neón — VIP rosa vía JS */
     --primary-foreground: 240 6% 10%;  /* texto sobre botón */
 
     --secondary: 240 5% 94%;           /* zinc-100/200 para chips/botones  */
@@ -38,25 +38,27 @@
     /* Bordes ≈ zinc-200 (#E4E4E7): definen sin agredir */
     --border: 240 6% 88%;
     --input:  240 6% 88%;
-    --ring:   328 100% 54%;
+    --ring:   109 100% 54%;
 
     --radius: 0.75rem;
 
-    /* ── Brand accent (overrideable via JS) ── */
-    --brand-color: #FF1493;
-    --brand-color-dim: rgba(255, 20, 147, 0.13);
-    --brand-glow-sm: rgba(255, 20, 147, 0.33);
-    --brand-glow: rgba(255, 20, 147, 0.45);
-    --brand-glow-lg: rgba(255, 20, 147, 0.65);
+    /* ── Brand accent (`applyBrandTheme`) ── */
+    --brand-color: #39FF14;
+    --brand-hover: #52FF47;
+    --brand-chart-mid: #22c55e;
+    --brand-color-dim: rgba(57, 255, 20, 0.13);
+    --brand-glow-sm: rgba(57, 255, 20, 0.33);
+    --brand-glow: rgba(57, 255, 20, 0.45);
+    --brand-glow-lg: rgba(57, 255, 20, 0.65);
 
     --sidebar-background: 240 5% 96%;  /* igual que el fondo de página     */
     --sidebar-foreground: 240 6% 25%;
-    --sidebar-primary: 328 100% 54%;
+    --sidebar-primary: 109 100% 54%;
     --sidebar-primary-foreground: 240 6% 10%;
     --sidebar-accent: 240 5% 91%;
     --sidebar-accent-foreground: 240 6% 10%;
     --sidebar-border: 240 6% 88%;
-    --sidebar-ring: 328 100% 54%;
+    --sidebar-ring: 109 100% 54%;
   }
 
   .dark {
@@ -69,7 +71,7 @@
     --popover: 220 10% 12%;
     --popover-foreground: 0 0% 100%;
 
-    --primary: 328 100% 54%;
+    --primary: 109 100% 54%;
     --primary-foreground: 220 13% 8%;
 
     --secondary: 220 10% 16%;
@@ -86,23 +88,24 @@
 
     --border: 220 10% 18%;
     --input: 220 10% 18%;
-    --ring: 328 100% 54%;
+    --ring: 109 100% 54%;
 
-    /* Brand vars (JS puede sobreescribir) */
-    --brand-color: #FF1493;
-    --brand-color-dim: rgba(255, 20, 147, 0.13);
-    --brand-glow-sm: rgba(255, 20, 147, 0.33);
-    --brand-glow: rgba(255, 20, 147, 0.45);
-    --brand-glow-lg: rgba(255, 20, 147, 0.65);
+    --brand-color: #39FF14;
+    --brand-hover: #52FF47;
+    --brand-chart-mid: #22c55e;
+    --brand-color-dim: rgba(57, 255, 20, 0.13);
+    --brand-glow-sm: rgba(57, 255, 20, 0.33);
+    --brand-glow: rgba(57, 255, 20, 0.45);
+    --brand-glow-lg: rgba(57, 255, 20, 0.65);
 
     --sidebar-background: 220 13% 8%;
     --sidebar-foreground: 0 0% 85%;
-    --sidebar-primary: 328 100% 54%;
+    --sidebar-primary: 109 100% 54%;
     --sidebar-primary-foreground: 220 13% 8%;
     --sidebar-accent: 220 10% 16%;
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 220 10% 18%;
-    --sidebar-ring: 328 100% 54%;
+    --sidebar-ring: 109 100% 54%;
   }
 }
 
@@ -153,28 +156,38 @@
   }
 }
 
-/* ── Light-mode primary readability ───────────────────────────────────────────
-   El rosa neón (#FF1493 / hsl 328 100% 54%) en texto plano sobre blanco necesita
-   un tono más oscuro para WCAG; los rellenos bg-primary siguen siendo neón.
-
-   • text-primary (iconos, etiquetas) → #db2777 (pink-600)
-   • border-primary / ring-primary → mismo tono
-   Dark mode: sin estas reglas (.selector .dark gana).
+/* ── Light-mode text/borde primary: tono oscuro WCAG sobre blanco ──
+   Verde: etiquetas/icons → green-700. Rosa VIP: pink-600.
+   `data-brand` lo fija `applyBrandTheme` (pink | default).
+   Sin atributo: se asume tema default antes del primer hydrate.
 ──────────────────────────────────────────────────────────────────────────────── */
-html:not(.dark) .text-primary {
+html:not(.dark):not([data-brand="pink"]) .text-primary {
+  color: #15803d;
+}
+
+html:not(.dark)[data-brand="pink"] .text-primary {
   color: #db2777;
 }
 
-/* Texto sobre botones bg-primary (rosa neón) — zinc-900 */
+/* Texto sobre botones bg-primary (neón sobre botón) — zinc-900 */
 html:not(.dark) .bg-primary {
-  color: #18181b;  /* zinc-900 */
+  color: #18181b;
 }
 
-html:not(.dark) .border-primary {
+html:not(.dark):not([data-brand="pink"]) .border-primary {
+  border-color: #15803d;
+}
+
+html:not(.dark)[data-brand="pink"] .border-primary {
   border-color: #db2777;
 }
 
-html:not(.dark) .ring-primary {
+html:not(.dark):not([data-brand="pink"]) .ring-primary {
+  --tw-ring-color: #15803d;
+  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(var(--tw-ring-width) + var(--tw-ring-offset-width)) #15803d;
+}
+
+html:not(.dark)[data-brand="pink"] .ring-primary {
   --tw-ring-color: #db2777;
   --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(var(--tw-ring-width) + var(--tw-ring-offset-width)) #db2777;
 }

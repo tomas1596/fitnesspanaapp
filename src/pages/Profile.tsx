@@ -29,6 +29,21 @@ import { PasswordRequirementsList } from '@/components/PasswordRequirementsList'
 
 const ADMIN_EMAIL = 'thomzonlyskills@gmail.com';
 
+/** Valor estable para `<Select controlled>` antes de elegir opción — evita `undefined` → warning uncontrolled/controlado. */
+const PROFILE_SELECT_UNSET = '__unset__';
+
+function profileActivitySelectValue(activityLevel: string): string {
+  const t = activityLevel.trim();
+  if (!t) return PROFILE_SELECT_UNSET;
+  return ACTIVITY_LEVEL_OPTIONS.some((o) => o.value === t) ? t : PROFILE_SELECT_UNSET;
+}
+
+function profileFitnessSelectValue(fitnessGoal: string): string {
+  const t = fitnessGoal.trim();
+  if (!t) return PROFILE_SELECT_UNSET;
+  return FITNESS_GOAL_OPTIONS.some((o) => o.value === t) ? t : PROFILE_SELECT_UNSET;
+}
+
 const todayStr = () => new Date().toISOString().split('T')[0];
 
 /** Fecha corta estilo feedback producto ("Lun. 11 Nov") para pasos diarios */
@@ -50,19 +65,19 @@ const parseProfileNumber = (raw: string): number | null => {
 const profileFormInputClass =
   'min-h-[2.875rem] w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-base shadow-none outline-none ring-0 ring-offset-0 md:text-sm ' +
   'text-zinc-900 placeholder:text-zinc-400 transition-[border-color,box-shadow] duration-200 ' +
-  'focus-visible:!border-pink-500 focus-visible:!outline-none focus-visible:!ring-1 focus-visible:!ring-pink-500 focus-visible:!ring-offset-0 ' +
+  'focus-visible:!border-primary focus-visible:!outline-none focus-visible:!ring-1 focus-visible:!ring-primary focus-visible:!ring-offset-0 ' +
   'dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder:text-zinc-500 ' +
-  'dark:focus-visible:!border-pink-500 dark:focus-visible:!ring-pink-500 disabled:opacity-60';
+  'dark:focus-visible:!border-primary dark:focus-visible:!ring-primary disabled:opacity-60';
 
 /** SelectTrigger: foco compacto tipo iOS sin doble ring gris por defecto. */
 const profileFormSelectTriggerClass =
   'min-h-[2.875rem] h-auto w-full justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-base md:text-sm ' +
   'text-zinc-900 shadow-none outline-none ring-0 ring-offset-0 transition-[border-color,box-shadow] duration-200 ' +
-  'focus:!border-pink-500 focus:!outline-none focus:!ring-1 focus:!ring-pink-500 focus:!ring-offset-0 ' +
-  'focus-visible:!border-pink-500 focus-visible:!ring-1 focus-visible:!ring-pink-500 focus-visible:!ring-offset-0 ' +
-  'data-[state=open]:!border-pink-500 data-[state=open]:!ring-1 data-[state=open]:!ring-pink-500 data-[state=open]:!ring-offset-0 ' +
+  'focus:!border-primary focus:!outline-none focus:!ring-1 focus:!ring-primary focus:!ring-offset-0 ' +
+  'focus-visible:!border-primary focus-visible:!ring-1 focus-visible:!ring-primary focus-visible:!ring-offset-0 ' +
+  'data-[state=open]:!border-primary data-[state=open]:!ring-1 data-[state=open]:!ring-primary data-[state=open]:!ring-offset-0 ' +
   'dark:border-zinc-700 dark:bg-zinc-900 dark:text-white ' +
-  'dark:focus:!border-pink-500 dark:focus:!ring-pink-500 dark:data-[state=open]:!border-pink-500 dark:data-[state=open]:!ring-pink-500 ' +
+  'dark:focus:!border-primary dark:focus:!ring-primary dark:data-[state=open]:!border-primary dark:data-[state=open]:!ring-primary ' +
   'disabled:opacity-60 data-[placeholder]:text-zinc-400 dark:data-[placeholder]:text-zinc-500';
 
 const settingsListCardCn =
@@ -78,15 +93,15 @@ const settingsListSectionHeaderCn =
 /** Inputs en modal «Editar perfil»: fondo suave y radios amplios */
 const editModalInputClass =
   'h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-100 px-4 text-base text-zinc-900 shadow-none outline-none transition ' +
-  'placeholder:text-zinc-400 focus-visible:border-pink-500 focus-visible:ring-1 focus-visible:ring-pink-500 ' +
-  'dark:border-zinc-600/80 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus-visible:border-pink-500 dark:focus-visible:ring-pink-500';
+  'placeholder:text-zinc-400 focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary ' +
+  'dark:border-zinc-600/80 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus-visible:border-primary dark:focus-visible:ring-primary';
 
 const modalSurfaceClass =
   'max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 text-zinc-900 shadow-xl ' +
   'dark:border-white/10 dark:bg-zinc-950 dark:text-zinc-100';
 
 const profileNeonButtonClass =
-  'w-full rounded-xl border-0 bg-[#FF1493] px-4 py-3 text-base font-bold text-zinc-950 shadow-md shadow-pink-500/20 transition hover:bg-[#FF4DA6] hover:shadow-lg hover:shadow-pink-500/25 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 dark:text-black';
+  'w-full rounded-xl border-0 bg-primary px-4 py-3 text-base font-bold text-primary-foreground shadow-md shadow-[0_10px_24px_var(--brand-glow-sm)] transition hover:bg-[color:var(--brand-hover)] hover:shadow-[0_12px_30px_var(--brand-glow)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 dark:text-black';
 
 const AdminButton = () => {
   const navigate = useNavigate();
@@ -531,14 +546,14 @@ const Profile = () => {
                 type="button"
                 onClick={() => { if (!uploadingAvatar) setAvatarModalOpen(true); }}
                 className={cn(
-                  'relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-pink-500 bg-accent',
-                  'drop-shadow-none dark:drop-shadow-[0_0_8px_rgba(255,20,147,0.45)]',
+                  'relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-primary bg-accent',
+                  'drop-shadow-none dark:drop-shadow-[0_0_8px_var(--brand-glow)]',
                 )}
                 aria-label="Cambiar foto de perfil"
               >
                 {avatarUrl
                   ? <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
-                  : <User className="h-6 w-6 text-pink-600/85 dark:text-pink-400/90" />}
+                  : <User className="h-6 w-6 text-primary/85 dark:text-primary/90" />}
                 {uploadingAvatar ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/55">
                     <Loader2 className="h-5 w-5 animate-spin text-white" />
@@ -561,7 +576,7 @@ const Profile = () => {
                     Admin 👑
                   </span>
                 ) : isTester ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[#FF1493]/15 px-2.5 py-0.5 text-[11px] font-bold text-[#db2777] dark:text-[#FF1493]">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-0.5 text-[11px] font-bold text-primary">
                     Tester ∞
                   </span>
                 ) : isPremium ? (
@@ -584,9 +599,9 @@ const Profile = () => {
 
         {/* ── Banner Modo Rosita (solo para usuarios VIP) ── */}
         {brandTheme === 'pink' && (
-          <div className="flex items-center gap-3 rounded-2xl border border-pink-300/60 bg-pink-100/50 px-4 py-3 dark:border-pink-500/30 dark:bg-pink-500/10">
-            <Heart className="h-5 w-5 shrink-0 fill-pink-500 text-pink-500" />
-            <p className="text-sm font-semibold text-pink-600 dark:text-pink-400">
+          <div className="flex items-center gap-3 rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 dark:border-primary/30 dark:bg-primary/10">
+            <Heart className="h-5 w-5 shrink-0 fill-primary text-primary" />
+            <p className="text-sm font-semibold text-primary dark:text-primary">
               Modo Rosita para mi amor. Te amo. Gracias por tu apoyo incondicional.
             </p>
           </div>
@@ -660,7 +675,7 @@ const Profile = () => {
                     <span className="text-zinc-300 dark:text-zinc-600 select-none" aria-hidden>
                       |
                     </span>
-                    <span className="font-bold tabular-nums text-pink-600 dark:text-pink-400">
+                    <span className="font-bold tabular-nums text-primary dark:text-primary">
                       {stepsProgressPct}%
                     </span>
                   </div>
@@ -668,7 +683,7 @@ const Profile = () => {
                 <button
                   type="button"
                   onClick={() => setGoalDialog(true)}
-                  className="flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-pink-600 transition hover:bg-pink-500/10 dark:text-pink-400"
+                  className="flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/10 dark:text-primary"
                 >
                   <Settings2 className="h-3 w-3" /> Meta
                 </button>
@@ -719,11 +734,17 @@ const Profile = () => {
               <label htmlFor="profile-activity-level" className="block text-sm font-medium text-zinc-500 dark:text-zinc-400">
                 Nivel de actividad
               </label>
-              <Select value={activityLevel || undefined} onValueChange={setActivityLevel}>
+              <Select
+                value={profileActivitySelectValue(activityLevel)}
+                onValueChange={(v) => setActivityLevel(v === PROFILE_SELECT_UNSET ? '' : v)}
+              >
                 <SelectTrigger id="profile-activity-level" className={cn(profileFormSelectTriggerClass)}>
                   <SelectValue placeholder="Elegir nivel" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={PROFILE_SELECT_UNSET} className="text-muted-foreground">
+                    Elegir nivel
+                  </SelectItem>
                   {ACTIVITY_LEVEL_OPTIONS.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                   ))}
@@ -734,11 +755,17 @@ const Profile = () => {
               <label htmlFor="profile-fitness-goal" className="block text-sm font-medium text-zinc-500 dark:text-zinc-400">
                 Objetivo fitness
               </label>
-              <Select value={fitnessGoal || undefined} onValueChange={setFitnessGoal}>
+              <Select
+                value={profileFitnessSelectValue(fitnessGoal)}
+                onValueChange={(v) => setFitnessGoal(v === PROFILE_SELECT_UNSET ? '' : v)}
+              >
                 <SelectTrigger id="profile-fitness-goal" className={cn(profileFormSelectTriggerClass)}>
                   <SelectValue placeholder="Elegir objetivo" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={PROFILE_SELECT_UNSET} className="text-muted-foreground">
+                    Elegir objetivo
+                  </SelectItem>
                   {FITNESS_GOAL_OPTIONS.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                   ))}
@@ -756,7 +783,7 @@ const Profile = () => {
           <Button
             onClick={saveProfile}
             disabled={saving}
-            className="mt-5 w-full rounded-xl border-0 bg-[#FF1493] px-4 py-3 text-base font-bold text-zinc-950 shadow-md shadow-pink-500/20 transition hover:bg-[#FF4DA6] hover:shadow-lg hover:shadow-pink-500/25 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 dark:text-black"
+            className="mt-5 w-full rounded-xl border-0 bg-primary px-4 py-3 text-base font-bold text-primary-foreground shadow-md shadow-[0_10px_24px_var(--brand-glow-sm)] transition hover:bg-[color:var(--brand-hover)] hover:shadow-[0_12px_30px_var(--brand-glow)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 dark:text-black"
           >
             <Save className="mr-2 h-4 w-4" /> {saving ? 'Guardando...' : 'Guardar'}
           </Button>
@@ -771,8 +798,8 @@ const Profile = () => {
             onClick={() => setFaqOpen(true)}
             className={cn(settingsListRowCn)}
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-pink-500/12">
-              <HelpCircle className="h-[18px] w-[18px] text-pink-600 dark:text-pink-400" />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/12">
+              <HelpCircle className="h-[18px] w-[18px] text-primary dark:text-primary" />
             </span>
             <span className="min-w-0 flex-1 text-left font-medium leading-snug">Suscripción y Ayuda</span>
             <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
@@ -793,13 +820,13 @@ const Profile = () => {
               rel="noopener noreferrer"
               className={cn(settingsListRowCn)}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-pink-500/15">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15">
                 <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="#25D366" aria-hidden="true">
                   <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
                 </svg>
               </span>
               <span className="min-w-0 flex-1 truncate text-left leading-snug">Soporte directo</span>
-              <span className="mr-1 shrink-0 rounded-md bg-pink-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-pink-700 dark:text-pink-400">
+              <span className="mr-1 shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary dark:text-primary">
                 WhatsApp
               </span>
               <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
@@ -874,14 +901,14 @@ const Profile = () => {
                 aria-label="Ver foto completa"
                 onClick={() => avatarUrl && setLightboxOpen(true)}
                 className={cn(
-                  'group relative h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-pink-500 bg-accent transition-transform active:scale-95',
-                  'drop-shadow-none dark:drop-shadow-[0_0_8px_rgba(255,20,147,0.45)]',
+                  'group relative h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-primary bg-accent transition-transform active:scale-95',
+                  'drop-shadow-none dark:drop-shadow-[0_0_8px_var(--brand-glow)]',
                 )}
               >
                 {avatarUrl
                   ? <img src={avatarUrl} alt="Foto de perfil" className="h-full w-full object-cover" />
                   : <div className="flex h-full w-full items-center justify-center">
-                      <User className="h-10 w-10 text-pink-600/85 dark:text-pink-400/90" />
+                      <User className="h-10 w-10 text-primary/85 dark:text-primary/90" />
                     </div>}
                 {avatarUrl && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/30">
@@ -955,7 +982,7 @@ const Profile = () => {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pb-2 pt-1">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#FF1493]/15">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/15">
               <span className="text-3xl">∞</span>
             </div>
             <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
@@ -1074,7 +1101,7 @@ const Profile = () => {
                     className={cn(
                       'flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all',
                       draftGender === value
-                        ? 'bg-[#FF1493] text-zinc-950 shadow-md shadow-pink-500/25 dark:text-black'
+                        ? 'bg-primary text-primary-foreground shadow-md shadow-[0_8px_20px_var(--brand-glow-sm)] dark:text-black'
                         : 'text-zinc-500 hover:bg-white/60 dark:text-zinc-400 dark:hover:bg-zinc-800/80',
                     )}
                   >
@@ -1186,7 +1213,7 @@ const MiniStat = ({
   progressPct?: number;
 }) => (
   <div className="flex min-w-0 flex-col items-center justify-center px-0.5 text-center sm:px-1">
-    <Icon className="mb-2 h-6 w-6 shrink-0 text-pink-500 sm:h-7 sm:w-7" strokeWidth={2.25} aria-hidden />
+    <Icon className="mb-2 h-6 w-6 shrink-0 text-primary sm:h-7 sm:w-7" strokeWidth={2.25} aria-hidden />
     <p className="text-2xl font-bold tabular-nums leading-none tracking-tight text-zinc-900 dark:text-white">{value}</p>
     {progressPct !== undefined ? (
       <div
@@ -1198,7 +1225,7 @@ const MiniStat = ({
         aria-label={`Avance ${label}`}
       >
         <div
-          className="h-full rounded-full bg-pink-500 transition-[width] duration-300 ease-out"
+          className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
           style={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }}
         />
       </div>

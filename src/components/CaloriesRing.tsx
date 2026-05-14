@@ -38,7 +38,7 @@ const CaloriesRing = ({ consumed, goal, size = 96 }: Props) => {
           cy={c}
           r={radius}
           fill="transparent"
-          className="stroke-pink-500 dark:drop-shadow-[0_0_10px_rgba(236,72,153,0.35)]"
+          className="stroke-primary dark:drop-shadow-[0_0_10px_var(--brand-glow-sm)]"
           strokeWidth="7"
           strokeLinecap="round"
           strokeDasharray={circ}
@@ -47,7 +47,7 @@ const CaloriesRing = ({ consumed, goal, size = 96 }: Props) => {
         />
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <Flame className="mb-0.5 h-3.5 w-3.5 shrink-0 text-pink-600 dark:text-pink-400" aria-hidden />
+        <Flame className="mb-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
         <span className="text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{Math.round(consumed)}</span>
         {goal > 0 && (
           <span className="text-[10px] tabular-nums text-zinc-500 dark:text-zinc-400">/ {Math.round(goal)}</span>

@@ -1,6 +1,10 @@
 /**
- * Acento de marca para estilos inline: `var(--brand-color)` (rosa neón en el tema global).
- * @deprecated `NRC_GREEN` — mismo valor; nombre histórico.
+ * Acento de marca para estilos inline: equivale al hex activo (`#39FF14` o `#FF1493`)
+ * porque `applyBrandTheme` escribe `--brand-color` en el `<html>` según `profiles.theme`.
+ *
+ * Útil cuando las clases Tailwind `bg-primary` / `text-primary` no bastan (SVG inline, shadows, Leaflet…).
+ *
+ * @deprecated `NRC_GREEN` — mismo token; nombre histórico antes del tema VIP rosa.
  */
 export const BRAND_COLOR = 'var(--brand-color)';
 export const NRC_GREEN = BRAND_COLOR;

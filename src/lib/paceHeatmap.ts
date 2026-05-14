@@ -1,9 +1,22 @@
 import { distM, type LatLng } from '@/lib/runAnalysis';
 
-/** Rosa neón → amarillo vivo → rojo cereza (estilo carrera). */
-const RGB_PINK: [number, number, number] = [255, 20, 147];
+/** De acento de marca (ritmo bajo / rápido) a amarillo y rojo (lento). */
 const RGB_YELLOW: [number, number, number] = [255, 235, 59];
 const RGB_RED: [number, number, number] = [220, 20, 60];
+
+function parseHexRgb(hex: string): [number, number, number] | null {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Color “rápido” del heatmap: sigue `--brand-color` (verde o rosa VIP). */
+function brandHeatFastRgb(): [number, number, number] {
+  if (typeof document === 'undefined') return [57, 255, 20];
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--brand-color').trim();
+  return parseHexRgb(raw) ?? [57, 255, 20];
+}
 
 /** Ventana fija: ritmo medio de los últimos 2 minutos (ms). */
 export const PACE_ROLLING_WINDOW_MS = 120_000;
@@ -37,12 +50,13 @@ export function paceToRgb(
   const t = maxP <= minP ? 0.5 : (pace - minP) / (maxP - minP);
   const u = Math.max(0, Math.min(1, t));
   let rgb: [number, number, number];
+  const fastRgb = brandHeatFastRgb();
   if (u <= 0.5) {
     const k = u * 2;
     rgb = [
-      lerp(RGB_PINK[0], RGB_YELLOW[0], k),
-      lerp(RGB_PINK[1], RGB_YELLOW[1], k),
-      lerp(RGB_PINK[2], RGB_YELLOW[2], k),
+      lerp(fastRgb[0], RGB_YELLOW[0], k),
+      lerp(fastRgb[1], RGB_YELLOW[1], k),
+      lerp(fastRgb[2], RGB_YELLOW[2], k),
     ];
   } else {
     const k = (u - 0.5) * 2;

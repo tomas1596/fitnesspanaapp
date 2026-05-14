@@ -87,8 +87,8 @@ const ROLE_META: Record<
     short: 'Tester',
     icon: Sparkles,
     triggerClass:
-      'border-pink-500/45 bg-pink-500/12 text-pink-900 dark:border-[#FF1493]/50 dark:bg-[#FF1493]/12 dark:text-[#FF1493]',
-    itemClass: 'text-pink-900 dark:text-[#FF1493]',
+      'border-primary/45 bg-primary/12 text-primary dark:border-primary/50 dark:bg-primary/12 dark:text-primary',
+    itemClass: 'text-primary dark:text-primary',
   },
 };
 
@@ -117,7 +117,7 @@ function RoleDropdown({
           type="button"
           disabled={disabled}
           className={cn(
-            'inline-flex min-w-[8rem] items-center justify-between gap-2 rounded-full border px-3 py-2 text-xs font-bold shadow-sm transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/40 disabled:pointer-events-none disabled:opacity-50',
+            'inline-flex min-w-[8rem] items-center justify-between gap-2 rounded-full border px-3 py-2 text-xs font-bold shadow-sm transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:opacity-50',
             meta.triggerClass,
           )}
         >
@@ -161,7 +161,7 @@ function RoleDropdown({
                   {hints[role]}
                 </div>
               </div>
-              {selected && <Check className="h-4 w-4 shrink-0 text-pink-600 dark:text-[#FF1493]" />}
+              {selected && <Check className="h-4 w-4 shrink-0 text-primary" />}
             </DropdownMenuItem>
           );
         })}
@@ -401,13 +401,13 @@ const AdminPanel = () => {
       setThemeTarget(null);
       setToggling((prev) => new Set([...prev, row.user_id]));
       const newTheme = row.theme === 'pink' ? 'default' : 'pink';
-      const { error: rpcError } = await supabase.rpc('set_user_theme', {
-        target_user_id: row.user_id,
-        new_theme: newTheme,
-      });
-      if (rpcError) {
-        toast({ title: 'Error al cambiar tema', description: rpcError.message, variant: 'destructive' });
-      } else {
+      try {
+        const { error: rpcError } = await supabase.rpc('set_user_theme', {
+          target_user_id: row.user_id,
+          new_theme: newTheme,
+        });
+        if (rpcError) throw rpcError;
+
         setRows((prev) =>
           prev.map((r) => (r.user_id === row.user_id ? { ...r, theme: newTheme } : r)),
         );
@@ -418,12 +418,21 @@ const AdminPanel = () => {
           title: newTheme === 'pink' ? '🌸 Modo Rosa VIP activado' : '🟢 Modo Normal restaurado',
           description: row.email,
         });
+      } catch (err) {
+        const msg =
+          err != null && typeof err === 'object' && 'message' in err
+            ? String((err as { message: unknown }).message)
+            : typeof err === 'string'
+              ? err
+              : 'No se pudo actualizar el tema';
+        toast({ title: 'Error al cambiar tema', description: msg, variant: 'destructive' });
+      } finally {
+        setToggling((prev) => {
+          const next = new Set(prev);
+          next.delete(row.user_id);
+          return next;
+        });
       }
-      setToggling((prev) => {
-        const next = new Set(prev);
-        next.delete(row.user_id);
-        return next;
-      });
     },
     [toast, currentUser?.id],
   );
@@ -478,7 +487,7 @@ const AdminPanel = () => {
             <ArrowLeft className="h-5 w-5 text-zinc-700 dark:text-zinc-200" />
           </Button>
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <Shield className="h-7 w-7 shrink-0 text-pink-600 dark:text-[#FF1493]" />
+            <Shield className="h-7 w-7 shrink-0 text-primary" />
             <h1 className="text-2xl font-extrabold tracking-tight">Panel de Control</h1>
           </div>
         </div>
@@ -501,7 +510,7 @@ const AdminPanel = () => {
               className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-md shadow-zinc-900/5 dark:border-white/10 dark:bg-zinc-900/80 dark:shadow-black/40 sm:p-5"
             >
               <div className="flex items-center gap-2">
-                <Icon className="h-7 w-7 shrink-0 text-pink-600 dark:text-[#FF1493]" aria-hidden />
+                <Icon className="h-7 w-7 shrink-0 text-primary" aria-hidden />
                 <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   {label}
                 </span>
@@ -525,7 +534,7 @@ const AdminPanel = () => {
             placeholder="Buscar por nombre o email…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="h-12 rounded-full border-zinc-200/90 bg-zinc-100 pl-11 pr-4 text-sm text-zinc-900 shadow-inner shadow-zinc-900/5 placeholder:text-zinc-400 focus-visible:ring-pink-500/30 dark:border-white/10 dark:bg-zinc-900/90 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+            className="h-12 rounded-full border-zinc-200/90 bg-zinc-100 pl-11 pr-4 text-sm text-zinc-900 shadow-inner shadow-zinc-900/5 placeholder:text-zinc-400 focus-visible:ring-primary/30 dark:border-white/10 dark:bg-zinc-900/90 dark:text-zinc-100 dark:placeholder:text-zinc-500"
             aria-label="Filtrar usuarios"
           />
         </div>
@@ -576,7 +585,7 @@ const AdminPanel = () => {
                   >
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-4">
                       <div className="flex items-start gap-3 sm:items-center">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-pink-500 bg-zinc-100 dark:bg-zinc-800">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-primary bg-zinc-100 dark:bg-zinc-800">
                           {r.avatar_url ? (
                             <img src={r.avatar_url} alt="" className="h-full w-full object-cover" />
                           ) : (
@@ -627,7 +636,7 @@ const AdminPanel = () => {
                               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200/90 bg-white text-xs shadow-sm transition hover:bg-zinc-100 dark:border-white/10 dark:bg-zinc-800 dark:hover:bg-zinc-700"
                             >
                               <Palette
-                                className={`h-4 w-4 ${r.theme === 'pink' ? 'text-pink-500' : 'text-zinc-400'}`}
+                                className={`h-4 w-4 ${r.theme === 'pink' ? 'text-primary' : 'text-zinc-400'}`}
                               />
                             </button>
                           </>
@@ -646,7 +655,7 @@ const AdminPanel = () => {
                               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200/90 bg-white text-xs shadow-sm transition hover:bg-zinc-100 dark:border-white/10 dark:bg-zinc-800 dark:hover:bg-zinc-700"
                             >
                               <Palette
-                                className={`h-4 w-4 ${r.theme === 'pink' ? 'text-pink-500' : 'text-zinc-400'}`}
+                                className={`h-4 w-4 ${r.theme === 'pink' ? 'text-primary' : 'text-zinc-400'}`}
                               />
                             </button>
                           </>
@@ -678,11 +687,11 @@ const AdminPanel = () => {
               className={`h-11 w-full justify-start gap-3 rounded-xl font-semibold ${
                 themeTarget?.theme === 'pink'
                   ? 'bg-zinc-500/10 text-zinc-600 hover:bg-zinc-500/20 dark:text-zinc-400'
-                  : 'bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 dark:text-pink-400'
+                  : 'bg-primary/10 text-primary hover:bg-primary/20 dark:text-primary'
               }`}
               onClick={() => themeTarget && void handleToggleTheme(themeTarget)}
             >
-              <Palette className={`h-4 w-4 ${themeTarget?.theme === 'pink' ? 'text-zinc-500' : 'text-pink-500'}`} />
+              <Palette className={`h-4 w-4 ${themeTarget?.theme === 'pink' ? 'text-zinc-500' : 'text-primary'}`} />
               {themeTarget?.theme === 'pink' ? 'Quitar Modo Rosa VIP' : 'Activar Modo Rosa VIP 🌸'}
             </Button>
           </div>

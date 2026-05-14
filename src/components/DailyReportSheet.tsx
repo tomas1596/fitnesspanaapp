@@ -301,7 +301,7 @@ function RecoveryReadOnlyRow({ label, value }: { label: string; value: number })
       ) : (
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label={`${label}: ${score} de 5`}>
           <div
-            className="inline-flex min-h-[2.75rem] min-w-[2.75rem] select-none items-center justify-center rounded-full bg-pink-500 px-5 py-2 text-2xl font-bold tabular-nums text-white"
+            className="inline-flex min-h-[2.75rem] min-w-[2.75rem] select-none items-center justify-center rounded-full bg-primary px-5 py-2 text-2xl font-bold tabular-nums text-primary-foreground"
           >
             {score}
           </div>

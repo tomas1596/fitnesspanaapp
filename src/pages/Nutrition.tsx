@@ -55,7 +55,7 @@ const MEALS: { key: MealType; label: string; icon: typeof Sun }[] = [
 ];
 
 const NUTRITION_FORM_INPUT_CLASS =
-  'min-h-[48px] rounded-xl border-0 bg-zinc-100 px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-pink-500/30 dark:bg-zinc-800';
+  'min-h-[48px] rounded-xl border-0 bg-zinc-100 px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/30 dark:bg-zinc-800';
 
 const roundMacro = (n: number) => Math.round(n * 100) / 100;
 
@@ -571,7 +571,7 @@ const Nutrition = () => {
                         variant="ghost"
                         size="icon"
                         onClick={() => openMealFoodPicker(m.key)}
-                        className="h-9 w-9 shrink-0 rounded-xl border-0 bg-pink-500/10 text-pink-600 shadow-none transition-all duration-300 hover:bg-pink-500/20 active:scale-90 dark:bg-pink-500/20 dark:text-pink-400 dark:hover:bg-pink-500/30"
+                        className="h-9 w-9 shrink-0 rounded-xl border-0 bg-primary/10 text-primary shadow-none transition-all duration-300 hover:bg-primary/20 active:scale-90 dark:bg-primary/20 dark:text-primary dark:hover:bg-primary/30"
                         aria-label={`Añadir a ${m.label}`}
                       >
                         <Plus className="h-4 w-4" />
@@ -641,7 +641,7 @@ const Nutrition = () => {
           <TabsContent value="biblioteca" className="mt-0 space-y-4">
             <Button
               onClick={openNewFoodFromLibrary}
-              className="h-12 w-full rounded-xl bg-pink-500 text-base font-bold tracking-tight text-white shadow-none transition-all hover:bg-pink-600 active:scale-[0.99]"
+              className="h-12 w-full rounded-xl bg-primary text-base font-bold tracking-tight text-white shadow-none transition-all hover:bg-[color:var(--brand-hover)] active:scale-[0.99]"
             >
               <Plus className="mr-2 h-5 w-5" strokeWidth={2} />
               Nuevo alimento
@@ -826,7 +826,7 @@ const Nutrition = () => {
               type="button"
               onClick={() => void saveNewFood()}
               disabled={savingFood}
-              className="min-h-12 flex-1 rounded-xl bg-pink-500 px-6 text-base font-semibold text-white shadow-none hover:bg-pink-600 disabled:opacity-60"
+              className="min-h-12 flex-1 rounded-xl bg-primary px-6 text-base font-semibold text-white shadow-none hover:bg-[color:var(--brand-hover)] disabled:opacity-60"
             >
               {savingFood
                 ? 'Guardando…'
@@ -861,7 +861,7 @@ const Nutrition = () => {
             type="button"
             variant="ghost"
             onClick={openNewFoodFromMealPicker}
-            className="mb-4 h-12 w-full rounded-xl border-0 bg-pink-500/10 text-base font-semibold text-pink-600 shadow-none hover:bg-pink-500/20 dark:bg-pink-500/20 dark:text-pink-400 dark:hover:bg-pink-500/30"
+            className="mb-4 h-12 w-full rounded-xl border-0 bg-primary/10 text-base font-semibold text-primary shadow-none hover:bg-primary/20 dark:bg-primary/20 dark:text-primary dark:hover:bg-primary/30"
           >
             <Plus className="mr-2 h-5 w-5" />
             Crear nuevo alimento
@@ -920,7 +920,7 @@ const Nutrition = () => {
                       variant="ghost"
                       size="icon"
                       onClick={() => selectFoodFromPicker(f)}
-                      className="h-11 w-11 shrink-0 rounded-xl border-0 bg-pink-500/10 text-pink-600 shadow-none hover:bg-pink-500/20 dark:bg-pink-500/20 dark:text-pink-400 dark:hover:bg-pink-500/30"
+                      className="h-11 w-11 shrink-0 rounded-xl border-0 bg-primary/10 text-primary shadow-none hover:bg-primary/20 dark:bg-primary/20 dark:text-primary dark:hover:bg-primary/30"
                       aria-label={`Elegir ${f.name}`}
                     >
                       <Plus className="h-5 w-5" />
@@ -1028,7 +1028,7 @@ const Nutrition = () => {
                 type="button"
                 onClick={() => void addLogFromLibrary()}
                 disabled={savingLog}
-                className="min-h-12 w-full rounded-xl bg-pink-500 text-base font-semibold text-white shadow-none hover:bg-pink-600 disabled:opacity-60"
+                className="min-h-12 w-full rounded-xl bg-primary text-base font-semibold text-white shadow-none hover:bg-[color:var(--brand-hover)] disabled:opacity-60"
               >
                 {savingLog ? 'Guardando…' : 'Agregar al diario'}
               </Button>
@@ -1065,7 +1065,7 @@ const WellbeingScale = ({
               onClick={() => onChange(n)}
               className={
                 isOn
-                  ? 'flex-1 rounded-full bg-pink-500 py-2 text-sm font-semibold tabular-nums text-white transition-colors'
+                  ? 'flex-1 rounded-full bg-primary py-2 text-sm font-semibold tabular-nums text-white transition-colors'
                   : 'flex-1 rounded-full bg-zinc-100 py-2 text-sm font-semibold tabular-nums text-zinc-500 transition-colors dark:bg-zinc-800 dark:text-zinc-500'
               }
               aria-pressed={isOn}

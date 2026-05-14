@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Polyline } from 'react-leaflet';
 import type { LatLng } from '@/lib/runAnalysis';
 import { segmentRouteByPaceGradient, type PaceHeatTheme } from '@/lib/paceHeatmap';
+import { useBrandColorHex } from '@/hooks/useBrandColorHex';
 
 /** Trazo fino y nítido (sin capas de glow). */
 const LINE_WEIGHT = 3;
@@ -19,9 +20,10 @@ type Props = {
  * Línea SVG sólida, sin sombras ni halos extra.
  */
 export function PaceHeatPolylines({ points, avgPaceSecPerKm, mapTheme }: Props) {
+  const brandHex = useBrandColorHex();
   const segments = useMemo(
     () => segmentRouteByPaceGradient(points, avgPaceSecPerKm, mapTheme),
-    [points, avgPaceSecPerKm, mapTheme],
+    [points, avgPaceSecPerKm, mapTheme, brandHex],
   );
 
   if (points.length < 2) return null;

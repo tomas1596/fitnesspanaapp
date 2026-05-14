@@ -41,13 +41,13 @@ const BottomNav = () => {
                   'flex h-10 w-10 items-center justify-center rounded-2xl transition-all duration-300',
                   active ? 'scale-110 bg-primary/10 dark:bg-primary/15' : 'scale-100 bg-transparent',
                 ].join(' ')}
-                style={active ? { boxShadow: '0 0 12px rgba(255,20,147,0.28)' } : undefined}
+                style={active ? { boxShadow: '0 0 12px var(--brand-glow-sm)' } : undefined}
               >
                 <Icon
                   className={[
                     'transition-all duration-300',
                     active
-                      ? 'h-6 w-6 text-primary drop-shadow-[0_0_5px_rgba(255,20,147,0.45)]'
+                      ? 'h-6 w-6 text-primary drop-shadow-[0_0_5px_var(--brand-glow-sm)]'
                       : 'h-5 w-5 text-zinc-500 dark:text-muted-foreground/50',
                   ].join(' ')}
                   strokeWidth={active ? 2.5 : 1.8}

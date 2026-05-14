@@ -27,7 +27,7 @@ const queryClient = new QueryClient();
 /**
  * Componente sin UI: lee `profiles.theme` del usuario actual y aplica
  * las CSS custom properties de marca en el elemento raíz del documento.
- * Se resetea al rosa neón por defecto cuando el usuario cierra sesión.
+ * Sin sesión o tema `default` → verde neón; `profiles.theme === 'pink'` → rosa VIP.
  */
 const BrandThemeApplier = () => {
   const { user } = useAuth();

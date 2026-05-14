@@ -88,10 +88,10 @@ function useAuthStyles(isDark: boolean) {
   const inputCls = [
     'h-14 rounded-xl border text-sm transition-all duration-200',
     'focus-visible:ring-0 focus-visible:ring-offset-0',
-    'focus-visible:border-pink-500',
+    'focus-visible:border-primary',
     isDark
-      ? 'border-white/10 bg-zinc-800/50 text-white placeholder:text-zinc-400 caret-pink-400'
-      : 'border-zinc-200 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 caret-pink-600',
+      ? 'border-white/10 bg-zinc-800/50 text-white placeholder:text-zinc-400 caret-primary'
+      : 'border-zinc-200 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 caret-primary',
   ].join(' ');
 
   const genderPillTrack = isDark
@@ -331,7 +331,7 @@ const Auth = () => {
                     className={cn(
                       'flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all',
                       gender === value
-                        ? 'bg-[#FF1493] text-zinc-950 shadow-md shadow-pink-500/25 dark:text-black'
+                        ? 'bg-primary text-primary-foreground shadow-[0_4px_14px_var(--brand-glow-sm)] dark:text-black'
                         : isDark
                           ? 'text-zinc-400 hover:bg-zinc-800/80'
                           : 'text-zinc-600 hover:bg-white/80',
@@ -468,9 +468,9 @@ const Auth = () => {
             disabled={submitting || !registerSubmitEnabled}
             aria-busy={submitting}
             className={cn(
-              'h-14 w-full rounded-xl border-0 bg-[#FF1493] text-base font-bold tracking-tight text-zinc-950',
-              'shadow-[0_0_24px_rgba(255,20,147,0.38),0_4px_18px_rgba(236,72,153,0.22)] transition-all duration-300',
-              'hover:bg-[#FF4DA6] hover:shadow-[0_0_32px_rgba(255,20,147,0.48)] active:scale-[0.98]',
+              'h-14 w-full rounded-xl border-0 bg-primary text-base font-bold tracking-tight text-primary-foreground',
+              'shadow-[0_0_24px_var(--brand-glow),0_4px_18px_var(--brand-color-dim)] transition-all duration-300',
+              'hover:bg-[color:var(--brand-hover)] hover:shadow-[0_0_32px_var(--brand-glow-lg)] active:scale-[0.98]',
               'disabled:pointer-events-none disabled:opacity-50 dark:text-black',
             )}
           >

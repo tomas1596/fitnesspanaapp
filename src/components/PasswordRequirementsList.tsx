@@ -26,14 +26,14 @@ export function PasswordRequirementsList({ password, className }: Props) {
             key={key}
             className={cn(
               'flex items-center gap-2 transition-colors duration-200',
-              ok ? 'text-pink-600 dark:text-[#FF1493]' : 'text-zinc-500 dark:text-zinc-500',
+              ok ? 'text-primary' : 'text-zinc-500 dark:text-zinc-500',
             )}
           >
             <span
               className={cn(
                 'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors duration-200',
                 ok
-                  ? 'border-pink-500 bg-pink-500/15 text-pink-600 dark:border-[#FF1493] dark:bg-[#FF1493]/15 dark:text-[#FF1493]'
+                  ? 'border-primary bg-primary/15 text-primary dark:border-primary dark:bg-primary/15 dark:text-primary'
                   : 'border-zinc-200 bg-zinc-50 text-transparent dark:border-zinc-600 dark:bg-zinc-800/80',
               )}
             >
