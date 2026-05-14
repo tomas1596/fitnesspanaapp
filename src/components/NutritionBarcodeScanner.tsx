@@ -7,7 +7,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Search, SwitchCamera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useZxing } from 'react-zxing';
@@ -22,10 +22,58 @@ export type NutritionBarcodeScannerProps = {
   onStartError?: (message: string) => void;
 };
 
-const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
-  audio: false,
-  video: { facingMode: 'environment' },
-};
+/** Zoom digital solicitado donde el navegador lo soporte (p. ej. Chrome); iOS suele ignorarlo. */
+const ZOOM_ADVANCED: MediaTrackConstraintSet[] = [{ zoom: 2 } as MediaTrackConstraintSet];
+
+function buildScannerConstraints(
+  videoInputs: MediaDeviceInfo[],
+  selectedIndex: number,
+  includeAdvancedZoom: boolean,
+): MediaStreamConstraints {
+  const count = Math.max(videoInputs.length, 1);
+  const idx = ((selectedIndex % count) + count) % count;
+  const dev = videoInputs[idx];
+
+  const baseTrack: MediaTrackConstraints = {
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    ...(includeAdvancedZoom ? { advanced: [...ZOOM_ADVANCED] } : {}),
+  };
+
+  if (dev?.deviceId) {
+    return {
+      audio: false,
+      video: {
+        ...baseTrack,
+        deviceId: { exact: dev.deviceId },
+      },
+    };
+  }
+
+  return {
+    audio: false,
+    video: {
+      ...baseTrack,
+      facingMode: 'environment',
+    },
+  };
+}
+
+async function getUserMediaWithZoomFallback(constraints: MediaStreamConstraints): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (e) {
+    const vid = constraints.video;
+    if (vid && typeof vid === 'object' && 'advanced' in vid && Array.isArray((vid as MediaTrackConstraints).advanced)) {
+      const { advanced: _omit, ...restVideo } = vid as MediaTrackConstraints;
+      return navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: restVideo,
+      });
+    }
+    throw e;
+  }
+}
 
 /** Formato esperado por la Barcode Detector API cuando está disponible. */
 type NativeBarcodeCtor = new (opts?: { formats?: string[] }) => {
@@ -97,21 +145,21 @@ function shouldReportHardwareError(error: Error): string | null {
   return null;
 }
 
-const VIDEO_PROPS = {
-  className: 'h-full w-full object-cover',
-  muted: true,
-  playsInline: true,
-  autoPlay: true,
-  'aria-hidden': true as const,
-};
+const VIDEO_ELEMENT_CLASSNAME = cn(
+  'absolute inset-0 h-full w-full object-cover [transform-origin:50%_50%]',
+  /** Refuerzo de “zoom”: empuja alejación física y acentúa centro (iOS). */
+  'scale-[1.2]',
+);
 
 /** Cámara + Barcode Detector API (`detect` sobre el mismo &lt;video&gt;). */
 function BarcodeScannerNativeViewport({
   active,
+  streamConstraints,
   onDecoded,
   onStartError,
 }: {
   active: boolean;
+  streamConstraints: MediaStreamConstraints;
   onDecoded: (barcode: string) => void | Promise<void>;
   onStartError?: (message: string) => void;
 }) {
@@ -119,6 +167,7 @@ function BarcodeScannerNativeViewport({
   const settledRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
   const onDecodedRef = useRef(onDecoded);
+
   useEffect(() => {
     onDecodedRef.current = onDecoded;
   }, [onDecoded]);
@@ -145,7 +194,6 @@ function BarcodeScannerNativeViewport({
       detectorInstance = null;
     }
 
-    /** API presente pero `new BarcodeDetector` falló → no pedir cámara en vano */
     if (!detectorInstance) {
       return () => {};
     }
@@ -178,7 +226,7 @@ function BarcodeScannerNativeViewport({
           }
         }
       } catch {
-        /* Fotogramas sin código o API con fallos ocasionales: ignorar. */
+        /* sin código válido — silenciar */
       }
     };
 
@@ -193,7 +241,7 @@ function BarcodeScannerNativeViewport({
 
     (async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
+        const stream = await getUserMediaWithZoomFallback(streamConstraints);
         if (cancelled || settledRef.current) {
           stream.getTracks().forEach((t) => t.stop());
           return;
@@ -220,18 +268,29 @@ function BarcodeScannerNativeViewport({
       cancelled = true;
       stopAll();
     };
-  }, [active, onStartError]);
+  }, [active, streamConstraints, onStartError]);
 
-  return <video ref={videoRef} {...VIDEO_PROPS} />;
+  return (
+    <video
+      ref={videoRef}
+      className={VIDEO_ELEMENT_CLASSNAME}
+      muted
+      playsInline
+      autoPlay
+      aria-hidden
+    />
+  );
 }
 
 /** Cámara + decodificación vía ZXing (react-zxing). */
 function BarcodeScannerZxingViewport({
   active,
+  streamConstraints,
   onDecoded,
   onStartError,
 }: {
   active: boolean;
+  streamConstraints: MediaStreamConstraints;
   onDecoded: (barcode: string) => void | Promise<void>;
   onStartError?: (message: string) => void;
 }) {
@@ -265,7 +324,7 @@ function BarcodeScannerZxingViewport({
   const { ref } = useZxing({
     paused: !active || scanDonePause,
     hints,
-    constraints: CAMERA_CONSTRAINTS,
+    constraints: streamConstraints,
     timeBetweenDecodingAttempts: 200,
     onResult(result) {
       if (!active || settledRef.current) return;
@@ -283,13 +342,51 @@ function BarcodeScannerZxingViewport({
     },
   });
 
-  return <video ref={ref} {...VIDEO_PROPS} />;
+  return (
+    <video
+      ref={ref}
+      className={VIDEO_ELEMENT_CLASSNAME}
+      muted
+      playsInline
+      autoPlay
+      aria-hidden
+    />
+  );
 }
 
-/**
- * Escáner híbrido: Barcode Detector nativo cuando exista; ZXing/Zxing-hook si no.
- * Siempre permite ingreso manual del EAN como respaldo rápido.
- */
+/** Línea láser sólo cosmética (keyframes globales únicos por id). */
+function BarcodeLaserScanLine() {
+  const styleId = 'nutrition-bc-laser-keyframes';
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    if (document.getElementById(styleId)) return undefined;
+    const el = document.createElement('style');
+    el.id = styleId;
+    el.textContent = `
+      @keyframes nutrition-barcode-laser-y {
+        0%, 100% { top: 12%; opacity: 0.7; }
+        50% { top: 80%; opacity: 1; }
+      }
+    `;
+    document.head.appendChild(el);
+    return undefined;
+  }, []);
+
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 z-[8] overflow-hidden"
+      aria-hidden
+    >
+      <div
+        className="absolute left-[6%] right-[6%] h-[3px] rounded-full bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.95)]"
+        style={{
+          animation: 'nutrition-barcode-laser-y 2.4s ease-in-out infinite alternate',
+        }}
+      />
+    </div>
+  );
+}
+
 export function NutritionBarcodeScanner({
   active,
   className,
@@ -299,8 +396,9 @@ export function NutritionBarcodeScanner({
 }: NutritionBarcodeScannerProps) {
   const [manualCode, setManualCode] = useState('');
   const [slowCameraHint, setSlowCameraHint] = useState(false);
+  const [videoInputs, setVideoInputs] = useState<MediaDeviceInfo[]>([]);
+  const [cameraIndex, setCameraIndex] = useState(0);
 
-  /** Evita hydration mismatch en SSR (`false`), en cliente refleja `window.BarcodeDetector`. */
   const prefersNativeBarcodeApi = useSyncExternalStore(
     () => () => {},
     () => typeof window !== 'undefined' && getNativeBarcodeCtor() !== undefined,
@@ -308,6 +406,23 @@ export function NutritionBarcodeScanner({
   );
 
   const manualInputRef = useRef<HTMLInputElement>(null);
+
+  const streamConstraintsNative = useMemo(
+    () => buildScannerConstraints(videoInputs, cameraIndex, true),
+    [videoInputs, cameraIndex],
+  );
+
+  /** Sin `advanced` de zoom para evitar Overconstrained en navegadores que no lo soporten (ZXing usa getUserMedia interno). */
+  const streamConstraintsZxing = useMemo(
+    () => buildScannerConstraints(videoInputs, cameraIndex, false),
+    [videoInputs, cameraIndex],
+  );
+
+  const cycleCamera = useCallback(() => {
+    const n = videoInputs.length;
+    if (n <= 1) return;
+    setCameraIndex((i) => (i + 1) % n);
+  }, [videoInputs.length]);
 
   const focusManualBarcode = () => {
     document.getElementById('nutrition-manual-barcode-section')?.scrollIntoView({
@@ -319,6 +434,30 @@ export function NutritionBarcodeScanner({
 
   useEffect(() => {
     setManualCode('');
+    setCameraIndex(0);
+    setVideoInputs([]);
+  }, [active]);
+
+  useEffect(() => {
+    if (!active) return undefined;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const list = await navigator.mediaDevices.enumerateDevices();
+        if (cancelled) return;
+        const vid = list.filter((d) => d.kind === 'videoinput' && d.deviceId);
+        setVideoInputs(vid);
+      } catch {
+        if (!cancelled) setVideoInputs([]);
+      }
+    };
+    void refresh();
+
+    navigator.mediaDevices?.addEventListener('devicechange', refresh);
+    return () => {
+      cancelled = true;
+      navigator.mediaDevices?.removeEventListener('devicechange', refresh);
+    };
   }, [active]);
 
   useEffect(() => {
@@ -339,13 +478,25 @@ export function NutritionBarcodeScanner({
 
   const viewport: ReactNode = active ? (
     prefersNativeBarcodeApi ? (
-      <BarcodeScannerNativeViewport active={active} onDecoded={onDecoded} onStartError={onStartError} />
+      <BarcodeScannerNativeViewport
+        active={active}
+        streamConstraints={streamConstraintsNative}
+        onDecoded={onDecoded}
+        onStartError={onStartError}
+      />
     ) : (
-      <BarcodeScannerZxingViewport active={active} onDecoded={onDecoded} onStartError={onStartError} />
+      <BarcodeScannerZxingViewport
+        active={active}
+        streamConstraints={streamConstraintsZxing}
+        onDecoded={onDecoded}
+        onStartError={onStartError}
+      />
     )
   ) : (
-    <div className={cn(VIDEO_PROPS.className, 'bg-black')} />
+    <div className="absolute inset-0 bg-neutral-950" />
   );
+
+  const showFlipCamera = active && videoInputs.length > 1;
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -396,10 +547,31 @@ export function NutritionBarcodeScanner({
       </div>
       <div className="relative mx-auto aspect-[16/9] max-h-[min(40vh,280px)] w-full max-w-[400px] overflow-hidden rounded-2xl border border-border bg-black">
         {viewport}
+        {active && (
+          <>
+            <BarcodeLaserScanLine />
+            {showFlipCamera ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="secondary"
+                aria-label="Cambiar cámara"
+                title="Otra lente trasera"
+                className="absolute right-3 top-3 z-20 h-11 w-11 shrink-0 rounded-full border border-white/25 bg-black/55 text-white shadow-lg backdrop-blur-sm hover:bg-black/70"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  cycleCamera();
+                }}
+              >
+                <SwitchCamera className="h-5 w-5" />
+              </Button>
+            ) : null}
+          </>
+        )}
       </div>
       {active ? (
         <p className="mx-auto max-w-[400px] text-center text-[11px] leading-snug text-muted-foreground px-1">
-          Mantené el código recto, sin reflejos y a unos 15 cm de distancia
+          Probá también alejar el teléfono ~20–25 cm si el centro se ve muy ampliado: ayuda al enfoque.
         </p>
       ) : (
         <p className="sr-only">Escáner inactivo.</p>

@@ -20,7 +20,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { NutritionBarcodeScanner, NutritionBarcodeScanLoadingOverlay } from '@/components/NutritionBarcodeScanner';
-import { fetchOpenFoodFactsProduct, mapOpenFoodFactsToNutritionFields } from '@/lib/openFoodFacts';
+import {
+  fetchOpenFoodFactsProduct,
+  mapOpenFoodFactsToNutritionFields,
+  nutritionValueToInputString,
+  type MacrosPer100g,
+  type OpenFoodFactsPackageTotal,
+} from '@/lib/openFoodFacts';
 import { calculateAge } from '@/lib/age';
 import { todayLocalYMD, localDayBoundsISO } from '@/lib/nutritionDay';
 
@@ -29,6 +35,14 @@ type MealType = 'desayuno' | 'almuerzo' | 'cena' | 'merienda';
 /** Columna obligatoria en DB; no se expone en el formulario (valor fijo). */
 const DEFAULT_PORTION_UNIT = 'g' as const;
 
+const INITIAL_MACROS_PER_100G: MacrosPer100g = {
+  calories: 0,
+  protein: 0,
+  carbs: 0,
+  fat: 0,
+};
+
+/** `custom_foods.base_*`: macros por **100 g/ml** para escalar después al diario. */
 type CustomFood = {
   id: string;
   name: string;
@@ -77,16 +91,29 @@ const mapRowToCustomFood = (r: {
   base_fat: Number(r.base_fat),
 });
 
+function formatConsumedQuantityFromMultiplier(multiplier: number): string {
+  const amount = multiplier * 100;
+  if (!Number.isFinite(amount)) return '';
+  const r = Math.abs(amount % 1) < 0.001 ? String(Math.round(amount)) : amount.toFixed(1);
+  return `${r} g o ml`;
+}
+
+function formatPackageReferenceLabel(pkg: OpenFoodFactsPackageTotal): string {
+  const u = pkg.unit === 'ml' ? 'ml' : 'g';
+  const r = Math.abs(pkg.amount % 1) < 0.001 ? String(Math.round(pkg.amount)) : pkg.amount.toFixed(1);
+  return `${r}${u}`;
+}
+
 const FoodMacroSummary = ({ f, className }: { f: CustomFood; className?: string }) => (
   <div className={className}>
     <p className="text-[11px] leading-relaxed text-muted-foreground">
-      <span className="font-medium text-foreground/90">Calorías:</span>{' '}
+      <span className="font-medium text-foreground/90">Calorías (ref. /100 g o ml):</span>{' '}
       <span className="tabular-nums">{Math.round(f.base_calories)} kcal</span>
     </p>
     <p className="text-[11px] leading-relaxed text-muted-foreground tabular-nums">
-      <span className="font-medium text-foreground/90">Proteína:</span> {f.base_protein} g ·{' '}
-      <span className="font-medium text-foreground/90">Carbohidratos:</span> {f.base_carbs} g ·{' '}
-      <span className="font-medium text-foreground/90">Grasas:</span> {f.base_fat} g
+      <span className="font-medium text-foreground/90">P</span> {f.base_protein} g ·{' '}
+      <span className="font-medium text-foreground/90">Carb.</span> {f.base_carbs} g ·{' '}
+      <span className="font-medium text-foreground/90">Grasa</span> {f.base_fat} g
     </p>
   </div>
 );
@@ -109,13 +136,12 @@ const Nutrition = () => {
 
   const [foodPickerSearch, setFoodPickerSearch] = useState('');
 
-  const [newFoodForm, setNewFoodForm] = useState({
-    name: '',
-    base_calories: '',
-    base_protein: '',
-    base_carbs: '',
-    base_fat: '',
-  });
+  const [newFoodForm, setNewFoodForm] = useState({ name: '' });
+  const [newFoodMacrosRef100g, setNewFoodMacrosRef100g] =
+    useState<MacrosPer100g>(INITIAL_MACROS_PER_100G);
+  const [consumedAmountInput, setConsumedAmountInput] = useState('100');
+  const [consumedUnit, setConsumedUnit] = useState<'g' | 'ml'>('g');
+  const [offPackageTotal, setOffPackageTotal] = useState<OpenFoodFactsPackageTotal | null>(null);
   const [savingFood, setSavingFood] = useState(false);
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
   const [deleteFoodTarget, setDeleteFoodTarget] = useState<CustomFood | null>(null);
@@ -130,7 +156,8 @@ const Nutrition = () => {
   const [calculatorOpen, setCalculatorOpen] = useState(false);
   const [calculatorMealLocked, setCalculatorMealLocked] = useState(false);
   const [selectedFood, setSelectedFood] = useState<CustomFood | null>(null);
-  const [portionQty, setPortionQty] = useState('1');
+  const [portionQty, setPortionQty] = useState('100');
+  const [portionUnit, setPortionUnit] = useState<'g' | 'ml'>('g');
   const [logMealType, setLogMealType] = useState<MealType>('desayuno');
   const [savingLog, setSavingLog] = useState(false);
 
@@ -249,15 +276,38 @@ const Nutrition = () => {
     return customFoods.filter((f) => f.name.toLowerCase().includes(q));
   }, [customFoods, foodPickerSearch]);
 
+  const consumedAmountEffective = useMemo(() => {
+    const raw = consumedAmountInput.replace(',', '.').trim();
+    const n = Number(raw);
+    if (Number.isFinite(n) && n > 0) return n;
+    return 100;
+  }, [consumedAmountInput]);
+
+  const consumedScaleFactor = consumedAmountEffective / 100;
+
+  const patchMacroDisplayToRef100 = (key: keyof MacrosPer100g, displayRaw: string) => {
+    const displayVal = Number(String(displayRaw).replace(',', '.')) || 0;
+    const qty = Math.max(0.0001, consumedAmountEffective);
+    setNewFoodMacrosRef100g((prev) => ({
+      ...prev,
+      [key]: roundMacro(displayVal * (100 / qty)),
+    }));
+  };
+
   const scaledFromSelected = useMemo(() => {
     if (!selectedFood) return null;
-    const m = Math.max(0.01, Number(portionQty) || 0);
+    const raw = portionQty.replace(',', '.').trim();
+    const amt = Number(raw);
+    const gramsOrMlEq = Number.isFinite(amt) && amt > 0 ? amt : 100;
+    const m = gramsOrMlEq / 100;
     return {
       calories: roundMacro(selectedFood.base_calories * m),
       protein: roundMacro(selectedFood.base_protein * m),
       carbs: roundMacro(selectedFood.base_carbs * m),
       fat: roundMacro(selectedFood.base_fat * m),
       multiplier: m,
+      /** Gramos/ml consumidos relativos al factor de escala (/100 referencia). */
+      consumedQty: gramsOrMlEq,
     };
   }, [selectedFood, portionQty]);
 
@@ -276,13 +326,21 @@ const Nutrition = () => {
     }
   };
 
-  const emptyFoodForm = () => ({
-    name: '',
-    base_calories: '',
-    base_protein: '',
-    base_carbs: '',
-    base_fat: '',
-  });
+  const emptyFoodForm = () => ({ name: '' });
+
+  const resetNewFoodNutritionDraft = useCallback(() => {
+    setNewFoodForm(emptyFoodForm());
+    setNewFoodMacrosRef100g(INITIAL_MACROS_PER_100G);
+    setConsumedAmountInput('100');
+    setConsumedUnit('g');
+    setOffPackageTotal(null);
+  }, []);
+
+  const loadFullPackIntoConsumedAmount = useCallback(() => {
+    if (!offPackageTotal) return;
+    setConsumedAmountInput(nutritionValueToInputString(offPackageTotal.amount));
+    setConsumedUnit(offPackageTotal.unit);
+  }, [offPackageTotal]);
 
   const handleOpenFoodFactsBarcode = useCallback(
     async (raw: string) => {
@@ -325,16 +383,16 @@ const Nutrition = () => {
         setNewFoodForm((prev) => ({
           ...prev,
           name: mapped.name || prev.name,
-          base_calories: mapped.base_calories || prev.base_calories,
-          base_protein: mapped.base_protein || prev.base_protein,
-          base_carbs: mapped.base_carbs || prev.base_carbs,
-          base_fat: mapped.base_fat || prev.base_fat,
         }));
+        setNewFoodMacrosRef100g(mapped.macrosPer100g);
+        setConsumedAmountInput('100');
+        setConsumedUnit(mapped.packageTotal?.unit === 'ml' ? 'ml' : 'g');
+        setOffPackageTotal(mapped.packageTotal);
         toast({
           title: 'Producto cargado',
           description: mapped.name
-            ? `«${mapped.name}» por 100 g. Revisá y ajustá si hace falta.`
-            : 'Macros por 100 g cargados desde Open Food Facts.',
+            ? `«${mapped.name}»: valores de referencia por 100 ${mapped.packageTotal?.unit === 'ml' ? 'ml' : 'g'}. Ajustá la cantidad consumida si querés.`
+            : 'Macros por 100 cargados desde Open Food Facts.',
         });
       } catch {
         toast({
@@ -364,7 +422,7 @@ const Nutrition = () => {
   const openNewFoodFromLibrary = () => {
     setFoodScanPhase('off');
     setEditingFoodId(null);
-    setNewFoodForm(emptyFoodForm());
+    resetNewFoodNutritionDraft();
     setNewFoodContext('library');
     setQuickCreateMeal(null);
     setNewFoodOpen(true);
@@ -375,13 +433,16 @@ const Nutrition = () => {
     setEditingFoodId(f.id);
     setNewFoodContext(null);
     setQuickCreateMeal(null);
-    setNewFoodForm({
-      name: f.name,
-      base_calories: String(f.base_calories),
-      base_protein: String(f.base_protein),
-      base_carbs: String(f.base_carbs),
-      base_fat: String(f.base_fat),
+    setNewFoodForm({ name: f.name });
+    setNewFoodMacrosRef100g({
+      calories: f.base_calories,
+      protein: f.base_protein,
+      carbs: f.base_carbs,
+      fat: f.base_fat,
     });
+    setConsumedAmountInput('100');
+    setConsumedUnit('g');
+    setOffPackageTotal(null);
     setNewFoodOpen(true);
   };
 
@@ -390,7 +451,7 @@ const Nutrition = () => {
     const meal = pickerMealType;
     if (!meal) return;
     setEditingFoodId(null);
-    setNewFoodForm(emptyFoodForm());
+    resetNewFoodNutritionDraft();
     setQuickCreateMeal(meal);
     setNewFoodContext('meal-picker');
     setNewFoodOpen(true);
@@ -403,10 +464,10 @@ const Nutrition = () => {
       toast({ title: 'Falta el nombre', variant: 'destructive' });
       return;
     }
-    const bc = Math.max(0, Number(newFoodForm.base_calories) || 0);
-    const bp = Math.max(0, Number(newFoodForm.base_protein) || 0);
-    const bcar = Math.max(0, Number(newFoodForm.base_carbs) || 0);
-    const bf = Math.max(0, Number(newFoodForm.base_fat) || 0);
+    const bc = Math.max(0, roundMacro(newFoodMacrosRef100g.calories));
+    const bp = Math.max(0, roundMacro(newFoodMacrosRef100g.protein));
+    const bcar = Math.max(0, roundMacro(newFoodMacrosRef100g.carbs));
+    const bf = Math.max(0, roundMacro(newFoodMacrosRef100g.fat));
 
     const editId = editingFoodId;
     if (editId) {
@@ -436,7 +497,7 @@ const Nutrition = () => {
       setCustomFoods((prev) => prev.map((x) => (x.id === editId ? updated : x)));
       if (selectedFood?.id === editId) setSelectedFood(updated);
       setNewFoodOpen(false);
-      setNewFoodForm(emptyFoodForm());
+      resetNewFoodNutritionDraft();
       setEditingFoodId(null);
       setNewFoodContext(null);
       setQuickCreateMeal(null);
@@ -465,9 +526,7 @@ const Nutrition = () => {
       return;
     }
     setNewFoodOpen(false);
-    setNewFoodForm(emptyFoodForm());
-    setNewFoodContext(null);
-    setQuickCreateMeal(null);
+    resetNewFoodNutritionDraft();
 
     if (ctx === 'meal-picker' && mealAfterPicker && data) {
       const food = mapRowToCustomFood(data);
@@ -476,11 +535,12 @@ const Nutrition = () => {
       setPickerMealType(null);
       setFoodPickerSearch('');
       setSelectedFood(food);
-      setPortionQty('1');
+      setPortionQty('100');
+      setPortionUnit('g');
       setLogMealType(mealAfterPicker);
       setCalculatorMealLocked(true);
       setCalculatorOpen(true);
-      toast({ title: 'Alimento creado', description: 'Ajustá la porción y agregalo al diario.' });
+      toast({ title: 'Alimento creado', description: 'Ajustá la cantidad consumida y agregalo al diario.' });
       return;
     }
 
@@ -514,7 +574,8 @@ const Nutrition = () => {
     if (!meal) return;
     setMealPickerOpen(false);
     setSelectedFood(food);
-    setPortionQty('1');
+    setPortionQty('100');
+    setPortionUnit('g');
     setLogMealType(meal);
     setCalculatorMealLocked(true);
     setCalculatorOpen(true);
@@ -522,7 +583,8 @@ const Nutrition = () => {
 
   const openCalculatorFromLibrary = (food: CustomFood) => {
     setSelectedFood(food);
-    setPortionQty('1');
+    setPortionQty('100');
+    setPortionUnit('g');
     setLogMealType('desayuno');
     setCalculatorMealLocked(false);
     setCalculatorOpen(true);
@@ -532,6 +594,7 @@ const Nutrition = () => {
     setCalculatorOpen(false);
     setSelectedFood(null);
     setCalculatorMealLocked(false);
+    setPortionUnit('g');
   };
 
   const addLogFromLibrary = async () => {
@@ -669,7 +732,9 @@ const Nutrition = () => {
                             <div className="min-w-0">
                               <p className="truncate text-sm text-foreground">
                                 {f.food_name}{' '}
-                                <span className="text-xs text-muted-foreground">×{f.quantity_multiplier}</span>
+                                <span className="text-xs text-muted-foreground tabular-nums">
+                                  {formatConsumedQuantityFromMultiplier(f.quantity_multiplier)}
+                                </span>
                               </p>
                               <p className="text-[11px] text-muted-foreground">
                                 {Math.round(f.calories)} kcal · P{Math.round(f.protein)} C{Math.round(f.carbs)} G{Math.round(f.fat)}
@@ -799,7 +864,7 @@ const Nutrition = () => {
             setQuickCreateMeal(null);
             setEditingFoodId(null);
             setFoodScanPhase('off');
-            setNewFoodForm(emptyFoodForm());
+            resetNewFoodNutritionDraft();
           }
         }}
       >
@@ -812,7 +877,9 @@ const Nutrition = () => {
               <p className="text-sm leading-snug text-muted-foreground">
                 {foodScanPhase === 'scanning' && !editingFoodId
                   ? 'Escaneá el código de barras para cargar datos por 100 g desde Open Food Facts.'
-                  : 'Ingresá los macronutrientes totales de este alimento.'}
+                  : editingFoodId
+                    ? 'Editá la referencia cada 100 g o ml; los totales se recalculan con la cantidad consumida.'
+                    : 'Open Food Facts suele traer datos cada 100 g o 100 ml; ajustá la cantidad para ver el total comido antes de guardar.'}
               </p>
             </DialogHeader>
           </div>
@@ -866,6 +933,73 @@ const Nutrition = () => {
                     />
                   </div>
 
+                  <div className="space-y-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-2">
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <label
+                          htmlFor="new-food-consumed-amt"
+                          className="block text-xs font-medium text-muted-foreground"
+                        >
+                          Cantidad consumida
+                        </label>
+                        <Input
+                          id="new-food-consumed-amt"
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          step="1"
+                          placeholder="100"
+                          value={consumedAmountInput}
+                          onChange={(e) => setConsumedAmountInput(e.target.value)}
+                          className={NUTRITION_FORM_INPUT_CLASS}
+                        />
+                      </div>
+                      <div className="w-full shrink-0 space-y-1.5 sm:w-[44%]">
+                        <span className="block text-xs font-medium text-muted-foreground">Unidad</span>
+                        <Select
+                          value={consumedUnit}
+                          onValueChange={(v) => setConsumedUnit(v as 'g' | 'ml')}
+                        >
+                          <SelectTrigger id="new-food-consumed-unit" className="min-h-[48px] rounded-xl border-0 bg-zinc-100 dark:bg-zinc-800">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="g">Gramos (g)</SelectItem>
+                            <SelectItem value="ml">Mililitros (ml)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {offPackageTotal ? (
+                      <div className="rounded-xl border border-border/50 bg-muted/40 px-3 py-2">
+                        <p className="text-[11px] leading-snug text-muted-foreground">
+                          {offPackageTotal.unit === 'ml'
+                            ? 'Contenido total del envase (referencia):'
+                            : 'Peso total del envase (referencia):'}{' '}
+                          <span className="font-semibold tabular-nums text-foreground/90">
+                            {formatPackageReferenceLabel(offPackageTotal)}
+                          </span>
+                        </p>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="mt-2 h-10 w-full rounded-xl font-semibold"
+                          onClick={loadFullPackIntoConsumedAmount}
+                        >
+                          Cargar envase completo
+                        </Button>
+                      </div>
+                    ) : null}
+
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      Calorías, proteínas, carbohidratos y grasas abajo muestran el total para la cantidad
+                      anterior; guardamos en la biblioteca la referencia por cada{' '}
+                      <span className="font-medium text-foreground/80">100 {consumedUnit}</span>.
+                    </p>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label htmlFor="new-food-cals" className="mb-1.5 block text-xs font-medium text-muted-foreground">
@@ -878,10 +1012,8 @@ const Nutrition = () => {
                         min={0}
                         step="0.1"
                         placeholder="0"
-                        value={newFoodForm.base_calories}
-                        onChange={(e) =>
-                          setNewFoodForm((p) => ({ ...p, base_calories: e.target.value }))
-                        }
+                        value={nutritionValueToInputString(newFoodMacrosRef100g.calories * consumedScaleFactor)}
+                        onChange={(e) => patchMacroDisplayToRef100('calories', e.target.value)}
                         className={NUTRITION_FORM_INPUT_CLASS}
                       />
                     </div>
@@ -896,10 +1028,8 @@ const Nutrition = () => {
                         min={0}
                         step="0.1"
                         placeholder="0"
-                        value={newFoodForm.base_protein}
-                        onChange={(e) =>
-                          setNewFoodForm((p) => ({ ...p, base_protein: e.target.value }))
-                        }
+                        value={nutritionValueToInputString(newFoodMacrosRef100g.protein * consumedScaleFactor)}
+                        onChange={(e) => patchMacroDisplayToRef100('protein', e.target.value)}
                         className={NUTRITION_FORM_INPUT_CLASS}
                       />
                     </div>
@@ -914,10 +1044,8 @@ const Nutrition = () => {
                         min={0}
                         step="0.1"
                         placeholder="0"
-                        value={newFoodForm.base_carbs}
-                        onChange={(e) =>
-                          setNewFoodForm((p) => ({ ...p, base_carbs: e.target.value }))
-                        }
+                        value={nutritionValueToInputString(newFoodMacrosRef100g.carbs * consumedScaleFactor)}
+                        onChange={(e) => patchMacroDisplayToRef100('carbs', e.target.value)}
                         className={NUTRITION_FORM_INPUT_CLASS}
                       />
                     </div>
@@ -932,10 +1060,8 @@ const Nutrition = () => {
                         min={0}
                         step="0.1"
                         placeholder="0"
-                        value={newFoodForm.base_fat}
-                        onChange={(e) =>
-                          setNewFoodForm((p) => ({ ...p, base_fat: e.target.value }))
-                        }
+                        value={nutritionValueToInputString(newFoodMacrosRef100g.fat * consumedScaleFactor)}
+                        onChange={(e) => patchMacroDisplayToRef100('fat', e.target.value)}
                         className={NUTRITION_FORM_INPUT_CLASS}
                       />
                     </div>
@@ -1047,7 +1173,7 @@ const Nutrition = () => {
                   >
                     <span className="font-semibold text-lg leading-snug text-foreground">{f.name}</span>
                     <span className="text-sm tabular-nums text-zinc-500 dark:text-zinc-400">
-                      {Math.round(f.base_calories)} kcal · P{f.base_protein}g C{f.base_carbs}g G{f.base_fat}g
+                      {Math.round(f.base_calories)} kcal / 100 · P{f.base_protein}g C{f.base_carbs}g G{f.base_fat}g
                     </span>
                   </button>
                   <div className="flex shrink-0 items-center pr-2">
@@ -1104,30 +1230,48 @@ const Nutrition = () => {
           {selectedFood && scaledFromSelected && (
             <div className="space-y-4">
               <div className="rounded-xl bg-zinc-100/80 p-4 text-sm dark:bg-zinc-800/80">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Por porción base</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Referencia cada 100 {portionUnit}
+                </p>
                 <p className="mt-1 tabular-nums text-foreground">
                   {Math.round(selectedFood.base_calories)} kcal · P{selectedFood.base_protein}g C{selectedFood.base_carbs}g G{selectedFood.base_fat}g
                 </p>
               </div>
 
-              <div>
-                <label htmlFor="portion-qty" className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                  Porciones
-                </label>
-                <Input
-                  id="portion-qty"
-                  type="number"
-                  inputMode="decimal"
-                  min={0.01}
-                  step={0.1}
-                  value={portionQty}
-                  onChange={(e) => setPortionQty(e.target.value)}
-                  className={NUTRITION_FORM_INPUT_CLASS}
-                />
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <label htmlFor="portion-qty" className="mb-0 block text-xs font-medium text-muted-foreground">
+                    Cantidad consumida
+                  </label>
+                  <Input
+                    id="portion-qty"
+                    type="number"
+                    inputMode="decimal"
+                    min={0.01}
+                    step={0.1}
+                    value={portionQty}
+                    onChange={(e) => setPortionQty(e.target.value)}
+                    className={NUTRITION_FORM_INPUT_CLASS}
+                  />
+                </div>
+                <div className="w-full shrink-0 space-y-1.5 sm:w-[40%]">
+                  <span className="block text-xs font-medium text-muted-foreground">Unidad</span>
+                  <Select value={portionUnit} onValueChange={(v) => setPortionUnit(v as 'g' | 'ml')}>
+                    <SelectTrigger id="portion-unit" className="min-h-[48px] rounded-xl border-0 bg-secondary">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="g">Gramos (g)</SelectItem>
+                      <SelectItem value="ml">Mililitros (ml)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="rounded-xl border border-border/60 p-3">
-                <p className="text-[11px] font-medium text-muted-foreground">Total con cantidad ×{scaledFromSelected.multiplier}</p>
+                <p className="text-[11px] font-medium text-muted-foreground">
+                  Total estimado ({nutritionValueToInputString(scaledFromSelected.consumedQty)} {portionUnit})
+                </p>
                 <p className="mt-1 text-lg font-bold tabular-nums text-foreground">{scaledFromSelected.calories} kcal</p>
                 <p className="text-xs tabular-nums text-muted-foreground">
                   P{scaledFromSelected.protein}g · C{scaledFromSelected.carbs}g · G{scaledFromSelected.fat}g
