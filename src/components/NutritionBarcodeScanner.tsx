@@ -10,9 +10,10 @@ import {
 import { Loader2, Search, SwitchCamera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useZxing } from 'react-zxing';
-import { BarcodeFormat, DecodeHintType } from '@zxing/library';
+import { BarcodeFormat, DecodeHintType, type Result } from '@zxing/library';
 import { cn } from '@/lib/utils';
+import { useZxingCenterCrop } from '@/hooks/useZxingCenterCrop';
+import { drawVideoCenterCropToCanvas } from '@/lib/zxingCenterCropReader';
 
 export type NutritionBarcodeScannerProps = {
   active: boolean;
@@ -35,8 +36,9 @@ function buildScannerConstraints(
   const dev = videoInputs[idx];
 
   const baseTrack: MediaTrackConstraints = {
-    width: { ideal: 1280 },
-    height: { ideal: 720 },
+    /** Rango más estricto ayuda al enfoque; evita resoluciones extremas que saturan el pipeline en iOS. */
+    width: { min: 640, ideal: 1280, max: 1920 },
+    height: { min: 360, ideal: 720, max: 1080 },
     ...(includeAdvancedZoom ? { advanced: [...ZOOM_ADVANCED] } : {}),
   };
 
@@ -149,6 +151,8 @@ const VIDEO_ELEMENT_CLASSNAME = cn(
   'absolute inset-0 h-full w-full object-cover [transform-origin:50%_50%]',
   /** Refuerzo de “zoom”: empuja alejación física y acentúa centro (iOS). */
   'scale-[1.2]',
+  /** Nitidez percibida de barras oscuras sobre fondos claros (cámara trasera web suele exponer oscuro). */
+  '[filter:contrast(1.2)_brightness(1.1)]',
 );
 
 /** Cámara + Barcode Detector API (`detect` sobre el mismo &lt;video&gt;). */
@@ -164,6 +168,7 @@ function BarcodeScannerNativeViewport({
   onStartError?: (message: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const scanCanvasRef = useRef<HTMLCanvasElement>(null);
   const settledRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
   const onDecodedRef = useRef(onDecoded);
@@ -213,10 +218,18 @@ function BarcodeScannerNativeViewport({
 
     const probeFrame = async (detector: InstanceType<NativeBarcodeCtor>) => {
       const video = videoRef.current;
-      if (!video || cancelled || settledRef.current || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA)
+      const cropCanvas = scanCanvasRef.current;
+      if (
+        !video ||
+        !cropCanvas ||
+        cancelled ||
+        settledRef.current ||
+        video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+      )
         return;
       try {
-        const codes = await detector.detect(video as unknown as CanvasImageSource);
+        if (!drawVideoCenterCropToCanvas(video, cropCanvas)) return;
+        const codes = await detector.detect(cropCanvas as unknown as CanvasImageSource);
         if (codes?.length && !settledRef.current) {
           const raw = codes[0]?.rawValue?.trim();
           if (raw) {
@@ -271,18 +284,25 @@ function BarcodeScannerNativeViewport({
   }, [active, streamConstraints, onStartError]);
 
   return (
-    <video
-      ref={videoRef}
-      className={VIDEO_ELEMENT_CLASSNAME}
-      muted
-      playsInline
-      autoPlay
-      aria-hidden
-    />
+    <>
+      <video
+        ref={videoRef}
+        className={VIDEO_ELEMENT_CLASSNAME}
+        muted
+        playsInline
+        autoPlay
+        aria-hidden
+      />
+      <canvas
+        ref={scanCanvasRef}
+        className="pointer-events-none absolute left-0 top-0 h-px w-px opacity-0"
+        aria-hidden
+      />
+    </>
   );
 }
 
-/** Cámara + decodificación vía ZXing (react-zxing). */
+/** Cámara + decodificación vía ZXing con recorte central dinámico. */
 function BarcodeScannerZxingViewport({
   active,
   streamConstraints,
@@ -321,12 +341,12 @@ function BarcodeScannerZxingViewport({
     }
   }, [active]);
 
-  const { ref } = useZxing({
+  const { ref } = useZxingCenterCrop({
     paused: !active || scanDonePause,
     hints,
     constraints: streamConstraints,
     timeBetweenDecodingAttempts: 200,
-    onResult(result) {
+    onResult(result: Result) {
       if (!active || settledRef.current) return;
       const text = result.getText()?.trim();
       if (!text) return;
@@ -407,22 +427,42 @@ export function NutritionBarcodeScanner({
 
   const manualInputRef = useRef<HTMLInputElement>(null);
 
+  /** Prioriza videoinputs que no parecen cámara frontal (multi-lente iPhone). */
+  const scanCameraDevices = useMemo(() => {
+    const withId = videoInputs.filter((d) => d.deviceId);
+    const rear = withId.filter(
+      (d) =>
+        !/front|selfie|user-facing|facetime|facial|true\s*depth|infrared|\blidar\b/i.test(d.label || ''),
+    );
+    if (rear.length >= 1) return rear;
+    return withId;
+  }, [videoInputs]);
+
+  useEffect(() => {
+    const n = scanCameraDevices.length;
+    if (!n) {
+      setCameraIndex(0);
+      return;
+    }
+    setCameraIndex((i) => i % n);
+  }, [scanCameraDevices]);
+
   const streamConstraintsNative = useMemo(
-    () => buildScannerConstraints(videoInputs, cameraIndex, true),
-    [videoInputs, cameraIndex],
+    () => buildScannerConstraints(scanCameraDevices, cameraIndex, true),
+    [scanCameraDevices, cameraIndex],
   );
 
   /** Sin `advanced` de zoom para evitar Overconstrained en navegadores que no lo soporten (ZXing usa getUserMedia interno). */
   const streamConstraintsZxing = useMemo(
-    () => buildScannerConstraints(videoInputs, cameraIndex, false),
-    [videoInputs, cameraIndex],
+    () => buildScannerConstraints(scanCameraDevices, cameraIndex, false),
+    [scanCameraDevices, cameraIndex],
   );
 
   const cycleCamera = useCallback(() => {
-    const n = videoInputs.length;
+    const n = scanCameraDevices.length;
     if (n <= 1) return;
     setCameraIndex((i) => (i + 1) % n);
-  }, [videoInputs.length]);
+  }, [scanCameraDevices]);
 
   const focusManualBarcode = () => {
     document.getElementById('nutrition-manual-barcode-section')?.scrollIntoView({
@@ -496,7 +536,7 @@ export function NutritionBarcodeScanner({
     <div className="absolute inset-0 bg-neutral-950" />
   );
 
-  const showFlipCamera = active && videoInputs.length > 1;
+  const showFlipCamera = active && scanCameraDevices.length > 1;
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -555,8 +595,8 @@ export function NutritionBarcodeScanner({
                 type="button"
                 size="icon"
                 variant="secondary"
-                aria-label="Cambiar cámara"
-                title="Otra lente trasera"
+                aria-label="Cambiar cámara o lente trasera"
+                title="Si no enfoca en iPhone, probá otra lente trasera"
                 className="absolute right-3 top-3 z-20 h-11 w-11 shrink-0 rounded-full border border-white/25 bg-black/55 text-white shadow-lg backdrop-blur-sm hover:bg-black/70"
                 onClick={(e) => {
                   e.stopPropagation();
