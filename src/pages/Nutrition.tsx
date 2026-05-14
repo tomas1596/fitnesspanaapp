@@ -300,11 +300,21 @@ const Nutrition = () => {
       setFoodScanPhase('fetching');
       try {
         const data = await fetchOpenFoodFactsProduct(digits);
+
+        if (data.status === 0) {
+          toast({
+            title: 'Sin resultado',
+            description: 'Producto no encontrado en la base de datos. Ingresalo manualmente.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
         const mapped = mapOpenFoodFactsToNutritionFields(data);
         if (!mapped) {
           toast({
-            title: 'Producto no encontrado',
-            description: 'Por favor, ingresa los datos manualmente.',
+            title: 'Sin resultado',
+            description: 'Producto no encontrado en la base de datos. Ingresalo manualmente.',
             variant: 'destructive',
           });
           return;
