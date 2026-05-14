@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { CircleMarker, MapContainer, TileLayer, useMap } from 'react-leaflet';
+import { CircleMarker, MapContainer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -47,6 +47,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { ReadableBasemapLayers, readableMapFallbackBg } from '@/components/ReadableBasemapLayers';
 import { KmMilestoneMarkers } from '@/components/KmMilestoneMarkers';
 import { PaceHeatPolylines } from '@/components/PaceHeatPolylines';
 import { estimateRunCalories, estimateRunSteps } from '@/lib/calories';
@@ -55,10 +56,6 @@ import { fmtPace, fmtTime } from '@/lib/runFormat';
 import { cn } from '@/lib/utils';
 
 type ActivityRow = Tables<'activities'>;
-
-const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-const LIGHT_TILES = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-const TILE_ATTR = '&copy; OpenStreetMap &copy; CARTO';
 
 function FitRouteBounds({ positions }: { positions: [number, number][] }) {
   const map = useMap();
@@ -97,8 +94,8 @@ export default function ActivityDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { resolved } = useTheme();
-  const tileUrl = resolved === 'dark' ? DARK_TILES : LIGHT_TILES;
-  const mapBg = resolved === 'dark' ? '#0b0f14' : '#e9ecef';
+  const basemapTheme = resolved === 'dark' ? 'dark' : 'light';
+  const mapBg = readableMapFallbackBg(basemapTheme);
 
   const [row, setRow] = useState<ActivityRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -441,7 +438,7 @@ export default function ActivityDetail() {
                 className="h-full w-full"
                 style={{ background: mapBg }}
               >
-                <TileLayer url={tileUrl} attribution={TILE_ATTR} />
+                <ReadableBasemapLayers theme={basemapTheme} />
                 <PaceHeatPolylines points={displayRoutePts} avgPaceSecPerKm={avgPace} mapTheme={mapHeatTheme} />
                 <KmMilestoneMarkers points={displayRoutePts} mapTheme={mapHeatTheme} />
                 {/* Start dot — green */}

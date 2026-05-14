@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { PageScreenHeader } from '@/components/PageScreenHeader';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -358,23 +359,24 @@ const Timer = () => {
       className="min-h-screen transition-colors duration-300"
       style={{ backgroundColor: bg }}
     >
-      <div className="mx-auto flex min-h-screen max-w-lg flex-col px-4 pb-28 pt-6">
+      <div className="mx-auto flex min-h-screen max-w-lg flex-col px-4 pb-28">
 
-        {/* Top bar */}
-        <div className="flex items-center justify-between">
-          <h1 className={`text-3xl font-extrabold tracking-tight ${fgDark ? 'text-black' : 'text-foreground'}`}>
-            Timer
-          </h1>
-          <button
-            onClick={() => setSettingsOpen(true)}
-            className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 active:scale-90 ${
-              fgDark ? 'bg-black/10 text-black' : 'border border-border/40 bg-card/80 text-foreground backdrop-blur-sm'
-            }`}
-            aria-label="Configurar"
-          >
-            <Settings className="h-5 w-5" />
-          </button>
-        </div>
+        <PageScreenHeader
+          title="Timer"
+          titleClassName={fgDark ? 'text-black' : undefined}
+          right={
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 active:scale-90 ${
+                fgDark ? 'bg-black/10 text-black' : 'border border-border/40 bg-card/80 text-foreground backdrop-blur-sm'
+              }`}
+              aria-label="Configurar"
+            >
+              <Settings className="h-5 w-5" />
+            </button>
+          }
+        />
 
         {/* Active preset chip */}
         <div className="mt-3">

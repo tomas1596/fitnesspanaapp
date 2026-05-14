@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Dumbbell } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function VerifiedAccount() {
@@ -21,9 +21,11 @@ export default function VerifiedAccount() {
         }`}
       >
         {/* Logo */}
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary">
-          <Dumbbell className="h-7 w-7 text-primary-foreground" />
-        </div>
+        <img
+          src="/android-chrome-192x192.png"
+          alt="Pana Fitness Logo"
+          className="h-20 w-20 rounded-2xl object-cover shadow-lg"
+        />
 
         {/* Icono de éxito */}
         <div className="relative flex items-center justify-center">

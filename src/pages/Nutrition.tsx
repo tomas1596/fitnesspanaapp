@@ -19,6 +19,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import HalfStarRating from '@/components/HalfStarRating';
+import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { calculateAge } from '@/lib/age';
 import { todayLocalYMD, localDayBoundsISO } from '@/lib/nutritionDay';
 
@@ -502,9 +503,9 @@ const Nutrition = () => {
   const dashOffset = C * (1 - ringPct / 100);
 
   return (
-    <div className="min-h-screen bg-background px-4 pb-24 pt-6">
+    <div className="min-h-screen bg-background px-4 pb-24">
       <div className="mx-auto max-w-lg">
-        <h1 className="mb-4 text-3xl font-extrabold tracking-tight text-foreground">Nutrición</h1>
+        <PageScreenHeader title="Nutrición" />
 
         <Tabs value={nutritionTab} onValueChange={setNutritionTab} className="w-full">
           <TabsList className="mb-5 grid h-11 w-full grid-cols-2 rounded-xl border border-border/40 bg-card/60 p-1 backdrop-blur-sm">

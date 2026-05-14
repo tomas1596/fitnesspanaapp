@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { CircleMarker, MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+import { CircleMarker, MapContainer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Bluetooth, History as HistoryIcon, Pause, Play, Square } from 'lucide-react';
@@ -17,6 +17,8 @@ import {
 } from '@/lib/runAnalysis';
 import { estimateRunCalories, estimateRunSteps } from '@/lib/calories';
 import { fmtPace, fmtTime, NRC_GREEN } from '@/lib/runFormat';
+import { ReadableBasemapLayers, readableMapFallbackBg } from '@/components/ReadableBasemapLayers';
+import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { KmMilestoneMarkers } from '@/components/KmMilestoneMarkers';
 import { PaceHeatPolylines } from '@/components/PaceHeatPolylines';
 // Sticky-notification imports disabled (re-enable before App Store launch):
@@ -38,10 +40,6 @@ type RunRow = {
 
 /** Web Bluetooth sólo existe en Chrome/Edge (no en Safari/iOS). Evaluado una vez. */
 const BT_SUPPORTED = typeof navigator !== 'undefined' && 'bluetooth' in navigator;
-
-const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-const LIGHT_TILES = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-const TILE_ATTR = '&copy; OpenStreetMap &copy; CARTO';
 
 const Recenter = ({ center }: { center: [number, number] | null }) => {
   const map = useMap();
@@ -149,8 +147,8 @@ const Cardio = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const { resolved } = useTheme();
-  const tileUrl = resolved === 'dark' ? DARK_TILES : LIGHT_TILES;
-  const mapBg = resolved === 'dark' ? '#0b0f14' : '#e9ecef';
+  const basemapTheme = resolved === 'dark' ? 'dark' : 'light';
+  const mapBg = readableMapFallbackBg(basemapTheme);
   const mapHeatTheme = resolved === 'dark' ? 'dark' : 'light';
 
   const [tab, setTab] = useState<'run' | 'history'>('run');
@@ -526,32 +524,34 @@ const Cardio = () => {
         </div>
       )}
 
-      {/* Header tabs */}
-      <div className="flex items-center justify-between px-4 pt-5">
-        <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Modo Ruta</h1>
-        <div className="flex items-center gap-1 rounded-full border border-border/40 bg-card/70 p-1 backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={() => setTab('run')}
-            className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 active:scale-95 ${
-              tab === 'run' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground/60 hover:text-foreground'
-            }`}
-            style={tab === 'run' ? { boxShadow: '0 0 10px rgba(34,197,94,0.4)' } : undefined}
-          >
-            Correr
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('history')}
-            className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 active:scale-95 ${
-              tab === 'history' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground/60 hover:text-foreground'
-            }`}
-            style={tab === 'history' ? { boxShadow: '0 0 10px rgba(34,197,94,0.4)' } : undefined}
-          >
-            <HistoryIcon className="h-3.5 w-3.5" /> Actividad
-          </button>
-        </div>
-      </div>
+      <PageScreenHeader
+        className="px-4"
+        title="Modo Ruta"
+        right={
+          <div className="flex items-center gap-1 rounded-full border border-border/40 bg-card/70 p-1 backdrop-blur-sm">
+            <button
+              type="button"
+              onClick={() => setTab('run')}
+              className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 active:scale-95 ${
+                tab === 'run' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground/60 hover:text-foreground'
+              }`}
+              style={tab === 'run' ? { boxShadow: '0 0 10px rgba(34,197,94,0.4)' } : undefined}
+            >
+              Correr
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('history')}
+              className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 active:scale-95 ${
+                tab === 'history' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground/60 hover:text-foreground'
+              }`}
+              style={tab === 'history' ? { boxShadow: '0 0 10px rgba(34,197,94,0.4)' } : undefined}
+            >
+              <HistoryIcon className="h-3.5 w-3.5" /> Actividad
+            </button>
+          </div>
+        }
+      />
 
       {tab === 'run' ? (
         <div className="relative mt-3 h-[calc(100vh-180px)] overflow-hidden">
@@ -651,7 +651,7 @@ const Cardio = () => {
                     keyboard={false}
                     style={{ width: '100%', height: '100%', background: mapBg }}
                   >
-                    <TileLayer url={tileUrl} attribution={TILE_ATTR} />
+                    <ReadableBasemapLayers theme={basemapTheme} />
                     <PaceHeatPolylines points={displayRoute} avgPaceSecPerKm={pace} mapTheme={mapHeatTheme} />
                     <KmMilestoneMarkers points={displayRoute} mapTheme={mapHeatTheme} />
                     <Marker position={position} icon={dotIcon} />
@@ -735,7 +735,7 @@ const Cardio = () => {
                 keyboard={false}
                 style={{ width: '100%', height: '100%', background: mapBg }}
               >
-                <TileLayer url={tileUrl} attribution={TILE_ATTR} />
+                <ReadableBasemapLayers theme={basemapTheme} />
                 <PaceHeatPolylines points={displayRoute} avgPaceSecPerKm={pace} mapTheme={mapHeatTheme} />
                 <KmMilestoneMarkers points={displayRoute} mapTheme={mapHeatTheme} />
                 {position && <Marker position={position} icon={dotIcon} />}
@@ -764,7 +764,7 @@ const Cardio = () => {
               onClick={handleHrFab}
               disabled={hrBtBusy || (hrBtConnected && !!hrConnRef.current)}
               title={hrBtConnected ? 'Pulsómetro vinculado' : 'Vincular pulsómetro BLE'}
-              className={`pointer-events-auto absolute right-3 top-3 z-[45] flex h-12 w-12 items-center justify-center rounded-full border shadow-lg backdrop-blur-md transition active:scale-95 disabled:opacity-60 ${
+              className={`pointer-events-auto absolute right-3 top-3 z-[45] flex h-12 w-12 items-center justify-center rounded-full border shadow-lg ring-1 ring-black/15 backdrop-blur-md transition active:scale-95 disabled:opacity-60 dark:ring-white/15 ${
                 hrBtConnected
                   ? 'border-transparent text-black'
                   : 'border-border/70 bg-background/75 text-muted-foreground'
@@ -788,8 +788,11 @@ const Cardio = () => {
               <div className="pointer-events-auto flex flex-col items-center gap-3">
                 <button
                   onClick={handleStart}
-                  className="flex h-32 w-32 items-center justify-center rounded-full text-xl font-extrabold tracking-wider text-black shadow-2xl transition active:scale-95"
-                  style={{ background: 'var(--brand-color)', boxShadow: '0 10px 40px var(--brand-glow)' }}
+                  className="flex h-32 w-32 items-center justify-center rounded-full text-xl font-extrabold tracking-wider text-black shadow-2xl ring-2 ring-black/20 transition active:scale-95 dark:ring-white/25"
+                  style={{
+                    background: 'var(--brand-color)',
+                    boxShadow: '0 10px 40px var(--brand-glow), 0 4px 14px rgba(0,0,0,0.25)',
+                  }}
                 >
                   COMENZAR
                 </button>
@@ -845,8 +848,8 @@ const Metric = ({ label, value, big, primary }: { label: string; value: string; 
 
 const RunCard = ({ run }: { run: RunRow }) => {
   const { resolved } = useTheme();
-  const tileUrl = resolved === 'dark' ? DARK_TILES : LIGHT_TILES;
-  const mapBg = resolved === 'dark' ? '#0b0f14' : '#e9ecef';
+  const basemapTheme = resolved === 'dark' ? 'dark' : 'light';
+  const mapBg = readableMapFallbackBg(basemapTheme);
   const mapHeatTheme = resolved === 'dark' ? 'dark' : 'light';
   const km = Number(run.distance_meters) / 1000;
   const date = new Date(run.started_at);
@@ -873,7 +876,7 @@ const RunCard = ({ run }: { run: RunRow }) => {
             touchZoom={false}
             style={{ width: '100%', height: '100%', background: mapBg }}
           >
-            <TileLayer url={tileUrl} attribution={TILE_ATTR} />
+            <ReadableBasemapLayers theme={basemapTheme} />
             <PaceHeatPolylines points={displayRoute} avgPaceSecPerKm={run.avg_pace_seconds_per_km} mapTheme={mapHeatTheme} />
             {/* Start dot */}
             {poly.length > 0 && (

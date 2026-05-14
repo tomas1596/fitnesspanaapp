@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import ExerciseCard from '@/components/ExerciseCard';
 import DailyReportSheet from '@/components/DailyReportSheet';
 import TemplatesSheet from '@/components/TemplatesSheet';
+import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -438,19 +439,20 @@ const Workout = () => {
   const showWorkoutUI = !showEmptyPastState;
 
   return (
-    <div className="min-h-screen bg-background px-4 pb-24 pt-6">
+    <div className="min-h-screen bg-background px-4 pb-24">
       <div className="mx-auto max-w-lg">
-        {/* Header */}
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Entrenamiento</h1>
-          <Button
-            onClick={() => setTemplatesOpen(true)}
-            variant="ghost"
-            className="h-9 rounded-xl border border-border/50 bg-card/80 px-3 text-sm font-medium text-foreground backdrop-blur-sm hover:bg-accent"
-          >
-            <Library className="mr-1.5 h-4 w-4 text-primary/60" /> Mi Biblioteca
-          </Button>
-        </div>
+        <PageScreenHeader
+          title="Entrenamiento"
+          right={
+            <Button
+              onClick={() => setTemplatesOpen(true)}
+              variant="ghost"
+              className="h-9 rounded-xl border border-border/50 bg-card/80 px-3 text-sm font-medium text-foreground backdrop-blur-sm hover:bg-accent"
+            >
+              <Library className="mr-1.5 h-4 w-4 text-primary/60" /> Mi Biblioteca
+            </Button>
+          }
+        />
 
         {/* Date selector */}
         <div className="mb-5 flex items-center justify-center rounded-2xl border border-border/40 bg-card/70 px-2 py-2 backdrop-blur-sm">

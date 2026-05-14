@@ -14,6 +14,7 @@ import {
   FileText, Heart, Sparkles, AlertTriangle, Loader2, Trash2, X, ZoomIn,
 } from 'lucide-react';
 import StepsRing from '@/components/StepsRing';
+import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { FAQBottomSheet } from '@/components/FAQBottomSheet';
 import { useTheme } from '@/hooks/useTheme';
 import { ACTIVITY_LEVEL_OPTIONS, FITNESS_GOAL_OPTIONS } from '@/lib/profileOptions';
@@ -347,27 +348,29 @@ const Profile = () => {
   const ageLabel = ageYears != null ? `${ageYears} años` : 'Completá tu fecha de nacimiento';
 
   return (
-    <div className="min-h-screen bg-background px-4 pb-24 pt-6">
+    <div className="min-h-screen bg-background px-4 pb-24">
       <div className="mx-auto max-w-lg space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-foreground">Perfil</h1>
-          <div className="w-48">
-            <Select value={theme} onValueChange={(v) => setTheme(v as 'light' | 'dark' | 'system')}>
-              <SelectTrigger className="h-10 rounded-xl border border-input bg-card text-xs font-medium text-foreground shadow-sm">
-                <SelectValue placeholder="Tema" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="light">
-                  <span className="flex items-center gap-2"><Sun className="h-3.5 w-3.5" /> Modo Día</span>
-                </SelectItem>
-                <SelectItem value="dark">
-                  <span className="flex items-center gap-2"><Moon className="h-3.5 w-3.5" /> Modo Noche</span>
-                </SelectItem>
-                <SelectItem value="system">Automático (Sistema)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+        <PageScreenHeader
+          title="Perfil"
+          right={
+            <div className="w-48">
+              <Select value={theme} onValueChange={(v) => setTheme(v as 'light' | 'dark' | 'system')}>
+                <SelectTrigger className="h-10 rounded-xl border border-input bg-card text-xs font-medium text-foreground shadow-sm">
+                  <SelectValue placeholder="Tema" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="light">
+                    <span className="flex items-center gap-2"><Sun className="h-3.5 w-3.5" /> Modo Día</span>
+                  </SelectItem>
+                  <SelectItem value="dark">
+                    <span className="flex items-center gap-2"><Moon className="h-3.5 w-3.5" /> Modo Noche</span>
+                  </SelectItem>
+                  <SelectItem value="system">Automático (Sistema)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          }
+        />
 
         <div className="rounded-2xl bg-card p-4">
           <div className="flex items-center gap-4">
