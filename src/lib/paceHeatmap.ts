@@ -1,7 +1,7 @@
 import { distM, type LatLng } from '@/lib/runAnalysis';
 
-/** Verde neón → amarillo vivo → rojo cereza (estilo carrera). */
-const RGB_GREEN: [number, number, number] = [57, 255, 20];
+/** Rosa neón → amarillo vivo → rojo cereza (estilo carrera). */
+const RGB_PINK: [number, number, number] = [255, 20, 147];
 const RGB_YELLOW: [number, number, number] = [255, 235, 59];
 const RGB_RED: [number, number, number] = [220, 20, 60];
 
@@ -27,7 +27,7 @@ function rgbToHex(r: number, g: number, b: number) {
     .join('')}`;
 }
 
-/** De verde (ritmo bajo / rápido) a rojo (ritmo alto / lento), pasando por amarillo. */
+/** De rosa (ritmo bajo / rápido) a rojo (ritmo alto / lento), pasando por amarillo. */
 export function paceToRgb(
   pace: number,
   minP: number,
@@ -40,9 +40,9 @@ export function paceToRgb(
   if (u <= 0.5) {
     const k = u * 2;
     rgb = [
-      lerp(RGB_GREEN[0], RGB_YELLOW[0], k),
-      lerp(RGB_GREEN[1], RGB_YELLOW[1], k),
-      lerp(RGB_GREEN[2], RGB_YELLOW[2], k),
+      lerp(RGB_PINK[0], RGB_YELLOW[0], k),
+      lerp(RGB_PINK[1], RGB_YELLOW[1], k),
+      lerp(RGB_PINK[2], RGB_YELLOW[2], k),
     ];
   } else {
     const k = (u - 0.5) * 2;

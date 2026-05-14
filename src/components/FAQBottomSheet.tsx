@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ChevronDown, Copy } from 'lucide-react';
+import { ChevronDown, Copy, MessageCircle } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -55,7 +55,7 @@ const FAQ_ITEMS: { question: string; answer: ReactNode }[] = [
       <>
         El pago es por transferencia directa vía Mercado Pago al alias{' '}
         <span className="inline-flex items-center gap-1 align-middle">
-          <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 font-mono text-sm font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
+          <span className="rounded-md bg-pink-500/10 px-2 py-0.5 font-mono text-sm font-semibold text-pink-700 dark:bg-pink-500/15 dark:text-pink-400">
             {MP_ALIAS}
           </span>
           <CopyAliasButton />
@@ -63,6 +63,11 @@ const FAQ_ITEMS: { question: string; answer: ReactNode }[] = [
         .
       </>
     ),
+  },
+  {
+    question: '¿Cómo confirmo mi pago?',
+    answer:
+      'Una vez realizado el pago, envía el comprobante por WhatsApp para que activemos tu cuenta de forma inmediata.',
   },
   {
     question: '¿Cuándo se activa mi cuenta?',
@@ -96,28 +101,28 @@ export function FAQBottomSheet({ open, onOpenChange }: Props) {
           'rounded-t-2xl [&>div:first-child]:mt-3 [&>div:first-child]:h-1 [&>div:first-child]:w-10 [&>div:first-child]:rounded-full [&>div:first-child]:bg-zinc-300 [&>div:first-child]:dark:bg-zinc-600',
         )}
       >
-        <DrawerHeader className="border-b border-zinc-200 px-4 pb-3 pt-0 text-left dark:border-zinc-800">
+        <DrawerHeader className="border-0 px-4 pb-2 pt-0 text-left">
           <DrawerTitle className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">Suscripción y ayuda</DrawerTitle>
           <DrawerDescription className="sr-only">
             Preguntas frecuentes sobre suscripción, pagos y cuenta.
           </DrawerDescription>
         </DrawerHeader>
 
-        <div className="overflow-y-auto overscroll-contain px-2 pb-8 pt-1">
-          <div className="space-y-1">
+        <div className="overflow-y-auto overscroll-contain px-3 pb-10 pt-1">
+          <div className="space-y-2">
             {FAQ_ITEMS.map((item, i) => {
               const isOpen = expanded === i;
               return (
                 <div
                   key={item.question}
-                  className="rounded-xl border border-zinc-200 bg-zinc-50/90 dark:border-zinc-800 dark:bg-zinc-900/50"
+                  className="overflow-hidden rounded-2xl bg-zinc-100/90 shadow-sm dark:bg-zinc-900/80"
                 >
                   <button
                     type="button"
                     onClick={() => setExpanded(isOpen ? null : i)}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-100/90 dark:text-zinc-100 dark:hover:bg-zinc-800/60"
+                    className="flex w-full items-center justify-between gap-2 px-4 py-3.5 text-left text-sm font-semibold text-zinc-900 transition-colors hover:bg-zinc-200/50 dark:text-zinc-100 dark:hover:bg-zinc-800/90"
                   >
-                    <span className="pr-2">{item.question}</span>
+                    <span className="pr-2 leading-snug">{item.question}</span>
                     <ChevronDown
                       className={cn(
                         'h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-300 dark:text-zinc-500',
@@ -132,7 +137,7 @@ export function FAQBottomSheet({ open, onOpenChange }: Props) {
                     )}
                   >
                     <div className="overflow-hidden">
-                      <div className="border-t border-zinc-200 px-3 pb-3 pt-2 text-sm leading-relaxed text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
+                      <div className="px-4 pb-3.5 pt-0 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
                         {item.answer}
                       </div>
                     </div>
@@ -141,6 +146,21 @@ export function FAQBottomSheet({ open, onOpenChange }: Props) {
               );
             })}
           </div>
+
+          <a
+            href="https://wa.me/5493388414236?text=Hola%2C%20necesito%20ayuda%20con%20Pana%20Fitness"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              'mt-6 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-bold transition active:scale-[0.99]',
+              'border-2 border-[#FF1493] bg-[#FF1493]/12 text-zinc-900 shadow-[0_0_24px_rgba(236,72,153,0.22)]',
+              'hover:bg-[#FF1493]/20 dark:text-zinc-50 dark:shadow-[0_0_28px_rgba(255,20,147,0.28)]',
+            )}
+            style={{ marginBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+          >
+            <MessageCircle className="h-5 w-5 shrink-0 text-pink-600 dark:text-[#FF1493]" aria-hidden />
+            Contacto directo
+          </a>
         </div>
       </DrawerContent>
     </Drawer>

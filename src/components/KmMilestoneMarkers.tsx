@@ -11,7 +11,7 @@ function kmDiscIcon(km: number, theme: PaceHeatTheme) {
   const bg = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.1)';
   const border = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(15,23,42,0.22)';
   const color = isDark ? '#f8fafc' : '#0f172a';
-  const shadow = isDark ? '0 0 18px rgba(57,255,20,0.45)' : '0 2px 10px rgba(0,0,0,0.14)';
+  const shadow = isDark ? '0 0 18px rgba(255,20,147,0.45)' : '0 2px 10px rgba(0,0,0,0.14)';
   const label = `${km} km`;
   const iconW = km >= 10 ? 52 : 44;
   return L.divIcon({

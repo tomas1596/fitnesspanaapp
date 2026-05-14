@@ -2,7 +2,16 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { CircleMarker, MapContainer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Bluetooth, History as HistoryIcon, Pause, Play, Square } from 'lucide-react';
+import {
+  Bluetooth,
+  Clock,
+  Footprints,
+  History as HistoryIcon,
+  Pause,
+  Play,
+  Square,
+  Zap,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,8 +25,9 @@ import {
   type LatLng,
 } from '@/lib/runAnalysis';
 import { estimateRunCalories, estimateRunSteps } from '@/lib/calories';
-import { fmtPace, fmtTime, NRC_GREEN } from '@/lib/runFormat';
+import { fmtPace, fmtTime, BRAND_COLOR } from '@/lib/runFormat';
 import { ReadableBasemapLayers, readableMapFallbackBg } from '@/components/ReadableBasemapLayers';
+import { cn } from '@/lib/utils';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { KmMilestoneMarkers } from '@/components/KmMilestoneMarkers';
 import { PaceHeatPolylines } from '@/components/PaceHeatPolylines';
@@ -535,7 +545,7 @@ const Cardio = () => {
               className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 active:scale-95 ${
                 tab === 'run' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground/60 hover:text-foreground'
               }`}
-              style={tab === 'run' ? { boxShadow: '0 0 10px rgba(34,197,94,0.4)' } : undefined}
+              style={tab === 'run' ? { boxShadow: '0 0 10px rgba(255,20,147,0.4)' } : undefined}
             >
               Correr
             </button>
@@ -545,7 +555,7 @@ const Cardio = () => {
               className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 active:scale-95 ${
                 tab === 'history' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground/60 hover:text-foreground'
               }`}
-              style={tab === 'history' ? { boxShadow: '0 0 10px rgba(34,197,94,0.4)' } : undefined}
+              style={tab === 'history' ? { boxShadow: '0 0 10px rgba(255,20,147,0.4)' } : undefined}
             >
               <HistoryIcon className="h-3.5 w-3.5" /> Actividad
             </button>
@@ -571,63 +581,80 @@ const Cardio = () => {
           {/* Active run focus screen */}
           {phase === 'active' && countdown === null && (
             <div className="absolute inset-0 z-40 flex flex-col bg-background">
-              {/* Top: Pace, BPM, Time */}
-              <div className="grid grid-cols-3 gap-2 px-4 pt-6 text-center">
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Ritmo</div>
-                  <div className="mt-1 text-2xl font-bold tabular-nums text-foreground">{fmtPace(pace)}</div>
-                </div>
-                <div className="min-h-[4.5rem]">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">PPM</div>
-                  <div className="mt-1 text-2xl font-bold tabular-nums text-foreground">
-                    {liveHeartRate != null ? liveHeartRate : '—'}
+              {/* Top: Pace, BPM, Time — glass panel */}
+              <div className="mx-3 mt-4 rounded-2xl border border-border/50 bg-background/70 px-3 py-3 shadow-lg backdrop-blur-md dark:border-white/10 dark:bg-black/45 dark:shadow-black/40">
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Ritmo</div>
+                    <div className="mt-1 text-xl font-bold tabular-nums text-foreground sm:text-2xl">{fmtPace(pace)}</div>
                   </div>
-                  {liveHeartRate == null && (
-                    <p className="mt-0.5 text-[9px] leading-tight text-muted-foreground">Sensor no vinculado</p>
-                  )}
-                </div>
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Tiempo</div>
-                  <div className="mt-1 text-2xl font-bold tabular-nums text-foreground">{fmtTime(seconds)}</div>
+                  <div className="min-h-[4.25rem]">
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground">PPM</div>
+                    <div className="mt-1 text-xl font-bold tabular-nums text-foreground sm:text-2xl">
+                      {liveHeartRate != null ? liveHeartRate : '—'}
+                    </div>
+                    {liveHeartRate == null && (
+                      <p className="mt-0.5 text-[9px] leading-tight text-muted-foreground">Sensor no vinculado</p>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Tiempo</div>
+                    <div className="mt-1 text-xl font-bold tabular-nums tracking-tight text-foreground sm:text-2xl">
+                      {fmtTime(seconds)}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Center: distance + unit (single line, running-app style) */}
-              <div className="flex min-h-0 flex-1 flex-col justify-center px-2 py-4">
-                <div className="flex w-full items-baseline justify-center gap-1.5 sm:gap-2">
-                  <span
-                    className="font-extrabold tabular-nums"
-                    style={{ color: NRC_GREEN, fontSize: 'clamp(5rem, 28vw, 10rem)', lineHeight: 0.9 }}
-                  >
-                    {km.toFixed(2).replace('.', ',')}
-                  </span>
-                  <span className="text-lg font-light tracking-wide text-muted-foreground/85 sm:text-2xl">
-                    km
-                  </span>
+              {/* Center: distance — primary focal */}
+              <div className="flex min-h-0 flex-1 flex-col justify-center px-2 py-2">
+                <div className="flex w-full flex-col items-center justify-center text-center">
+                  <div className="flex items-baseline justify-center gap-1 sm:gap-2">
+                    <span
+                      className="font-extrabold tabular-nums tracking-tight drop-shadow-sm dark:drop-shadow-[0_0_32px_rgba(255,20,147,0.35)]"
+                      style={{ color: BRAND_COLOR, fontSize: 'clamp(5.5rem, 32vw, 11rem)', lineHeight: 0.88 }}
+                    >
+                      {km.toFixed(2).replace('.', ',')}
+                    </span>
+                    <span className="text-base font-semibold uppercase tracking-[0.2em] text-muted-foreground/90 sm:text-xl">
+                      km
+                    </span>
+                  </div>
                 </div>
               </div>
 
               {/* Bottom: pause + long-press finish */}
-              <div className="flex items-center justify-center gap-6 pb-8">
-                <button
-                  onClick={handlePause}
-                  className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-2xl active:scale-95"
-                >
-                  {phase === 'active' ? <Pause className="h-9 w-9" fill="currentColor" /> : <Play className="h-9 w-9" fill="currentColor" />}
-                </button>
-                <button
-                  onPointerDown={beginHold}
-                  onPointerUp={() => endHold(false)}
-                  onPointerLeave={() => endHold(false)}
-                  className="relative h-20 w-20 overflow-hidden rounded-full text-[10px] font-extrabold text-black shadow-xl active:scale-95"
-                  style={{ background: '#FF6B35' }}
-                >
-                  <div
-                    className="absolute inset-0 bg-black/40"
-                    style={{ clipPath: `inset(0 0 ${(1 - holdProgress) * 100}% 0)` }}
-                  />
-                  <span className="relative">MANTÉN<br/>FINALIZAR</span>
-                </button>
+              <div className="flex flex-col items-center gap-3 pb-8">
+                <div className="flex items-end justify-center gap-8">
+                  <button
+                    type="button"
+                    onClick={handlePause}
+                    className="flex h-[72px] w-[72px] items-center justify-center rounded-full border-2 border-border bg-card/90 text-primary shadow-lg backdrop-blur-sm transition active:scale-95 dark:border-white/15 dark:bg-zinc-900/80"
+                    aria-label="Pausar carrera"
+                  >
+                    <Pause className="h-8 w-8 shrink-0" />
+                  </button>
+                  <button
+                    type="button"
+                    onPointerDown={beginHold}
+                    onPointerUp={() => endHold(false)}
+                    onPointerLeave={() => endHold(false)}
+                    className="relative flex h-[84px] w-[84px] flex-col items-center justify-center overflow-hidden rounded-full border-4 border-orange-400/90 bg-[#FF6B35] text-[9px] font-extrabold leading-tight text-white shadow-[0_0_28px_rgba(255,107,53,0.55),0_8px_24px_rgba(0,0,0,0.35)] transition active:scale-95"
+                    aria-label="Mantén pulsado para finalizar"
+                  >
+                    <div
+                      className="absolute inset-0 bg-black/50"
+                      style={{ clipPath: `inset(0 0 ${(1 - holdProgress) * 100}% 0)` }}
+                    />
+                    <span className="relative text-center uppercase tracking-wide">
+                      Finalizar
+                      <span className="mt-0.5 block text-[8px] font-bold text-white/95">mantén</span>
+                    </span>
+                  </button>
+                </div>
+                <p className="max-w-[14rem] text-center text-[10px] font-medium text-muted-foreground">
+                  Mantén el botón naranja hasta completar la barra para guardar la carrera
+                </p>
               </div>
             </div>
           )}
@@ -692,28 +719,33 @@ const Cardio = () => {
                   <Metric label="PPM" value={liveHeartRate != null ? String(liveHeartRate) : '—'} />
                 </div>
 
-                <div className="flex items-center justify-center gap-10">
-                  <button
-                    onPointerDown={beginHold}
-                    onPointerUp={() => endHold(false)}
-                    onPointerLeave={() => endHold(false)}
-                    className="relative h-20 w-20 overflow-hidden rounded-full bg-foreground/90 shadow-xl active:scale-95"
-                    aria-label="Mantén para finalizar"
-                  >
-                    <div
-                      className="absolute inset-0 bg-primary/70"
-                      style={{ clipPath: `inset(0 0 ${(1 - holdProgress) * 100}% 0)` }}
-                    />
-                    <Square className="relative mx-auto h-7 w-7 text-background" fill="currentColor" />
-                  </button>
-                  <button
-                    onClick={handlePause}
-                    className="flex h-20 w-20 items-center justify-center rounded-full text-black shadow-2xl active:scale-95"
-                    style={{ background: '#FF6B35' }}
-                    aria-label="Reanudar"
-                  >
-                    <Play className="h-9 w-9" fill="currentColor" />
-                  </button>
+                <div className="flex flex-col items-center gap-2.5">
+                  <div className="flex items-end justify-center gap-8">
+                    <button
+                      type="button"
+                      onPointerDown={beginHold}
+                      onPointerUp={() => endHold(false)}
+                      onPointerLeave={() => endHold(false)}
+                      className="relative flex h-[84px] w-[84px] flex-col items-center justify-center overflow-hidden rounded-full border-4 border-orange-400/90 bg-[#FF6B35] text-[9px] font-extrabold uppercase leading-tight text-white shadow-[0_0_24px_rgba(255,107,53,0.45)] transition active:scale-95"
+                      aria-label="Mantén pulsado para finalizar"
+                    >
+                      <div
+                        className="absolute inset-0 bg-black/50"
+                        style={{ clipPath: `inset(0 0 ${(1 - holdProgress) * 100}% 0)` }}
+                      />
+                      <Square className="relative h-7 w-7 text-white" fill="currentColor" />
+                      <span className="relative mt-0.5 text-[8px] font-bold tracking-wide">mantén</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePause}
+                      className="flex h-[72px] w-[72px] items-center justify-center rounded-full border-2 border-border bg-primary text-primary-foreground shadow-xl transition active:scale-95 dark:border-white/15"
+                      aria-label="Reanudar carrera"
+                    >
+                      <Play className="h-8 w-8 shrink-0" />
+                    </button>
+                  </div>
+                  <p className="text-center text-[10px] font-medium text-muted-foreground">Mantén el botón naranja para guardar y cerrar</p>
                 </div>
               </div>
             </div>
@@ -757,8 +789,8 @@ const Cardio = () => {
             )}
           </div>
 
-          {/* FAB Bluetooth (mapa): solo visible si el navegador soporta Web Bluetooth */}
-          {BT_SUPPORTED && countdown === null && (
+          {/* FAB Bluetooth (mapa): solo en reposo; oculto durante carrera activa/pausa */}
+          {BT_SUPPORTED && countdown === null && phase === 'idle' && (
             <button
               type="button"
               onClick={handleHrFab}
@@ -778,23 +810,29 @@ const Cardio = () => {
                   : undefined
               }
             >
-              <Bluetooth className="h-5 w-5" strokeWidth={2.25} />
+              <Bluetooth className="h-5 w-5 text-blue-600 dark:text-blue-400" strokeWidth={2.25} />
             </button>
           )}
 
-          {/* Idle controls floating over map */}
-          <div className="pointer-events-none absolute bottom-4 left-0 right-0 z-30 flex flex-col items-center gap-3">
+          {/* Idle: CTA principal — neón marca; glow en noche, borde nítido en día */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30">
             {phase === 'idle' && (
-              <div className="pointer-events-auto flex flex-col items-center gap-3">
+              <div className="pointer-events-auto flex w-full flex-col items-center px-5 pb-5 pt-14">
                 <button
+                  type="button"
                   onClick={handleStart}
-                  className="flex h-32 w-32 items-center justify-center rounded-full text-xl font-extrabold tracking-wider text-black shadow-2xl ring-2 ring-black/20 transition active:scale-95 dark:ring-white/25"
-                  style={{
-                    background: 'var(--brand-color)',
-                    boxShadow: '0 10px 40px var(--brand-glow), 0 4px 14px rgba(0,0,0,0.25)',
-                  }}
+                  className={cn(
+                    'flex h-36 w-36 shrink-0 flex-col items-center justify-center rounded-full border-2 border-transparent text-center',
+                    'bg-[#FF1493] text-zinc-950 transition duration-200 active:scale-[0.96]',
+                    'hover:bg-[#FF4DA6]',
+                    resolved === 'dark'
+                      ? 'shadow-[0_0_16px_rgba(255,20,147,0.85),0_0_32px_rgba(255,20,147,0.45),0_10px_28px_rgba(0,0,0,0.5)]'
+                      : 'border-pink-500 shadow-sm',
+                  )}
                 >
-                  COMENZAR
+                  <span className="max-w-[94%] px-1 text-[10px] font-black uppercase leading-snug tracking-[0.14em] text-zinc-950">
+                    <span className="block">COMENZAR</span>
+                  </span>
                 </button>
               </div>
             )}
@@ -802,11 +840,34 @@ const Cardio = () => {
         </div>
       ) : (
         <div className="px-4 pt-4">
-          <div className="rounded-2xl border border-border/40 bg-card/80 p-5 text-center backdrop-blur-sm">
+          <div
+            className={cn(
+              'rounded-2xl border bg-card/80 p-5 text-center backdrop-blur-sm',
+              resolved === 'dark'
+                ? 'border-pink-500/30 shadow-[0_0_40px_rgba(236,72,153,0.15)]'
+                : 'border-pink-600/25 ring-1 ring-pink-500/30',
+            )}
+          >
             <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">Km del mes</div>
-            <div className="text-6xl font-extrabold tabular-nums text-primary"
-              style={{ textShadow: '0 0 20px rgba(34,197,94,0.3)' }}>
-              {monthStats.km.toFixed(2)}
+            <div className="mt-1 flex items-baseline justify-center gap-1.5">
+              <span
+                className={cn(
+                  'text-5xl font-extrabold tabular-nums tracking-tight sm:text-6xl',
+                  resolved === 'dark'
+                    ? 'text-pink-400 [text-shadow:0_0_22px_rgba(244,114,182,0.5)]'
+                    : 'text-pink-600',
+                )}
+              >
+                {monthStats.km.toFixed(2).replace('.', ',')}
+              </span>
+              <span
+                className={cn(
+                  'text-lg font-bold uppercase tracking-wider sm:text-xl',
+                  resolved === 'dark' ? 'text-pink-400/80' : 'text-pink-600/90',
+                )}
+              >
+                km
+              </span>
             </div>
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2">
@@ -883,7 +944,7 @@ const RunCard = ({ run }: { run: RunRow }) => {
               <CircleMarker
                 center={poly[0]}
                 radius={5}
-                pathOptions={{ fillColor: '#16a34a', color: '#ffffff', weight: 2, fillOpacity: 1 }}
+                pathOptions={{ fillColor: '#FF1493', color: '#ffffff', weight: 2, fillOpacity: 1 }}
               />
             )}
             {/* End dot */}
@@ -899,16 +960,23 @@ const RunCard = ({ run }: { run: RunRow }) => {
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Sin ruta</div>
         )}
       </div>
-      <div className="flex items-center justify-between p-3">
-        <div>
-          <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
-            {date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} · {date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-          </div>
-          <div className="text-2xl font-extrabold tabular-nums text-primary">{km.toFixed(2)} km</div>
-        </div>
-        <div className="text-right">
-          <div className="text-xs text-muted-foreground">{fmtTime(run.duration_seconds)}</div>
-          <div className="text-xs text-muted-foreground">{fmtPace(run.avg_pace_seconds_per_km)} /km</div>
+      <div className="border-t border-border/40 px-3 py-2.5">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs">
+          <span className="inline-flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+            <Footprints className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+            <span className="font-semibold tabular-nums">{km.toFixed(2).replace('.', ',')} km</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+            <Zap className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+            <span className="tabular-nums">{fmtPace(run.avg_pace_seconds_per_km)} /km</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+            <Clock className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+            <span className="tabular-nums">
+              {date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} ·{' '}
+              {date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </span>
         </div>
       </div>
     </Link>

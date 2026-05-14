@@ -103,6 +103,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          portion_unit?: string
           user_id?: string
         }
         Relationships: []

@@ -420,7 +420,7 @@ const Workout = () => {
                   'flex h-9 w-9 items-center justify-center rounded-full text-sm transition-colors',
                   isFuture && 'text-muted-foreground/30',
                   !isFuture && !hasData && !isSel && 'text-foreground hover:bg-accent',
-                  hasData && !isSel && 'bg-primary text-primary-foreground font-semibold',
+                  hasData && !isSel && 'bg-pink-500/15 font-semibold text-pink-800 dark:bg-pink-500/20 dark:text-pink-300',
                   isSel && 'ring-2 ring-primary ring-offset-2 ring-offset-card',
                   isSel && !hasData && 'text-foreground',
                 )}
@@ -578,7 +578,7 @@ const Workout = () => {
                 <Button
                   onClick={confirmAddExercise}
                   disabled={!newExName.trim() || !newExGroup}
-                  className="h-12 w-full rounded-xl font-semibold"
+                  className="h-12 w-full rounded-xl border-0 bg-pink-500 font-semibold text-white shadow-none hover:bg-pink-600"
                 >
                   Confirmar
                 </Button>
@@ -587,12 +587,9 @@ const Workout = () => {
               (isToday || enableEmptyDay || exercises.length > 0) && (
                 <Button
                   onClick={() => setAddingExercise(true)}
-                  className="h-14 w-full rounded-2xl text-base font-bold tracking-tight"
-                  style={{
-                    boxShadow: '0 0 20px rgba(34,197,94,0.35), 0 4px 16px rgba(0,0,0,0.2)',
-                  }}
+                  className="h-14 w-full rounded-2xl border-0 bg-pink-500/10 text-base font-bold tracking-tight text-pink-700 shadow-none transition-colors hover:bg-pink-500/20 dark:bg-pink-500/20 dark:text-pink-400 dark:hover:bg-pink-500/30"
                 >
-                  <Plus className="mr-2 h-5 w-5" /> Agregar Ejercicio
+                  <Plus className="mr-2 h-5 w-5" strokeWidth={2} /> Agregar ejercicio
                 </Button>
               )
             )}

@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
+import { useTheme } from '@/hooks/useTheme';
+import { cn } from '@/lib/utils';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -180,7 +182,11 @@ const SOUND_OPTIONS: { id: SoundOption; label: string; emoji: string }[] = [
 
 // ── Component ────────────────────────────────────────────────────────────────
 
+const timerInputClass =
+  'rounded-xl border-zinc-200 bg-zinc-100 text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-pink-500/40 dark:border-white/10 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500';
+
 const Timer = () => {
+  const { resolved } = useTheme();
   const [presets, setPresets]             = useState<Preset[]>(loadPresets);
   const [activePresetId, setActivePresetId] = useState<string>(presets[0]?.id ?? 'default');
   const active = useMemo(
@@ -390,12 +396,14 @@ const Timer = () => {
         {/* Giant clock */}
         <div className="flex flex-1 flex-col items-center justify-center">
           <div
-            className={`text-center font-bold tabular-nums leading-none tracking-tight ${
+            className={`text-center font-bold leading-none tracking-tight ${
               fgDark ? 'text-black' : 'text-foreground'
             }`}
             style={{ fontSize: 'clamp(7rem, 36vw, 12rem)' }}
           >
-            {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+            <span className="tabular-nums">{String(mins).padStart(2, '0')}</span>
+            <span className="tabular-nums">:</span>
+            <span className="tabular-nums">{String(secs).padStart(2, '0')}</span>
           </div>
 
           {/* Round counter */}
@@ -406,63 +414,87 @@ const Timer = () => {
           </div>
         </div>
 
-        {/* Controls */}
-        <div className="flex items-center justify-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={reset}
-            className={`h-14 w-14 rounded-2xl transition-all duration-300 active:scale-90 ${
-              fgDark ? 'bg-black/10 text-black hover:bg-black/20' : 'border border-border/40 bg-card/80 text-foreground backdrop-blur-sm hover:bg-accent'
-            }`}
-          >
-            <RotateCcw className="h-6 w-6" />
-          </Button>
-
+        {/* Controls — circular, espaciado tipo Modo Ruta */}
+        <div className="flex items-center justify-center gap-6 pb-2">
           <button
-            onClick={isRunning ? pause : start}
-            className={`flex h-20 w-20 items-center justify-center rounded-full transition-all duration-300 active:scale-95 ${
-              fgDark ? 'bg-black text-white shadow-lg' : 'bg-primary text-primary-foreground'
-            }`}
-            style={!fgDark ? { boxShadow: '0 0 24px rgba(34,197,94,0.5), 0 4px 20px rgba(0,0,0,0.25)' } : undefined}
-            aria-label={isRunning ? 'Pausar' : 'Iniciar'}
+            type="button"
+            onClick={reset}
+            className={cn(
+              'flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-300 active:scale-95',
+              fgDark
+                ? 'border-black/25 bg-black/15 text-black shadow-lg shadow-black/10 hover:bg-black/25'
+                : 'border-border/50 bg-white/90 text-zinc-900 shadow-md shadow-black/8 backdrop-blur-sm hover:bg-white dark:bg-zinc-800/90 dark:text-zinc-50',
+            )}
+            aria-label="Reiniciar"
           >
-            {isRunning ? <Pause className="h-9 w-9" /> : <Play className="ml-1 h-9 w-9" />}
+            <RotateCcw className="h-7 w-7" strokeWidth={2.25} />
           </button>
 
-          <div className="h-14 w-14" />
+          <button
+            type="button"
+            onClick={isRunning ? pause : start}
+            className={cn(
+              'flex h-[5.5rem] w-[5.5rem] shrink-0 items-center justify-center rounded-full transition-all duration-300 active:scale-[0.96]',
+              fgDark
+                ? 'bg-zinc-950 text-white shadow-[0_10px_32px_rgba(0,0,0,0.45)] ring-2 ring-black/20'
+                : resolved === 'dark'
+                  ? 'bg-[#FF1493] text-zinc-950 shadow-[0_0_36px_rgba(255,20,147,0.55),0_10px_28px_rgba(0,0,0,0.5)] ring-2 ring-pink-400/45 hover:bg-[#FF4DA6]'
+                  : 'bg-[#FF1493] text-zinc-950 shadow-sm ring-0 hover:bg-[#FF4DA6]',
+            )}
+            aria-label={isRunning ? 'Pausar' : 'Iniciar'}
+          >
+            {isRunning ? <Pause className="h-10 w-10" strokeWidth={2.5} /> : <Play className="ml-1 h-10 w-10" strokeWidth={2.5} />}
+          </button>
+
+          <div className="h-16 w-16 shrink-0" aria-hidden />
         </div>
       </div>
 
       {/* ── Settings Dialog (timer list + sound picker) ───────────────────── */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto border border-white/10 bg-zinc-900/95 backdrop-blur-xl">
+        <DialogContent
+          className={cn(
+            'max-h-[85vh] overflow-y-auto border-zinc-200/80 bg-white text-zinc-900 shadow-xl',
+            'dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100',
+            'sm:rounded-2xl',
+          )}
+        >
           <DialogHeader>
-            <DialogTitle className="text-xl font-extrabold tracking-tight">Temporizadores</DialogTitle>
+            <DialogTitle className="text-xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100">
+              Temporizadores
+            </DialogTitle>
           </DialogHeader>
 
           {/* Sound selector */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+          <div className="rounded-2xl border border-zinc-200/80 bg-zinc-100/90 p-3 dark:border-white/10 dark:bg-zinc-800/60">
             <div className="mb-2 flex items-center gap-2">
-              <Volume2 className="h-4 w-4 text-primary/70" />
-              <p className="text-sm font-semibold text-foreground">Sonido de alerta</p>
+              <Volume2 className="h-4 w-4 text-pink-600 dark:text-[#FF1493]" />
+              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Sonido de alerta</p>
             </div>
             <div className="flex gap-2">
-              {SOUND_OPTIONS.map(({ id, label, emoji }) => (
-                <button
-                  key={id}
-                  onClick={() => handleSoundChange(id)}
-                  className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-2.5 text-xs font-semibold transition-all duration-300 active:scale-95 ${
-                    selectedSound === id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-white/5 text-secondary-foreground hover:bg-white/10'
-                  }`}
-                  style={selectedSound === id ? { boxShadow: '0 0 12px rgba(34,197,94,0.35)' } : undefined}
-                >
-                  <span className="text-lg leading-none">{emoji}</span>
-                  <span className="leading-tight">{label}</span>
-                </button>
-              ))}
+              {SOUND_OPTIONS.map(({ id, label, emoji }) => {
+                const sel = selectedSound === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => handleSoundChange(id)}
+                    className={cn(
+                      'flex flex-1 flex-col items-center gap-1 rounded-xl border border-transparent bg-white/90 py-2.5 text-xs font-semibold transition-all duration-300 active:scale-95',
+                      'dark:bg-zinc-900/80',
+                      sel &&
+                        (resolved === 'dark'
+                          ? 'border-2 border-[#FF1493] bg-pink-500/15 text-zinc-100 shadow-[0_0_22px_rgba(255,20,147,0.45)]'
+                          : 'border-2 border-pink-500 bg-pink-500/10 text-zinc-900 shadow-sm'),
+                      !sel &&
+                        'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800/80',
+                    )}
+                  >
+                    <span className="text-lg leading-none">{emoji}</span>
+                    <span className="leading-tight">{label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -471,33 +503,58 @@ const Timer = () => {
             {presets.map(p => (
               <div
                 key={p.id}
-                className={`flex items-center justify-between rounded-xl border p-3 transition-all duration-200 ${
-                  p.id === activePresetId ? 'border-primary/50 bg-primary/8' : 'border-white/8 bg-white/5'
-                }`}
+                className={cn(
+                  'flex items-center justify-between rounded-xl border border-zinc-200/80 px-3 py-2.5 transition-all duration-200',
+                  'dark:border-white/10',
+                  p.id === activePresetId
+                    ? 'bg-pink-500/10 dark:bg-pink-500/15'
+                    : 'bg-zinc-50/95 dark:bg-zinc-800/50',
+                )}
               >
                 <button
-                  onClick={() => { setActivePresetId(p.id); setSettingsOpen(false); reset(); }}
-                  className="flex-1 text-left"
+                  type="button"
+                  onClick={() => {
+                    setActivePresetId(p.id);
+                    setSettingsOpen(false);
+                    reset();
+                  }}
+                  className="min-w-0 flex-1 text-left"
                 >
-                  <div className="font-semibold text-foreground">{p.name}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="font-semibold text-zinc-900 dark:text-zinc-100">{p.name}</div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
                     Prep {p.prep}s · Trabajo {p.work}s · Descanso {p.rest}s · {p.rounds} rondas
                   </div>
                 </button>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditing({ ...p })}>
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg text-zinc-500 hover:bg-zinc-200/80 hover:text-zinc-800 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
+                    onClick={() => setEditing({ ...p })}
+                    aria-label="Editar temporizador"
+                  >
                     <Settings className="h-4 w-4" />
                   </Button>
                   {presets.length > 1 && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deletePreset(p.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-lg text-zinc-400 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+                      onClick={() => deletePreset(p.id)}
+                      aria-label="Eliminar temporizador"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
                     </Button>
                   )}
                 </div>
               </div>
             ))}
 
-            <Button onClick={openNewPreset} variant="outline" className="w-full">
+            <Button
+              type="button"
+              onClick={openNewPreset}
+              className="mt-1 h-12 w-full rounded-xl border-0 bg-[#FF1493] px-4 py-3 text-base font-bold text-zinc-950 shadow-md shadow-pink-500/20 transition hover:bg-[#FF4DA6] hover:shadow-lg hover:shadow-pink-500/30 active:scale-[0.98] dark:text-black"
+            >
               <Plus className="mr-2 h-4 w-4" /> Añadir nuevo temporizador
             </Button>
           </div>
@@ -506,15 +563,21 @@ const Timer = () => {
 
       {/* ── Edit Preset Dialog ───────────────────────────────────────────────── */}
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent>
+        <DialogContent
+          className={cn(
+            'border-zinc-200/80 bg-white text-zinc-900 shadow-xl dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100',
+            'sm:rounded-2xl',
+          )}
+        >
           <DialogHeader>
-            <DialogTitle>Configurar temporizador</DialogTitle>
+            <DialogTitle className="text-zinc-900 dark:text-zinc-100">Configurar temporizador</DialogTitle>
           </DialogHeader>
           {editing && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
-                <Label>Nombre</Label>
+                <Label className="text-zinc-600 dark:text-zinc-400">Nombre</Label>
                 <Input
+                  className={cn('mt-1.5', timerInputClass)}
                   value={editing.name}
                   onChange={e => setEditing({ ...editing, name: e.target.value })}
                   placeholder="Ej: Soga HIIT"
@@ -522,31 +585,60 @@ const Timer = () => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Preparación (s)</Label>
-                  <Input type="number" min={0} value={editing.prep}
-                    onChange={e => setEditing({ ...editing, prep: Math.max(0, +e.target.value || 0) })} />
+                  <Label className="text-zinc-600 dark:text-zinc-400">Preparación (s)</Label>
+                  <Input
+                    className={cn('mt-1.5', timerInputClass)}
+                    type="number"
+                    min={0}
+                    value={editing.prep}
+                    onChange={e => setEditing({ ...editing, prep: Math.max(0, +e.target.value || 0) })}
+                  />
                 </div>
                 <div>
-                  <Label>Trabajo (s)</Label>
-                  <Input type="number" min={1} value={editing.work}
-                    onChange={e => setEditing({ ...editing, work: Math.max(1, +e.target.value || 1) })} />
+                  <Label className="text-zinc-600 dark:text-zinc-400">Trabajo (s)</Label>
+                  <Input
+                    className={cn('mt-1.5', timerInputClass)}
+                    type="number"
+                    min={1}
+                    value={editing.work}
+                    onChange={e => setEditing({ ...editing, work: Math.max(1, +e.target.value || 1) })}
+                  />
                 </div>
                 <div>
-                  <Label>Descanso (s)</Label>
-                  <Input type="number" min={0} value={editing.rest}
-                    onChange={e => setEditing({ ...editing, rest: Math.max(0, +e.target.value || 0) })} />
+                  <Label className="text-zinc-600 dark:text-zinc-400">Descanso (s)</Label>
+                  <Input
+                    className={cn('mt-1.5', timerInputClass)}
+                    type="number"
+                    min={0}
+                    value={editing.rest}
+                    onChange={e => setEditing({ ...editing, rest: Math.max(0, +e.target.value || 0) })}
+                  />
                 </div>
                 <div>
-                  <Label>Rondas</Label>
-                  <Input type="number" min={1} value={editing.rounds}
-                    onChange={e => setEditing({ ...editing, rounds: Math.max(1, +e.target.value || 1) })} />
+                  <Label className="text-zinc-600 dark:text-zinc-400">Rondas</Label>
+                  <Input
+                    className={cn('mt-1.5', timerInputClass)}
+                    type="number"
+                    min={1}
+                    value={editing.rounds}
+                    onChange={e => setEditing({ ...editing, rounds: Math.max(1, +e.target.value || 1) })}
+                  />
                 </div>
               </div>
               <div className="flex gap-2 pt-2">
-                <Button variant="ghost" onClick={() => setEditing(null)} className="flex-1">
+                <Button
+                  variant="ghost"
+                  onClick={() => setEditing(null)}
+                  className="flex-1 rounded-xl text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
                   <X className="mr-2 h-4 w-4" /> Cancelar
                 </Button>
-                <Button onClick={savePreset} className="flex-1">Guardar</Button>
+                <Button
+                  onClick={savePreset}
+                  className="flex-1 rounded-xl border-0 bg-[#FF1493] font-bold text-zinc-950 shadow-md shadow-pink-500/20 hover:bg-[#FF4DA6] dark:text-black"
+                >
+                  Guardar
+                </Button>
               </div>
             </div>
           )}

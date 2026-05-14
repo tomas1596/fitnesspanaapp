@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, createContext, useContext } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -41,6 +41,8 @@ interface AuthContextType {
   /** true hasta conocer is_admin del usuario actual (evita redirigir admins por un frame). */
   isAdminLoading: boolean;
   isAdmin: boolean;
+  /** Vuelve a leer `profiles.is_admin` (p. ej. tras cambiar rol desde el panel admin). */
+  refreshIsAdmin: () => Promise<void>;
   signUp: (
     email: string,
     password: string,
@@ -87,22 +89,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (!user) return;
-
-    let active = true;
-    (async () => {
-      const admin = await fetchIsAdmin(user.id);
-      if (active) {
-        setIsAdmin(admin);
-        setIsAdminLoading(false);
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
+  const refreshIsAdmin = useCallback(async () => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+    setIsAdminLoading(true);
+    const admin = await fetchIsAdmin(user.id);
+    setIsAdmin(admin);
+    setIsAdminLoading(false);
   }, [user]);
+
+  useEffect(() => {
+    void refreshIsAdmin();
+  }, [refreshIsAdmin]);
 
   const signUp = async (email: string, password: string, identity?: SignUpIdentity) => {
     const { error } = await supabase.auth.signUp({
@@ -145,6 +145,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         loading,
         isAdminLoading,
         isAdmin,
+        refreshIsAdmin,
         signUp,
         signIn,
         signOut,

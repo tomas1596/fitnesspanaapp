@@ -4,17 +4,17 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Dumbbell, Utensils, Droplet, TrendingUp, ChevronDown, Flame, Footprints, Sun, Sunset, Cookie, Moon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import StarDisplay from '@/components/StarDisplay';
+import CaloriesRing from '@/components/CaloriesRing';
 import { calculateAge } from '@/lib/age';
 import { localDayBoundsISO } from '@/lib/nutritionDay';
 
-type MealGroupKey = 'desayuno' | 'almuerzo' | 'cena' | 'snack';
+type MealGroupKey = 'desayuno' | 'almuerzo' | 'cena' | 'merienda';
 
 const LEGACY_MEAL_TO_GROUP: Record<string, MealGroupKey> = {
   breakfast: 'desayuno',
   lunch: 'almuerzo',
   dinner: 'cena',
-  snack: 'snack',
+  merienda: 'merienda',
   desayuno: 'desayuno',
   almuerzo: 'almuerzo',
   cena: 'cena',
@@ -101,7 +101,14 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises }: DailyReportShee
     });
 
     supabase.from('recovery_logs').select('sleep_quality, energy_level').eq('user_id', user.id).eq('log_date', dateStr).maybeSingle().then(({ data }) => {
-      setRecovery({ sleep: Number(data?.sleep_quality) || 0, energy: Number(data?.energy_level) || 0 });
+      if (data) {
+        setRecovery({
+          sleep: Number(data.sleep_quality) || 0,
+          energy: Number(data.energy_level) || 0,
+        });
+      } else {
+        setRecovery({ sleep: 0, energy: 0 });
+      }
     });
 
     supabase.from('step_logs').select('steps').eq('user_id', user.id).eq('log_date', dateStr).maybeSingle().then(({ data }) => {
@@ -126,12 +133,12 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises }: DailyReportShee
           </div>
           <div className="mb-3 grid grid-cols-2 gap-2 text-center">
             <div className="rounded-xl bg-accent p-3">
-              <p className="text-lg font-bold text-foreground">{exercises.length}</p>
-              <p className="text-[10px] text-muted-foreground">Ejercicios</p>
+              <p className="text-xl font-bold tabular-nums text-foreground">{exercises.length}</p>
+              <p className="mt-1 text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Ejercicios</p>
             </div>
             <div className="rounded-xl bg-accent p-3">
-              <p className="text-lg font-bold text-foreground">{totalSets}</p>
-              <p className="text-[10px] text-muted-foreground">Series</p>
+              <p className="text-xl font-bold tabular-nums text-foreground">{totalSets}</p>
+              <p className="mt-1 text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Series</p>
             </div>
           </div>
           {exercises.length > 0 ? (
@@ -166,37 +173,52 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises }: DailyReportShee
             <Utensils className="h-4 w-4 text-primary" />
             <h4 className="text-sm font-semibold text-foreground">Nutrición</h4>
           </div>
-          <div className="mb-3 grid grid-cols-2 gap-2">
-            <div className="rounded-xl bg-accent p-3">
-              <p className="text-xs text-muted-foreground">Calorías</p>
-              <p className="text-lg font-bold text-foreground">{calories.total}{calories.goal ? <span className="text-xs text-muted-foreground"> / {calories.goal}</span> : null}</p>
-            </div>
-            <div className="rounded-xl bg-accent p-3">
-              <p className="text-xs text-muted-foreground">Proteínas</p>
-              <p className="text-lg font-bold text-foreground">{calories.protein}g{calories.proteinGoal ? <span className="text-xs text-muted-foreground"> / {calories.proteinGoal}g</span> : null}</p>
-            </div>
-            <div className="rounded-xl bg-accent p-3">
-              <p className="text-xs text-muted-foreground">Carbos</p>
-              <p className="text-lg font-bold text-foreground">{calories.carbs}g</p>
-            </div>
-            <div className="rounded-xl bg-accent p-3">
-              <p className="text-xs text-muted-foreground">Grasas</p>
-              <p className="text-lg font-bold text-foreground">{calories.fat}g</p>
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center">
+            <CaloriesRing consumed={calories.total} goal={calories.goal} size={92} />
+            <div className="min-w-0 flex-1 space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Calorías</p>
+              <p className="text-xs text-muted-foreground">Consumidas vs. meta diaria</p>
             </div>
           </div>
-          <Collapsible open={foodsOpen} onOpenChange={setFoodsOpen}>
-            <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl bg-accent px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent/80">
-              <span>Ver comidas consumidas{foods.length > 0 && <span className="ml-1 text-xs text-muted-foreground">({foods.length})</span>}</span>
-              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${foodsOpen ? 'rotate-180' : ''}`} />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-accent p-3">
+              <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Proteínas</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-foreground">
+                {calories.protein}g
+                {calories.proteinGoal ? <span className="text-xs font-normal text-muted-foreground"> / {calories.proteinGoal}g</span> : null}
+              </p>
+            </div>
+            <div className="rounded-xl bg-accent p-3">
+              <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Carbos</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-foreground">{calories.carbs}g</p>
+            </div>
+            <div className="rounded-xl bg-accent p-3 sm:col-span-2">
+              <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Grasas</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-foreground">{calories.fat}g</p>
+            </div>
+          </div>
+          <div className="mt-6">
+            <Collapsible open={foodsOpen} onOpenChange={setFoodsOpen}>
+              <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 rounded-xl bg-zinc-100 px-4 py-3.5 text-left text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-200/90 dark:bg-zinc-800/50 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                <span className="min-w-0 flex-1 leading-snug">
+                  Ver comidas consumidas
+                  {foods.length > 0 && (
+                    <span className="ml-1.5 text-xs font-normal text-zinc-500 dark:text-zinc-400">({foods.length})</span>
+                  )}
+                </span>
+                <ChevronDown
+                  className={`h-5 w-5 shrink-0 text-zinc-500 transition-transform dark:text-zinc-400 ${foodsOpen ? 'rotate-180' : ''}`}
+                  aria-hidden
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2 space-y-3">
               {foods.length === 0 ? (
                 <p className="py-2 text-center text-xs text-muted-foreground">Sin comidas registradas</p>
               ) : (
                 ([
                   { key: 'desayuno' as const, label: 'Desayuno', Icon: Sun },
                   { key: 'almuerzo' as const, label: 'Almuerzo', Icon: Sunset },
-                  { key: 'snack' as const, label: 'Snack', Icon: Cookie },
+                  { key: 'merienda' as const, label: 'Merienda', Icon: Cookie },
                   { key: 'cena' as const, label: 'Cena', Icon: Moon },
                 ] as const).map(({ key, label, Icon }) => {
                   const items = foods.filter((f) => f.mealKey === key);
@@ -225,32 +247,28 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises }: DailyReportShee
               )}
             </CollapsibleContent>
           </Collapsible>
+          </div>
         </div>
 
         {/* Hidratación + Recovery */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-3">
           <div className="rounded-2xl bg-card p-4">
             <div className="mb-2 flex items-center gap-2">
               <Droplet className="h-4 w-4 text-primary" />
               <h4 className="text-sm font-semibold text-foreground">Hidratación</h4>
             </div>
-            <p className="text-2xl font-bold text-foreground">{glasses}</p>
-            <p className="text-[10px] text-muted-foreground">vasos · {(glasses * 0.25).toFixed(2)} L</p>
+            <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Vasos</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{glasses}</p>
+            <p className="text-[10px] text-muted-foreground">{(glasses * 0.25).toFixed(2)} L</p>
           </div>
           <div className="rounded-2xl bg-card p-4">
-            <div className="mb-2 flex items-center gap-2">
+            <div className="mb-3 flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-primary" />
               <h4 className="text-sm font-semibold text-foreground">Descanso</h4>
             </div>
-            <div className="space-y-1">
-              <div>
-                <p className="text-[10px] text-muted-foreground">Sueño</p>
-                <StarDisplay value={recovery.sleep} />
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground">Energía</p>
-                <StarDisplay value={recovery.energy} />
-              </div>
+            <div className="space-y-5">
+              <RecoveryReadOnlyRow label="Calidad de sueño" value={recovery.sleep} />
+              <RecoveryReadOnlyRow label="Nivel de energía" value={recovery.energy} />
             </div>
           </div>
         </div>
@@ -262,13 +280,36 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises }: DailyReportShee
             <h4 className="text-sm font-semibold text-foreground">Pasos</h4>
           </div>
           <div className="flex items-baseline justify-between">
-            <p className="text-2xl font-bold text-foreground">{steps.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground">Meta: {stepGoal.toLocaleString()}</p>
+            <p className="text-2xl font-bold tabular-nums text-foreground">{steps.toLocaleString()}</p>
+            <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Meta: {stepGoal.toLocaleString()}</p>
           </div>
         </div>
       </SheetContent>
     </Sheet>
   );
 };
+
+function RecoveryReadOnlyRow({ label, value }: { label: string; value: number }) {
+  const registered = value > 0;
+  const score = registered ? Math.min(5, Math.max(1, Math.round(value))) : null;
+
+  return (
+    <div>
+      <p className="mb-2 text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{label}</p>
+      {!registered ? (
+        <p className="text-sm italic text-zinc-500 dark:text-zinc-400">No registrado</p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label={`${label}: ${score} de 5`}>
+          <div
+            className="inline-flex min-h-[2.75rem] min-w-[2.75rem] select-none items-center justify-center rounded-full bg-pink-500 px-5 py-2 text-2xl font-bold tabular-nums text-white"
+          >
+            {score}
+          </div>
+          <span className="text-xl font-medium tabular-nums text-zinc-500 dark:text-zinc-400">/ 5</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default DailyReportSheet;

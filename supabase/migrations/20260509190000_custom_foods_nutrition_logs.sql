@@ -40,7 +40,7 @@ CREATE TABLE public.nutrition_logs (
   protein NUMERIC NOT NULL DEFAULT 0,
   carbs NUMERIC NOT NULL DEFAULT 0,
   fat NUMERIC NOT NULL DEFAULT 0,
-  meal_type TEXT NOT NULL CHECK (meal_type IN ('desayuno', 'almuerzo', 'cena', 'snack')),
+  meal_type TEXT NOT NULL CHECK (meal_type IN ('desayuno', 'almuerzo', 'cena', 'merienda')),
   quantity_multiplier NUMERIC NOT NULL DEFAULT 1,
   consumed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );

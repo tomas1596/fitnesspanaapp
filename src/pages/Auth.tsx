@@ -4,14 +4,11 @@ import { useTheme } from '@/hooks/useTheme';
 import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { ThemeSegmentedControl } from '@/components/ThemeSegmentedControl';
 import { cn } from '@/lib/utils';
+import { passwordMeetsPolicy } from '@/lib/passwordPolicy';
+import { PasswordRequirementsList } from '@/components/PasswordRequirementsList';
+import { Eye, EyeOff } from 'lucide-react';
 
 const DOB_RANGE_ERROR = 'Debes tener entre 10 y 100 años para usar Pana Fitness';
 const DOB_REQUIRED_ERROR = 'Seleccioná tu fecha de nacimiento.';
@@ -89,34 +86,21 @@ function useAuthStyles(isDark: boolean) {
     : 'border border-zinc-200 bg-white shadow-sm';
 
   const inputCls = [
-    'h-14 rounded-xl text-sm transition-all duration-200',
+    'h-14 rounded-xl border text-sm transition-all duration-200',
     'focus-visible:ring-0 focus-visible:ring-offset-0',
-    'focus-visible:border-primary',
+    'focus-visible:border-pink-500',
     isDark
-      ? 'border border-white/10 bg-white/8 text-white placeholder:text-zinc-500 caret-primary'
-      : 'border border-zinc-300 bg-white text-zinc-900 placeholder:text-zinc-500 caret-primary',
+      ? 'border-white/10 bg-zinc-800/50 text-white placeholder:text-zinc-400 caret-pink-400'
+      : 'border-zinc-200 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 caret-pink-600',
   ].join(' ');
 
-  const selectTriggerCls = [
-    'h-14 rounded-xl text-sm transition-all duration-200 focus:ring-0 focus:ring-offset-0',
-    isDark
-      ? 'border border-white/10 bg-white/8 text-white'
-      : 'border border-zinc-300 bg-white text-zinc-900',
-  ].join(' ');
-
-  const selectContentCls = isDark
-    ? 'border-white/10 bg-zinc-900 text-white'
-    : 'border-zinc-200 bg-white text-zinc-900';
-
-  const selectItemCls = isDark
-    ? 'cursor-pointer text-white focus:bg-white/10 focus:text-white'
-    : 'cursor-pointer text-zinc-900 focus:bg-zinc-100 focus:text-zinc-900';
+  const genderPillTrack = isDark
+    ? 'border-white/10 bg-zinc-800/40'
+    : 'border-zinc-200 bg-zinc-100/90';
 
   const toggleTextCls = isDark
     ? 'text-zinc-400 hover:text-zinc-200'
     : 'text-zinc-600 hover:text-zinc-900';
-
-  const btnTextCls = isDark ? 'text-primary-foreground' : 'text-black';
 
   return {
     pageBg,
@@ -124,11 +108,8 @@ function useAuthStyles(isDark: boolean) {
     subtitleColor,
     card,
     inputCls,
-    selectTriggerCls,
-    selectContentCls,
-    selectItemCls,
+    genderPillTrack,
     toggleTextCls,
-    btnTextCls,
   };
 }
 
@@ -136,13 +117,17 @@ function useAuthStyles(isDark: boolean) {
 
 const Auth = () => {
   const { user, loading, signIn, signUp } = useAuth();
-  const { resolved } = useTheme();
+  const { theme, setTheme, resolved } = useTheme();
   const isDark = resolved === 'dark';
   const S = useAuthStyles(isDark);
 
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
@@ -155,6 +140,10 @@ const Auth = () => {
   const dobRef = useRef<HTMLInputElement>(null);
   const [emailFieldError, setEmailFieldError] = useState('');
   const [dobFieldError, setDobFieldError] = useState('');
+
+  const passwordsMatch = password === confirmPassword;
+  const registerSubmitEnabled =
+    isLogin || (passwordMeetsPolicy(password) && passwordsMatch);
 
   const { minStr: dobMinStr, maxStr: dobMaxStr, minDob, maxDob } = birthdateBounds();
 
@@ -199,6 +188,16 @@ const Auth = () => {
         setError('Completá nombre, apellido, fecha de nacimiento y género.');
         return;
       }
+      if (password !== confirmPassword) {
+        setError('Las contraseñas no coinciden.');
+        return;
+      }
+      if (!passwordMeetsPolicy(password)) {
+        setError(
+          'La contraseña debe tener al menos 8 caracteres, una mayúscula y un carácter especial.',
+        );
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -228,7 +227,12 @@ const Auth = () => {
   };
 
   return (
-    <div className={`flex min-h-screen flex-col items-center justify-center px-5 py-10 ${S.pageBg}`}>
+    <div className={cn('relative flex min-h-screen flex-col items-center justify-center px-5 pb-10 pt-20', S.pageBg)}>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-end p-4">
+        <div className="pointer-events-auto">
+          <ThemeSegmentedControl value={theme} onChange={setTheme} />
+        </div>
+      </div>
 
       {/* ── Logo ── */}
       <div className="mb-8 flex flex-col items-center gap-3 text-center">
@@ -312,15 +316,31 @@ const Auth = () => {
                 ) : null}
               </div>
 
-              <Select value={gender} onValueChange={setGender}>
-                <SelectTrigger className={S.selectTriggerCls}>
-                  <SelectValue placeholder="Seleccionar género" />
-                </SelectTrigger>
-                <SelectContent className={S.selectContentCls}>
-                  <SelectItem value="male" className={S.selectItemCls}>Masculino</SelectItem>
-                  <SelectItem value="female" className={S.selectItemCls}>Femenino</SelectItem>
-                </SelectContent>
-              </Select>
+              <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Género</p>
+              <div className={cn('flex gap-2 rounded-2xl border p-1', S.genderPillTrack)}>
+                {(
+                  [
+                    { value: 'male' as const, label: 'Masculino' },
+                    { value: 'female' as const, label: 'Femenino' },
+                  ] as const
+                ).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setGender(value)}
+                    className={cn(
+                      'flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all',
+                      gender === value
+                        ? 'bg-[#FF1493] text-zinc-950 shadow-md shadow-pink-500/25 dark:text-black'
+                        : isDark
+                          ? 'text-zinc-400 hover:bg-zinc-800/80'
+                          : 'text-zinc-600 hover:bg-white/80',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </>
           )}
 
@@ -347,16 +367,90 @@ const Auth = () => {
               <p className="mt-1.5 text-sm text-red-500">{emailFieldError}</p>
             ) : null}
           </div>
-          <Input
-            type="password"
-            placeholder="Contraseña"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-            autoComplete={isLogin ? 'current-password' : 'new-password'}
-            className={S.inputCls}
-          />
+
+          <div className="relative">
+            <Input
+              type={
+                isLogin
+                  ? showLoginPassword
+                    ? 'text'
+                    : 'password'
+                  : showRegPassword
+                    ? 'text'
+                    : 'password'
+              }
+              placeholder="Contraseña"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              {...(!isLogin ? { minLength: 8 } : {})}
+              autoComplete={isLogin ? 'current-password' : 'new-password'}
+              className={cn(S.inputCls, 'pr-12')}
+            />
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() =>
+                isLogin ? setShowLoginPassword((v) => !v) : setShowRegPassword((v) => !v)
+              }
+              className={cn(
+                'absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl transition-colors',
+                isDark
+                  ? 'text-zinc-400 hover:bg-white/10 hover:text-zinc-100'
+                  : 'text-zinc-500 hover:bg-zinc-200/80 hover:text-zinc-900',
+              )}
+              aria-label={
+                (isLogin ? showLoginPassword : showRegPassword)
+                  ? 'Ocultar contraseña'
+                  : 'Mostrar contraseña'
+              }
+            >
+              {(isLogin ? showLoginPassword : showRegPassword) ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+          {!isLogin ? <PasswordRequirementsList password={password} className="mt-1.5" /> : null}
+
+          {!isLogin && (
+            <div>
+              <div className="relative">
+                <Input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="Confirmar contraseña"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  className={cn(
+                    S.inputCls,
+                    'pr-12',
+                    confirmPassword.length > 0 && !passwordsMatch && 'border-red-500/80 focus-visible:border-red-500',
+                  )}
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  className={cn(
+                    'absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl transition-colors',
+                    isDark
+                      ? 'text-zinc-400 hover:bg-white/10 hover:text-zinc-100'
+                      : 'text-zinc-500 hover:bg-zinc-200/80 hover:text-zinc-900',
+                  )}
+                  aria-label={showConfirmPassword ? 'Ocultar confirmación' : 'Mostrar confirmación'}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {confirmPassword.length > 0 && !passwordsMatch ? (
+                <p className="mt-1.5 text-sm text-red-500">Las contraseñas no coinciden</p>
+              ) : null}
+            </div>
+          )}
 
           {error && (
             <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
@@ -371,13 +465,14 @@ const Auth = () => {
 
           <Button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !registerSubmitEnabled}
             aria-busy={submitting}
-            className={`h-14 w-full rounded-xl text-base font-bold tracking-tight transition-all duration-300 active:scale-95 disabled:pointer-events-none disabled:opacity-60 ${S.btnTextCls}`}
-            style={{ boxShadow: isDark
-              ? '0 0 20px rgba(34,197,94,0.40), 0 4px 20px rgba(0,0,0,0.35)'
-              : '0 0 16px rgba(34,197,94,0.30), 0 4px 12px rgba(0,0,0,0.08)',
-            }}
+            className={cn(
+              'h-14 w-full rounded-xl border-0 bg-[#FF1493] text-base font-bold tracking-tight text-zinc-950',
+              'shadow-[0_0_24px_rgba(255,20,147,0.38),0_4px_18px_rgba(236,72,153,0.22)] transition-all duration-300',
+              'hover:bg-[#FF4DA6] hover:shadow-[0_0_32px_rgba(255,20,147,0.48)] active:scale-[0.98]',
+              'disabled:pointer-events-none disabled:opacity-50 dark:text-black',
+            )}
           >
             {submitting ? '…' : isLogin ? 'Iniciar Sesión' : 'Crear Cuenta'}
           </Button>
@@ -393,6 +488,10 @@ const Auth = () => {
             setSuccessMsg('');
             setEmailFieldError('');
             setDobFieldError('');
+            setConfirmPassword('');
+            setShowLoginPassword(false);
+            setShowRegPassword(false);
+            setShowConfirmPassword(false);
           }}
           className={`mt-6 w-full text-center text-sm transition-colors duration-300 ${S.toggleTextCls}`}
         >

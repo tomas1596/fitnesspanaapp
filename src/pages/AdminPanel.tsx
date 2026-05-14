@@ -3,13 +3,43 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Palette, Search, Shield, Star, User, UserPlus, Users } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { applyBrandTheme } from '@/lib/brandTheme';
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  Crown,
+  Palette,
+  Search,
+  Shield,
+  Sparkles,
+  Star,
+  User,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -30,54 +60,114 @@ type DirectoryRow = {
   notified_premium: boolean;
 };
 
-type SubStatus = 'admin' | 'tester' | 'premium' | 'trial' | 'expired';
+type SubRole = 'free' | 'premium' | 'tester';
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
+const ROLE_META: Record<
+  SubRole,
+  { label: string; short: string; icon: typeof User; triggerClass: string; itemClass: string }
+> = {
+  free: {
+    label: 'Free',
+    short: 'Free',
+    icon: User,
+    triggerClass:
+      'border-zinc-300/80 bg-zinc-500/10 text-zinc-800 dark:border-white/15 dark:bg-zinc-800/60 dark:text-zinc-200',
+    itemClass: 'text-zinc-800 dark:text-zinc-200',
+  },
+  premium: {
+    label: 'Premium',
+    short: 'Premium',
+    icon: Star,
+    triggerClass:
+      'border-amber-500/40 bg-yellow-500/10 text-yellow-800 dark:border-amber-500/45 dark:bg-amber-500/12 dark:text-amber-300',
+    itemClass: 'text-amber-900 dark:text-amber-200',
+  },
+  tester: {
+    label: 'Tester',
+    short: 'Tester',
+    icon: Sparkles,
+    triggerClass:
+      'border-pink-500/45 bg-pink-500/12 text-pink-900 dark:border-[#FF1493]/50 dark:bg-[#FF1493]/12 dark:text-[#FF1493]',
+    itemClass: 'text-pink-900 dark:text-[#FF1493]',
+  },
+};
 
-function resolveStatus(row: DirectoryRow): { text: string; status: SubStatus } {
-  if (row.is_admin) return { text: 'Admin 👑', status: 'admin' };
-
-  const role = row.subscription_role ?? 'free';
-
-  if (role === 'tester') return { text: 'Tester ∞', status: 'tester' };
-
-  if (role === 'premium') {
-    const raw = row.subscription_expires_at ?? row.premium_until;
-    if (raw) {
-      const until = new Date(raw);
-      if (until > new Date()) {
-        const d = until.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-        return { text: `Premium · ${d}`, status: 'premium' };
-      }
-    }
-    // premium role but expired → treat as expired
-  }
-
-  // legacy premium_until (role=free but date still set)
-  if (row.premium_until) {
-    const pu = new Date(row.premium_until);
-    if (pu > new Date()) {
-      const d = pu.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-      return { text: `Premium · ${d}`, status: 'premium' };
-    }
-  }
-
-  const reg = row.registered_at ? new Date(row.registered_at) : new Date();
-  const trialEnd = new Date(reg.getTime() + 7 * 24 * 60 * 60 * 1000);
-  if (new Date() < trialEnd) {
-    const daysLeft = Math.max(1, Math.ceil((trialEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-    return { text: `Prueba · ${daysLeft}d`, status: 'trial' };
-  }
-
-  return { text: 'Expirado', status: 'expired' };
-}
-
-const STATUS_CLS: Record<SubStatus, string> = {
-  admin: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-  tester: 'bg-[#39FF14]/15 text-emerald-700 dark:text-[#39FF14]',
-  premium: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-  trial: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-  expired: 'bg-red-500/15 text-red-600 dark:text-red-400',
+function RoleDropdown({
+  row,
+  disabled,
+  current,
+  onSelect,
+}: {
+  row: DirectoryRow;
+  disabled: boolean;
+  current: SubRole;
+  onSelect: (r: DirectoryRow, role: SubRole) => void;
+}) {
+  const meta = ROLE_META[current];
+  const Icon = meta.icon;
+  const hints: Record<SubRole, string> = {
+    free: 'Sin suscripción',
+    premium: '+30 días al asignar',
+    tester: 'Acceso ilimitado QA',
+  };
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={cn(
+            'inline-flex min-w-[8rem] items-center justify-between gap-2 rounded-full border px-3 py-2 text-xs font-bold shadow-sm transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/40 disabled:pointer-events-none disabled:opacity-50',
+            meta.triggerClass,
+          )}
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+            {meta.short}
+          </span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="z-[100] w-64 rounded-xl border border-zinc-200/90 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-zinc-900"
+      >
+        {(['free', 'premium', 'tester'] as const).map((role) => {
+          const m = ROLE_META[role];
+          const I = m.icon;
+          const selected = current === role;
+          return (
+            <DropdownMenuItem
+              key={role}
+              onClick={() => {
+                if (!selected) onSelect(row, role);
+              }}
+              className={cn(
+                'flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-semibold focus:bg-zinc-100 data-[highlighted]:bg-zinc-100 dark:focus:bg-zinc-800 dark:data-[highlighted]:bg-zinc-800',
+                selected && 'bg-zinc-50 dark:bg-zinc-800/80',
+              )}
+            >
+              <span
+                className={cn(
+                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border',
+                  m.triggerClass,
+                )}
+              >
+                <I className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1 text-left">
+                <div className={cn('leading-tight', m.itemClass)}>{m.label}</div>
+                <div className="text-[10px] font-normal text-zinc-500 dark:text-zinc-400">
+                  {hints[role]}
+                </div>
+              </div>
+              {selected && <Check className="h-4 w-4 shrink-0 text-pink-600 dark:text-[#FF1493]" />}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 };
 
 const todayLocalYmd = () => {
@@ -95,7 +185,7 @@ const registeredYmdLocal = (iso: string) => {
 const AdminPanel = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, refreshIsAdmin } = useAuth();
 
   const [rows, setRows] = useState<DirectoryRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,6 +193,10 @@ const AdminPanel = () => {
   const [query, setQuery] = useState('');
   const [toggling, setToggling] = useState<Set<string>>(new Set());
   const [themeTarget, setThemeTarget] = useState<DirectoryRow | null>(null);
+  const [pendingSelfAdminRole, setPendingSelfAdminRole] = useState<{
+    row: DirectoryRow;
+    newRole: SubRole;
+  } | null>(null);
 
   // ── Data ───────────────────────────────────────────────────────────────
 
@@ -232,6 +326,17 @@ const AdminPanel = () => {
 
         if (rpcError) throw rpcError;
 
+        if (currentUser?.id === row.user_id) {
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('theme')
+            .eq('user_id', row.user_id)
+            .maybeSingle();
+          applyBrandTheme(prof?.theme === 'pink' ? 'pink' : 'default');
+          await refreshIsAdmin();
+          void loadDirectory();
+        }
+
         setRows((prev) =>
           prev.map((r) =>
             r.user_id === row.user_id
@@ -273,7 +378,20 @@ const AdminPanel = () => {
         return next;
       });
     },
-    [toast],
+    [toast, currentUser?.id, refreshIsAdmin, loadDirectory],
+  );
+
+  const requestRoleChange = useCallback(
+    (row: DirectoryRow, newRole: SubRole) => {
+      const isSelf = row.user_id === currentUser?.id;
+      const current = (row.subscription_role || 'free') as SubRole;
+      if (isSelf && row.is_admin && newRole !== current) {
+        setPendingSelfAdminRole({ row, newRole });
+        return;
+      }
+      void handleSetRole(row, newRole);
+    },
+    [currentUser?.id, handleSetRole],
   );
 
   // ── Theme toggle ───────────────────────────────────────────────────────
@@ -293,6 +411,9 @@ const AdminPanel = () => {
         setRows((prev) =>
           prev.map((r) => (r.user_id === row.user_id ? { ...r, theme: newTheme } : r)),
         );
+        if (row.user_id === currentUser?.id) {
+          applyBrandTheme(newTheme === 'pink' ? 'pink' : 'default');
+        }
         toast({
           title: newTheme === 'pink' ? '🌸 Modo Rosa VIP activado' : '🟢 Modo Normal restaurado',
           description: row.email,
@@ -304,10 +425,8 @@ const AdminPanel = () => {
         return next;
       });
     },
-    [toast],
+    [toast, currentUser?.id],
   );
-
-  // ── Derived ────────────────────────────────────────────────────────────
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -343,7 +462,7 @@ const AdminPanel = () => {
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-background px-4 pb-8 pt-6">
+    <div className="min-h-screen bg-white px-4 pb-8 pt-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
       <div className="mx-auto max-w-4xl space-y-6">
 
         {/* Header */}
@@ -352,40 +471,47 @@ const AdminPanel = () => {
             type="button"
             variant="ghost"
             size="icon"
-            className="h-10 w-10 shrink-0 rounded-xl border border-border/40 bg-card/80 backdrop-blur-sm transition-all duration-300 active:scale-90"
+            className="h-10 w-10 shrink-0 rounded-xl border border-zinc-200/80 bg-zinc-50 transition-all duration-300 active:scale-90 dark:border-white/10 dark:bg-zinc-900/80"
             onClick={() => navigate(-1)}
             aria-label="Volver"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-5 w-5 text-zinc-700 dark:text-zinc-200" />
           </Button>
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <Shield className="h-7 w-7 shrink-0 text-violet-500" />
-            <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Panel de Control</h1>
+            <Shield className="h-7 w-7 shrink-0 text-pink-600 dark:text-[#FF1493]" />
+            <h1 className="text-2xl font-extrabold tracking-tight">Panel de Control</h1>
           </div>
         </div>
 
-        <p className="text-xs font-medium text-muted-foreground/60">
-          Directorio de usuarios · Cambiá el rol desde el selector en cada fila.
+        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          Directorio de usuarios · Cambiá el rol desde el menú en cada fila.
         </p>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
           {(
             [
-              { Icon: Users, color: 'text-violet-500', label: 'Totales', value: totalUsers },
-              { Icon: UserPlus, color: 'text-emerald-500', label: 'Hoy', value: registeredToday },
-              { Icon: Star, color: 'text-amber-500', label: 'Activos', value: activeCount },
+              { Icon: Users, label: 'Totales', value: totalUsers },
+              { Icon: UserPlus, label: 'Hoy', value: registeredToday },
+              { Icon: Star, label: 'Activos', value: activeCount },
             ] as const
-          ).map(({ Icon, color, label, value }) => (
-            <div key={label} className="rounded-2xl border border-border/40 bg-card/80 p-4 backdrop-blur-sm">
+          ).map(({ Icon, label, value }) => (
+            <div
+              key={label}
+              className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-md shadow-zinc-900/5 dark:border-white/10 dark:bg-zinc-900/80 dark:shadow-black/40 sm:p-5"
+            >
               <div className="flex items-center gap-2">
-                <Icon className={`h-4 w-4 shrink-0 ${color} opacity-80`} />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">{label}</span>
+                <Icon className="h-7 w-7 shrink-0 text-pink-600 dark:text-[#FF1493]" aria-hidden />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  {label}
+                </span>
               </div>
               {loading ? (
-                <Skeleton className="mt-2 h-8 w-16 rounded-lg" />
+                <Skeleton className="mt-3 h-9 w-20 rounded-lg bg-zinc-200 dark:bg-zinc-800" />
               ) : (
-                <p className="mt-1 text-2xl font-extrabold tabular-nums text-foreground">{value}</p>
+                <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-white">
+                  {value}
+                </p>
               )}
             </div>
           ))}
@@ -393,148 +519,156 @@ const AdminPanel = () => {
 
         {/* Search */}
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
           <Input
             type="search"
             placeholder="Buscar por nombre o email…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="h-11 rounded-xl border border-border/40 bg-card/80 pl-9 text-sm backdrop-blur-sm"
+            className="h-12 rounded-full border-zinc-200/90 bg-zinc-100 pl-11 pr-4 text-sm text-zinc-900 shadow-inner shadow-zinc-900/5 placeholder:text-zinc-400 focus-visible:ring-pink-500/30 dark:border-white/10 dark:bg-zinc-900/90 dark:text-zinc-100 dark:placeholder:text-zinc-500"
             aria-label="Filtrar usuarios"
           />
         </div>
 
         {error && (
-          <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
             {error}
           </div>
         )}
 
-        {/* Table */}
-        <div className="rounded-2xl border border-border/40 bg-card/80 backdrop-blur-sm">
-          {loading ? (
-            <div className="space-y-3 p-4">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-10 w-full rounded-lg" />
-              ))}
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-14 pl-4">Foto</TableHead>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead className="hidden sm:table-cell">Email</TableHead>
-                  <TableHead className="whitespace-nowrap">Registro</TableHead>
-                  <TableHead className="w-44 pr-4 text-right">Rol</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                      {rows.length === 0 ? 'No hay usuarios.' : 'Sin resultados para tu búsqueda.'}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filtered.map((r) => {
-                    const name =
-                      [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || '—';
-                    const dateLabel = r.registered_at
-                      ? new Date(r.registered_at).toLocaleDateString('es-AR', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        })
-                      : '—';
-                    const { text, status } = resolveStatus(r);
-                    const isBusy = toggling.has(r.user_id);
-                    const isSelf = r.user_id === currentUser?.id;
+        {/* Directorio — filas tipo tarjeta */}
+        <div>
+          <p className="mb-2 hidden text-[10px] font-bold uppercase tracking-wider text-zinc-500 sm:grid sm:grid-cols-[3.5rem_1fr_1fr_7rem_auto] sm:gap-4 sm:px-4 dark:text-zinc-400">
+            <span />
+            <span>Usuario</span>
+            <span className="hidden sm:inline">Email</span>
+            <span>Alta</span>
+            <span className="text-right">Acciones</span>
+          </p>
+          <div className="space-y-2.5 rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-2 dark:border-white/10 dark:bg-zinc-900/40">
+            {loading ? (
+              <div className="space-y-3 p-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-24 w-full rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="py-14 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                {rows.length === 0 ? 'No hay usuarios.' : 'Sin resultados para tu búsqueda.'}
+              </div>
+            ) : (
+              filtered.map((r) => {
+                const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || '—';
+                const dateLabel = r.registered_at
+                  ? new Date(r.registered_at).toLocaleDateString('es-AR', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                    })
+                  : '—';
+                const isBusy = toggling.has(r.user_id);
+                const currentRole = (r.subscription_role || 'free') as SubRole;
 
-                    return (
-                      <TableRow key={r.user_id}>
-                        <TableCell className="pl-4">
-                          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-accent">
-                            {r.avatar_url ? (
-                              <img src={r.avatar_url} alt="" className="h-full w-full object-cover" />
-                            ) : (
-                              <User className="h-5 w-5 text-muted-foreground" />
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium text-foreground">{name}</div>
-                          <div className="mt-0.5 text-xs text-muted-foreground sm:hidden">
-                            {r.email || '—'}
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden max-w-[200px] truncate text-muted-foreground sm:table-cell">
-                          {r.email || '—'}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                          {dateLabel}
-                        </TableCell>
-                        <TableCell className="pr-2 text-right">
-                          {/* Admin's own row: static badge, no self-edit */}
-                          {isSelf ? (
-                            <span
-                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_CLS[status]}`}
-                            >
-                              {text}
-                            </span>
-                          ) : isBusy ? (
-                            <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                              Guardando…
-                            </span>
+                return (
+                  <div
+                    key={r.user_id}
+                    className="rounded-2xl border border-transparent px-4 py-4 transition-colors hover:border-zinc-200/80 hover:bg-white dark:hover:border-white/10 dark:hover:bg-zinc-800/50 sm:py-5"
+                  >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-4">
+                      <div className="flex items-start gap-3 sm:items-center">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-pink-500 bg-zinc-100 dark:bg-zinc-800">
+                          {r.avatar_url ? (
+                            <img src={r.avatar_url} alt="" className="h-full w-full object-cover" />
                           ) : (
-                            <div className="flex items-center justify-end gap-2">
-                              {/* Role selector */}
-                              <Select
-                                value={r.subscription_role || 'free'}
-                                onValueChange={(val) =>
-                                  void handleSetRole(r, val as 'free' | 'premium' | 'tester')
-                                }
-                              >
-                                <SelectTrigger className="h-8 w-28 rounded-xl border border-input bg-secondary text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="free">Free</SelectItem>
-                                  <SelectItem value="premium">Premium</SelectItem>
-                                  <SelectItem value="tester">Tester</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              {/* Theme toggle */}
-                              <button
-                                type="button"
-                                title={r.theme === 'pink' ? 'Quitar Modo Rosa' : 'Activar Modo Rosa'}
-                                onClick={() => setThemeTarget(r)}
-                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary text-xs transition hover:bg-accent"
-                              >
-                                <Palette className={`h-3.5 w-3.5 ${r.theme === 'pink' ? 'text-pink-500' : 'text-muted-foreground'}`} />
-                              </button>
-                            </div>
+                            <User className="h-5 w-5 text-zinc-400" />
                           )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          )}
+                        </div>
+                        <div className="min-w-0 flex-1 sm:hidden">
+                          <div className="font-semibold text-zinc-900 dark:text-zinc-100">{name}</div>
+                          <div className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">{r.email || '—'}</div>
+                          <div className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">Alta {dateLabel}</div>
+                        </div>
+                      </div>
+
+                      <div className="hidden min-w-0 flex-1 sm:block">
+                        <div className="font-semibold text-zinc-900 dark:text-zinc-100">{name}</div>
+                      </div>
+                      <div className="hidden min-w-0 max-w-[220px] truncate text-sm text-zinc-600 dark:text-zinc-400 sm:block">
+                        {r.email || '—'}
+                      </div>
+                      <div className="hidden whitespace-nowrap text-xs text-zinc-500 dark:text-zinc-400 sm:block">
+                        {dateLabel}
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-auto sm:flex-nowrap">
+                        {isBusy ? (
+                          <span className="inline-flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                            Guardando…
+                          </span>
+                        ) : r.is_admin ? (
+                          <>
+                            <Badge
+                              variant="outline"
+                              role="status"
+                              aria-label="Administrador"
+                              className={cn(
+                                'pointer-events-none min-w-[8rem] justify-center gap-1.5 rounded-full border px-3 py-2 text-xs font-bold shadow-none',
+                                'border-blue-500/35 bg-blue-500/10 text-blue-800 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-300',
+                              )}
+                            >
+                              <Crown className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                              Admin
+                            </Badge>
+                            <button
+                              type="button"
+                              title={r.theme === 'pink' ? 'Quitar Modo Rosa' : 'Activar Modo Rosa'}
+                              onClick={() => setThemeTarget(r)}
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200/90 bg-white text-xs shadow-sm transition hover:bg-zinc-100 dark:border-white/10 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                            >
+                              <Palette
+                                className={`h-4 w-4 ${r.theme === 'pink' ? 'text-pink-500' : 'text-zinc-400'}`}
+                              />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <RoleDropdown
+                              row={r}
+                              disabled={isBusy}
+                              current={currentRole}
+                              onSelect={(row2, role) => requestRoleChange(row2, role)}
+                            />
+                            <button
+                              type="button"
+                              title={r.theme === 'pink' ? 'Quitar Modo Rosa' : 'Activar Modo Rosa'}
+                              onClick={() => setThemeTarget(r)}
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200/90 bg-white text-xs shadow-sm transition hover:bg-zinc-100 dark:border-white/10 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                            >
+                              <Palette
+                                className={`h-4 w-4 ${r.theme === 'pink' ? 'text-pink-500' : 'text-zinc-400'}`}
+                              />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
 
       {/* ── Theme confirmation dialog ── */}
       <Dialog open={!!themeTarget} onOpenChange={(open) => { if (!open) setThemeTarget(null); }}>
-        <DialogContent className="rounded-2xl border-border bg-card">
+        <DialogContent className="rounded-2xl border-zinc-200/80 bg-white text-zinc-900 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100">
           <DialogHeader>
-            <DialogTitle className="text-foreground">
+            <DialogTitle>
               {themeTarget?.theme === 'pink' ? 'Quitar Modo Rosa VIP' : 'Activar Modo Rosa VIP 🌸'}
             </DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
+            <DialogDescription className="text-sm text-zinc-500 dark:text-zinc-400">
               {themeTarget?.email}
             </DialogDescription>
           </DialogHeader>
@@ -554,6 +688,36 @@ const AdminPanel = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!pendingSelfAdminRole}
+        onOpenChange={(open) => {
+          if (!open) setPendingSelfAdminRole(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-2xl border-zinc-200/80 bg-white dark:border-white/10 dark:bg-zinc-900">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-900 dark:text-zinc-50">Cambiar tu rol</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-zinc-600 dark:text-zinc-400">
+              ¿Estás seguro? Perderás el acceso al Panel de Control si dejas de ser Admin.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              onClick={() => {
+                if (!pendingSelfAdminRole) return;
+                const { row, newRole } = pendingSelfAdminRole;
+                setPendingSelfAdminRole(null);
+                void handleSetRole(row, newRole);
+              }}
+            >
+              Continuar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

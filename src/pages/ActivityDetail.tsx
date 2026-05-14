@@ -6,6 +6,9 @@ import 'leaflet/dist/leaflet.css';
 import {
   ArrowLeft,
   ChevronRight,
+  Flame,
+  Footprints,
+  Gauge,
   Heart,
   ListTree,
   MapPinned,
@@ -13,6 +16,7 @@ import {
   Share2,
   Timer,
   Trash2,
+  Zap,
 } from 'lucide-react';
 import ShareSticker from '@/components/ShareSticker';
 import {
@@ -80,12 +84,13 @@ function defaultTitleForDate(d: Date) {
   return label;
 }
 
-const DetailRow = ({ label, value, isDark }: { label: string; value: string; isDark: boolean }) => (
-  <div className="flex items-center justify-between border-b border-border py-3 last:border-0">
-    <span className={cn('text-sm', isDark ? 'text-muted-foreground' : 'text-zinc-500')}>{label}</span>
-    <span className={cn('text-sm font-semibold tabular-nums', isDark ? 'text-foreground' : 'text-zinc-950')}>
-      {value}
-    </span>
+const NEON_ICON =
+  'text-pink-500 [&>svg]:drop-shadow-[0_0_10px_rgba(236,72,153,0.35)] dark:text-[#FF1493] dark:[&>svg]:drop-shadow-[0_0_12px_rgba(255,20,147,0.4)]';
+
+const DetailRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-center justify-between border-b border-zinc-200/80 py-3 last:border-0 dark:border-white/10">
+    <span className="text-sm text-zinc-500 dark:text-zinc-400">{label}</span>
+    <span className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{value}</span>
   </div>
 );
 
@@ -306,79 +311,60 @@ export default function ActivityDetail() {
           <p className="mt-1 text-sm font-medium text-muted-foreground">kilómetros</p>
         </div>
 
-        <div className="mt-8 grid grid-cols-3 gap-x-2 gap-y-5">
-          <MetricCell label="Ritmo prom." value={fmtPace(avgPace)} isDark={resolved === 'dark'} />
-          <MetricCell label="Tiempo" value={fmtTime(durationSec)} isDark={resolved === 'dark'} />
-          <MetricCell label="Calorías" value={String(estCalories)} isDark={resolved === 'dark'} />
-          <MetricCell label="Desnivel positivo" value={elevShort} isDark={resolved === 'dark'} />
-          <MetricCell label="FC prom" value={hrLabel} isDark={resolved === 'dark'} />
-          <MetricCell label="Cadencia" value={cadenceLabel} isDark={resolved === 'dark'} />
+        <div className="mt-8 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+          <div className="grid grid-cols-3 gap-px bg-zinc-200/55 dark:bg-white/10">
+            <MetricCell
+              label="Ritmo prom."
+              value={fmtPace(avgPace)}
+              icon={<Gauge className="h-4 w-4" aria-hidden />}
+            />
+            <MetricCell label="Tiempo" value={fmtTime(durationSec)} icon={<Timer className="h-4 w-4" aria-hidden />} />
+            <MetricCell label="Calorías" value={String(estCalories)} icon={<Flame className="h-4 w-4" aria-hidden />} />
+            <MetricCell label="Desnivel +" value={elevShort} icon={<Mountain className="h-4 w-4" aria-hidden />} />
+            <MetricCell label="FC prom" value={hrLabel} icon={<Heart className="h-4 w-4" aria-hidden />} />
+            <MetricCell label="Cadencia" value={cadenceLabel} icon={<Footprints className="h-4 w-4" aria-hidden />} />
+          </div>
         </div>
 
-        <div className="mt-8 flex flex-col gap-3">
+        <div className="mt-6 flex flex-col gap-2.5">
           <button
             type="button"
             onClick={() => setPanel('share')}
-            className={cn(
-              'flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-left transition',
-              resolved === 'dark'
-                ? 'border border-[#22FF55]/30 bg-[#22FF55]/10 hover:border-[#22FF55]/60'
-                : 'border border-zinc-200 bg-white shadow-sm hover:border-zinc-300',
-            )}
+            className="flex w-full items-center justify-between rounded-2xl border border-zinc-200/70 bg-zinc-50/95 px-4 py-3.5 text-left transition hover:bg-zinc-100/90 active:scale-[0.99] dark:border-white/10 dark:bg-zinc-900/85 dark:hover:bg-zinc-800/90"
           >
             <span className="flex items-center gap-3">
-              <span
-                className={cn(
-                  'flex h-10 w-10 items-center justify-center rounded-xl',
-                  resolved === 'dark' ? 'bg-[#22FF55]/20' : 'bg-zinc-100',
-                )}
-              >
-                <Share2
-                  className={cn('h-5 w-5', resolved === 'dark' ? 'text-[#22FF55]' : 'text-green-950')}
-                />
+              <span className={cn('flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-sm dark:bg-zinc-800/90', NEON_ICON)}>
+                <Share2 className="h-5 w-5" />
               </span>
-              <span
-                className={cn(
-                  'font-semibold',
-                  resolved === 'dark' ? 'text-foreground' : 'text-zinc-900',
-                )}
-              >
-                Compartir actividad
-              </span>
+              <span className="font-semibold text-zinc-900 dark:text-zinc-50">Compartir actividad</span>
             </span>
-            <ChevronRight
-              className={cn('h-5 w-5', resolved === 'dark' ? 'text-muted-foreground' : 'text-zinc-500')}
-            />
+            <ChevronRight className="h-5 w-5 text-zinc-400 dark:text-zinc-500" />
           </button>
           <button
             type="button"
             onClick={() => setPanel('route')}
-            className="flex w-full items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5 text-left transition hover:border-primary/40"
+            className="flex w-full items-center justify-between rounded-2xl border border-zinc-200/70 bg-zinc-50/95 px-4 py-3.5 text-left transition hover:bg-zinc-100/90 active:scale-[0.99] dark:border-white/10 dark:bg-zinc-900/85 dark:hover:bg-zinc-800/90"
           >
             <span className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary">
-                <MapPinned
-                  className={cn('h-5 w-5', resolved === 'dark' ? 'text-primary' : 'text-zinc-800')}
-                />
+              <span className={cn('flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-sm dark:bg-zinc-800/90', NEON_ICON)}>
+                <MapPinned className="h-5 w-5" />
               </span>
-              <span className="font-semibold">Detalles de la ruta</span>
+              <span className="font-semibold text-zinc-900 dark:text-zinc-50">Detalles de la ruta</span>
             </span>
-            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            <ChevronRight className="h-5 w-5 text-zinc-400 dark:text-zinc-500" />
           </button>
           <button
             type="button"
             onClick={() => setPanel('more')}
-            className="flex w-full items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5 text-left transition hover:border-primary/40"
+            className="flex w-full items-center justify-between rounded-2xl border border-zinc-200/70 bg-zinc-50/95 px-4 py-3.5 text-left transition hover:bg-zinc-100/90 active:scale-[0.99] dark:border-white/10 dark:bg-zinc-900/85 dark:hover:bg-zinc-800/90"
           >
             <span className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary">
-                <ListTree
-                  className={cn('h-5 w-5', resolved === 'dark' ? 'text-primary' : 'text-zinc-800')}
-                />
+              <span className={cn('flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-sm dark:bg-zinc-800/90', NEON_ICON)}>
+                <ListTree className="h-5 w-5" />
               </span>
-              <span className="font-semibold">Más detalles</span>
+              <span className="font-semibold text-zinc-900 dark:text-zinc-50">Más detalles</span>
             </span>
-            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            <ChevronRight className="h-5 w-5 text-zinc-400 dark:text-zinc-500" />
           </button>
         </div>
       </div>
@@ -441,12 +427,12 @@ export default function ActivityDetail() {
                 <ReadableBasemapLayers theme={basemapTheme} />
                 <PaceHeatPolylines points={displayRoutePts} avgPaceSecPerKm={avgPace} mapTheme={mapHeatTheme} />
                 <KmMilestoneMarkers points={displayRoutePts} mapTheme={mapHeatTheme} />
-                {/* Start dot — green */}
+                {/* Start dot — acento rosa */}
                 {poly.length > 0 && (
                   <CircleMarker
                     center={poly[0]}
                     radius={8}
-                    pathOptions={{ fillColor: '#16a34a', color: '#ffffff', weight: 2.5, fillOpacity: 1 }}
+                    pathOptions={{ fillColor: '#FF1493', color: '#ffffff', weight: 2.5, fillOpacity: 1 }}
                   />
                 )}
                 {/* End dot — red */}
@@ -462,75 +448,56 @@ export default function ActivityDetail() {
             ) : (
               <div className="flex h-full items-center justify-center text-muted-foreground">Sin datos de ruta</div>
             )}
-
-            <div className="pointer-events-none absolute left-3 right-3 top-3 z-[500] flex flex-wrap gap-2">
-              <FloatStat
-                isDark={resolved === 'dark'}
-                label="Ritmo prom."
-                value={fmtPace(avgPace)}
-                icon={
-                  <Timer
-                    className={cn('h-3.5 w-3.5', resolved === 'dark' ? 'text-primary' : 'text-zinc-800')}
-                  />
-                }
-              />
-              <FloatStat
-                isDark={resolved === 'dark'}
-                label="Desnivel +"
-                value={elevShort}
-                icon={
-                  <Mountain
-                    className={cn('h-3.5 w-3.5', resolved === 'dark' ? 'text-primary' : 'text-zinc-800')}
-                  />
-                }
-              />
-              <FloatStat
-                isDark={resolved === 'dark'}
-                label="PPM"
-                value={hrLabel}
-                icon={
-                  <Heart
-                    className={cn('h-3.5 w-3.5', resolved === 'dark' ? 'text-primary' : 'text-zinc-800')}
-                  />
-                }
-              />
-            </div>
           </div>
 
           <div
-            className="shrink-0 border-t border-border bg-card/95 px-2 pt-2 backdrop-blur-lg"
+            className="shrink-0 border-t border-zinc-200/80 bg-white/95 px-3 pt-3 backdrop-blur-lg dark:border-white/10 dark:bg-zinc-950/95"
             style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
           >
-            <p className="mb-1 px-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Rendimiento
-            </p>
-            <div className="h-36 w-full">
+            <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Rendimiento</p>
+            <div className="h-40 w-full">
               {perfSeries.length > 1 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={perfSeries} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                  <ComposedChart data={perfSeries} margin={{ top: 6, right: 10, left: 0, bottom: 4 }}>
                     <defs>
-                      <linearGradient id="elevFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.25} />
-                        <stop offset="100%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0} />
+                      <linearGradient id="paceNeonFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#FF1493" stopOpacity={0.35} />
+                        <stop offset="55%" stopColor="#db2777" stopOpacity={0.12} />
+                        <stop offset="100%" stopColor="#db2777" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="elevFillSubtle" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#71717a" stopOpacity={0.2} />
+                        <stop offset="100%" stopColor="#71717a" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(161,161,170,0.25)" vertical={false} />
                     <XAxis
                       type="number"
                       dataKey="distKm"
                       domain={['dataMin', 'dataMax']}
                       scale="linear"
-                      tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                      tick={{ fontSize: 10, fill: '#a1a1aa' }}
                       tickFormatter={(v) => `${Number(v).toFixed(1)}`}
-                      label={{ value: 'km', position: 'insideBottomRight', offset: -4, fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                      axisLine={{ stroke: 'rgba(161,161,170,0.35)' }}
+                      tickLine={{ stroke: 'rgba(161,161,170,0.35)' }}
                     />
                     <YAxis
                       yAxisId="pace"
-                      width={36}
-                      tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                      width={40}
+                      domain={[paceChartRange.min, paceChartRange.max]}
+                      tick={{ fontSize: 10, fill: '#a1a1aa' }}
                       tickFormatter={(v) => `${Math.floor(Number(v) / 60)}`}
+                      axisLine={{ stroke: 'rgba(161,161,170,0.35)' }}
+                      tickLine={{ stroke: 'rgba(161,161,170,0.35)' }}
                     />
-                    <YAxis yAxisId="elev" orientation="right" width={32} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis
+                      yAxisId="elev"
+                      orientation="right"
+                      width={36}
+                      tick={{ fontSize: 10, fill: '#a1a1aa' }}
+                      axisLine={{ stroke: 'rgba(161,161,170,0.35)' }}
+                      tickLine={{ stroke: 'rgba(161,161,170,0.35)' }}
+                    />
                     <Tooltip
                       contentStyle={{
                         background: 'hsl(var(--card))',
@@ -545,6 +512,17 @@ export default function ActivityDetail() {
                         if (name === 'elevM') return [`${Math.round(n)} m`, 'Elev.'];
                         return [value, name];
                       }}
+                    />
+                    <Area
+                      yAxisId="pace"
+                      type="monotone"
+                      dataKey="paceSecPerKm"
+                      stroke="transparent"
+                      strokeWidth={0}
+                      fill="url(#paceNeonFill)"
+                      dot={false}
+                      isAnimationActive={false}
+                      connectNulls
                     />
                     {perfSeries.length > 1 &&
                       perfSeries.slice(0, -1).map((_, i) => {
@@ -570,16 +548,16 @@ export default function ActivityDetail() {
                       yAxisId="elev"
                       type="monotone"
                       dataKey="elevM"
-                      stroke="hsl(var(--muted-foreground))"
-                      strokeWidth={1.5}
-                      fill="url(#elevFill)"
+                      stroke="#a1a1aa"
+                      strokeWidth={1}
+                      fill="url(#elevFillSubtle)"
                       dot={false}
                       isAnimationActive={false}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                <div className="flex h-full items-center justify-center text-xs text-zinc-400">
                   Sin suficientes puntos para el gráfico
                 </div>
               )}
@@ -604,73 +582,81 @@ export default function ActivityDetail() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4">
-            <div className="rounded-2xl border border-border bg-card px-4">
-              <DetailRow
-                label="Ritmo más rápido (por km)"
-                value={fastest != null ? fmtPace(fastest) : '—'}
-                isDark={resolved === 'dark'}
-              />
-              <DetailRow label="Duración" value={fmtTime(durationSec)} isDark={resolved === 'dark'} />
+            <div className="rounded-2xl border border-zinc-200/80 bg-white px-4 shadow-sm dark:border-white/10 dark:bg-zinc-900">
+              <DetailRow label="Ritmo más rápido (por km)" value={fastest != null ? fmtPace(fastest) : '—'} />
+              <DetailRow label="Duración" value={fmtTime(durationSec)} />
               <DetailRow
                 label="Tiempo transcurrido"
                 value={`${started.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} – ${ended.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`}
-                isDark={resolved === 'dark'}
               />
-              <DetailRow label="Elevación (ganancia / pérdida)" value={elevLabel} isDark={resolved === 'dark'} />
-              <DetailRow label="Pasos (estimados)" value={String(displaySteps)} isDark={resolved === 'dark'} />
+              <DetailRow label="Elevación (ganancia / pérdida)" value={elevLabel} />
+              <DetailRow label="Pasos (estimados)" value={String(displaySteps)} />
             </div>
 
-            <h3 className="mt-8 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+            <h3 className="mt-8 text-xs font-bold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
               Parciales por kilómetro
             </h3>
-            <div className="mt-2 overflow-hidden rounded-2xl border border-border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-secondary/50 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    <th className="px-3 py-2">Km</th>
-                    <th className="px-3 py-2">Ritmo</th>
-                    <th className="px-3 py-2">Tiempo</th>
-                    <th className="px-3 py-2 text-right">+/-</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {splits.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">
-                        No hay kilómetros completos registrados.
-                      </td>
-                    </tr>
-                  ) : (
-                    splits.map((s, idx) => {
-                      const prev = idx > 0 ? splits[idx - 1] : null;
-                      const delta = prev ? s.timeSec - prev.timeSec : null;
-                      const faster = delta != null && delta < 0;
-                      const slower = delta != null && delta > 0;
-                      const deltaText =
-                        delta == null ? '—' : `${delta > 0 ? '+' : '-'}${Math.abs(Math.round(delta))}s`;
-                      return (
-                        <tr key={s.km} className="border-b border-border/80 last:border-0">
-                          <td className="px-3 py-2.5 font-semibold tabular-nums">{s.km}</td>
-                          <td className="px-3 py-2.5 tabular-nums">{fmtPace(s.paceSecPerKm)}</td>
-                          <td className="px-3 py-2.5 tabular-nums text-muted-foreground">
-                            {fmtTime(Math.round(s.timeSec))}
-                          </td>
-                          <td
-                            className={cn(
-                              'px-3 py-2.5 text-right text-xs font-bold tabular-nums',
-                              faster && 'text-[#22FF55]',
-                              slower && 'text-red-500',
-                              delta === 0 && 'text-muted-foreground',
-                            )}
-                          >
-                            {deltaText}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+            <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+              <div className="flex border-b border-zinc-200/70 px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:border-white/10">
+                <span className="w-14 tabular-nums">Km</span>
+                <span className="min-w-0 flex-1 text-center tabular-nums">Ritmo</span>
+                <span className="min-w-0 flex-1 text-center tabular-nums">Tiempo</span>
+                <span className="w-16 text-right tabular-nums">+/-</span>
+              </div>
+              {splits.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                  No hay kilómetros completos registrados.
+                </p>
+              ) : (
+                <ul className="divide-y divide-zinc-200/70 dark:divide-white/10">
+                  {splits.map((s, idx) => {
+                    const prev = idx > 0 ? splits[idx - 1] : null;
+                    const delta = prev ? s.timeSec - prev.timeSec : null;
+                    const faster = delta != null && delta < 0;
+                    const slower = delta != null && delta > 0;
+                    const deltaText =
+                      delta == null ? '—' : `${delta > 0 ? '+' : '-'}${Math.abs(Math.round(delta))}s`;
+                    const isPb =
+                      fastest != null && s.paceSecPerKm > 0 && Math.abs(s.paceSecPerKm - fastest) < 1e-3;
+                    return (
+                      <li
+                        key={s.km}
+                        className={cn(
+                          'flex items-center gap-2 px-4 py-3 tabular-nums',
+                          isPb &&
+                            'bg-pink-500/[0.09] dark:bg-pink-400/[0.12]',
+                        )}
+                      >
+                        <span className="flex w-14 shrink-0 items-center gap-1 font-semibold text-zinc-900 dark:text-zinc-50">
+                          {isPb && (
+                            <Zap
+                              className="h-3.5 w-3.5 shrink-0 text-pink-500 dark:text-[#FF1493]"
+                              aria-label="Parcial más rápido"
+                            />
+                          )}
+                          {s.km}
+                        </span>
+                        <span className="min-w-0 flex-1 text-center text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                          {fmtPace(s.paceSecPerKm)}
+                        </span>
+                        <span className="min-w-0 flex-1 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                          {fmtTime(Math.round(s.timeSec))}
+                        </span>
+                        <span
+                          className={cn(
+                            'w-16 shrink-0 text-right text-xs font-bold tabular-nums',
+                            faster && 'text-pink-500 dark:text-[#FF1493]',
+                            slower && 'text-red-500 dark:text-red-400',
+                            delta === 0 && 'text-zinc-400',
+                          )}
+                        >
+                          {deltaText}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           </div>
         </div>
@@ -679,44 +665,14 @@ export default function ActivityDetail() {
   );
 }
 
-function MetricCell({ label, value, isDark }: { label: string; value: string; isDark: boolean }) {
+function MetricCell({ label, value, icon }: { label: string; value: string; icon: ReactNode }) {
   return (
-    <div className="text-center">
-      <div
-        className={cn(
-          'text-[10px] font-semibold uppercase tracking-widest',
-          isDark ? 'text-muted-foreground' : 'text-zinc-500',
-        )}
-      >
+    <div className="flex flex-col items-center gap-1 bg-white px-2 py-3.5 text-center dark:bg-zinc-900 sm:px-3">
+      <span className={cn('inline-flex rounded-xl bg-zinc-100/95 p-2 dark:bg-zinc-800/80', NEON_ICON)}>{icon}</span>
+      <div className="text-[9px] font-semibold uppercase leading-snug tracking-wider text-zinc-500 dark:text-zinc-400">
         {label}
       </div>
-      <div
-        className={cn(
-          'mt-1 text-base font-bold tabular-nums',
-          isDark ? 'text-foreground' : 'text-zinc-950',
-        )}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function FloatStat({ label, value, icon, isDark }: { label: string; value: string; icon: ReactNode; isDark: boolean }) {
-  return (
-    <div className="pointer-events-auto rounded-2xl bg-white/95 px-3 py-2 shadow-lg ring-1 ring-black/5 dark:bg-zinc-900/95 dark:ring-white/10">
-      <div
-        className={cn(
-          'flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide',
-          isDark ? 'text-muted-foreground' : 'text-zinc-500',
-        )}
-      >
-        {icon}
-        {label}
-      </div>
-      <div
-        className={cn('mt-0.5 text-sm font-extrabold tabular-nums', isDark ? 'text-foreground' : 'text-zinc-950')}
-      >
+      <div className="w-full truncate text-sm font-bold tabular-nums leading-tight text-zinc-950 dark:text-zinc-50 sm:text-[15px]">
         {value}
       </div>
     </div>

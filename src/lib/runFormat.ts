@@ -1,9 +1,9 @@
 /**
- * Brand accent — apunta a la CSS custom property para que el Modo VIP Rosa
- * (y cualquier otro tema futuro) se refleje automáticamente en todos los
- * componentes que usen este valor en inline styles.
+ * Acento de marca para estilos inline: `var(--brand-color)` (rosa neón en el tema global).
+ * @deprecated `NRC_GREEN` — mismo valor; nombre histórico.
  */
-export const NRC_GREEN = 'var(--brand-color)';
+export const BRAND_COLOR = 'var(--brand-color)';
+export const NRC_GREEN = BRAND_COLOR;
 
 export const fmtTime = (s: number) => {
   const h = Math.floor(s / 3600);

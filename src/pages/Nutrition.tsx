@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Minus, Droplets, Trash2, Sun, Sunset, Cookie, Moon, BookOpen, Search, Pencil } from 'lucide-react';
+import { Plus, Minus, Droplets, Trash2, Sun, Sunset, Cookie, Moon, BookOpen, Search, Pencil, Apple } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -18,12 +18,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import HalfStarRating from '@/components/HalfStarRating';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { calculateAge } from '@/lib/age';
 import { todayLocalYMD, localDayBoundsISO } from '@/lib/nutritionDay';
 
-type MealType = 'desayuno' | 'almuerzo' | 'cena' | 'snack';
+type MealType = 'desayuno' | 'almuerzo' | 'cena' | 'merienda';
+
+/** Columna obligatoria en DB; no se expone en el formulario (valor fijo). */
+const DEFAULT_PORTION_UNIT = 'g' as const;
 
 type CustomFood = {
   id: string;
@@ -48,9 +50,12 @@ type NutritionLogRow = {
 const MEALS: { key: MealType; label: string; icon: typeof Sun }[] = [
   { key: 'desayuno', label: 'Desayuno', icon: Sun },
   { key: 'almuerzo', label: 'Almuerzo', icon: Sunset },
-  { key: 'snack', label: 'Snack', icon: Cookie },
+  { key: 'merienda', label: 'Merienda', icon: Cookie },
   { key: 'cena', label: 'Cena', icon: Moon },
 ];
+
+const NUTRITION_FORM_INPUT_CLASS =
+  'min-h-[48px] rounded-xl border-0 bg-zinc-100 px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-pink-500/30 dark:bg-zinc-800';
 
 const roundMacro = (n: number) => Math.round(n * 100) / 100;
 
@@ -161,16 +166,7 @@ const Nutrition = () => {
       console.warn('[nutrition] custom_foods', error.message);
       return;
     }
-    setCustomFoods(
-      (data || []).map((r) => ({
-        id: r.id,
-        name: r.name,
-        base_calories: Number(r.base_calories),
-        base_protein: Number(r.base_protein),
-        base_carbs: Number(r.base_carbs),
-        base_fat: Number(r.base_fat),
-      })),
-    );
+    setCustomFoods((data || []).map((r) => mapRowToCustomFood(r)));
   }, [user]);
 
   const fetchNutritionLogs = useCallback(async () => {
@@ -557,7 +553,7 @@ const Nutrition = () => {
                 const sumProt = items.reduce((s, f) => s + f.protein, 0);
                 const Icon = m.icon;
                 return (
-                  <div key={m.key} className="rounded-2xl border border-border/40 bg-card/80 p-4 backdrop-blur-sm">
+                  <div key={m.key} className="rounded-2xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex min-w-0 items-center gap-2.5">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary">
@@ -572,10 +568,10 @@ const Nutrition = () => {
                       </div>
                       <Button
                         type="button"
+                        variant="ghost"
                         size="icon"
                         onClick={() => openMealFoodPicker(m.key)}
-                        className="h-9 w-9 shrink-0 rounded-xl transition-all duration-300 active:scale-90"
-                        style={{ boxShadow: '0 0 10px rgba(34,197,94,0.25)' }}
+                        className="h-9 w-9 shrink-0 rounded-xl border-0 bg-pink-500/10 text-pink-600 shadow-none transition-all duration-300 hover:bg-pink-500/20 active:scale-90 dark:bg-pink-500/20 dark:text-pink-400 dark:hover:bg-pink-500/30"
                         aria-label={`Añadir a ${m.label}`}
                       >
                         <Plus className="h-4 w-4" />
@@ -635,9 +631,9 @@ const Nutrition = () => {
 
             <div className="rounded-2xl border border-border/40 bg-card/80 p-4 backdrop-blur-sm">
               <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground/70">Bienestar de hoy</h2>
-              <div className="space-y-3">
-                <HalfStarRating label="Calidad de Sueño" value={sleepQuality} onChange={(v) => updateRecovery('sleep_quality', v)} />
-                <HalfStarRating label="Nivel de Energía" value={energyLevel} onChange={(v) => updateRecovery('energy_level', v)} />
+              <div className="space-y-4">
+                <WellbeingScale label="Calidad de sueño" value={sleepQuality} onChange={(v) => void updateRecovery('sleep_quality', v)} />
+                <WellbeingScale label="Nivel de energía" value={energyLevel} onChange={(v) => void updateRecovery('energy_level', v)} />
               </div>
             </div>
           </TabsContent>
@@ -645,17 +641,19 @@ const Nutrition = () => {
           <TabsContent value="biblioteca" className="mt-0 space-y-4">
             <Button
               onClick={openNewFoodFromLibrary}
-              className="h-11 w-full rounded-xl text-base font-bold tracking-tight transition-all duration-300 active:scale-95"
-              style={{ boxShadow: '0 0 16px rgba(34,197,94,0.3)' }}
+              className="h-12 w-full rounded-xl bg-pink-500 text-base font-bold tracking-tight text-white shadow-none transition-all hover:bg-pink-600 active:scale-[0.99]"
             >
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="mr-2 h-5 w-5" strokeWidth={2} />
               Nuevo alimento
             </Button>
 
             {customFoods.length === 0 ? (
-              <p className="rounded-2xl bg-card p-6 text-center text-sm text-muted-foreground">
-                Todavía no tenés alimentos. Creá el primero para armar tu biblioteca personal.
-              </p>
+              <div className="rounded-2xl border border-border/40 bg-card/80 px-6 py-10 text-center backdrop-blur-sm">
+                <Apple className="mx-auto mb-4 h-14 w-14 text-zinc-300 dark:text-zinc-600" aria-hidden />
+                <p className="text-sm text-muted-foreground">
+                  Todavía no tenés alimentos. Creá el primero para armar tu biblioteca personal.
+                </p>
+              </div>
             ) : (
               <ul className="space-y-2">
                 {customFoods.map((f) => (
@@ -719,73 +717,126 @@ const Nutrition = () => {
           }
         }}
       >
-        <DialogContent className="rounded-2xl border-0 bg-card sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">
-              {editingFoodId ? 'Editar alimento' : 'Nuevo alimento (por porción)'}
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-xs text-muted-foreground">Valores para 1 unidad o porción estándar (ej. 100 g).</p>
-          <div className="space-y-3">
-            <Input
-              autoFocus
-              placeholder="Nombre"
-              value={newFoodForm.name}
-              onChange={(e) => setNewFoodForm((p) => ({ ...p, name: e.target.value }))}
-              className="h-11 rounded-xl border-0 bg-secondary"
-            />
-            <div className="grid grid-cols-2 gap-2">
+        <DialogContent className="gap-0 overflow-hidden rounded-2xl border-0 bg-card p-0 sm:max-w-md">
+          <div className="p-6 pb-2 pt-6">
+            <DialogHeader className="space-y-1.5 text-left">
+              <DialogTitle className="pr-8 text-xl font-bold tracking-tight text-foreground">
+                {editingFoodId ? 'Editar alimento' : 'Nuevo alimento'}
+              </DialogTitle>
+              <p className="text-sm leading-snug text-muted-foreground">
+                Ingresá los macronutrientes totales de este alimento.
+              </p>
+            </DialogHeader>
+          </div>
+
+          <div className="max-h-[min(58vh,520px)] space-y-4 overflow-y-auto px-6 pb-4">
+            <div>
+              <label htmlFor="new-food-name" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                Nombre
+              </label>
               <Input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="0.1"
-                placeholder="Calorías (kcal)"
-                value={newFoodForm.base_calories}
-                onChange={(e) => setNewFoodForm((p) => ({ ...p, base_calories: e.target.value }))}
-                className="h-11 rounded-xl border-0 bg-secondary"
-              />
-              <Input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="0.1"
-                placeholder="Proteínas (g)"
-                value={newFoodForm.base_protein}
-                onChange={(e) => setNewFoodForm((p) => ({ ...p, base_protein: e.target.value }))}
-                className="h-11 rounded-xl border-0 bg-secondary"
-              />
-              <Input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="0.1"
-                placeholder="Carbohidratos (g)"
-                value={newFoodForm.base_carbs}
-                onChange={(e) => setNewFoodForm((p) => ({ ...p, base_carbs: e.target.value }))}
-                className="h-11 rounded-xl border-0 bg-secondary"
-              />
-              <Input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="0.1"
-                placeholder="Grasas (g)"
-                value={newFoodForm.base_fat}
-                onChange={(e) => setNewFoodForm((p) => ({ ...p, base_fat: e.target.value }))}
-                className="h-11 rounded-xl border-0 bg-secondary"
+                id="new-food-name"
+                autoFocus
+                placeholder="Ej. Avena integral o Hamburguesa"
+                value={newFoodForm.name}
+                onChange={(e) => setNewFoodForm((p) => ({ ...p, name: e.target.value }))}
+                className={NUTRITION_FORM_INPUT_CLASS}
               />
             </div>
-            <Button onClick={saveNewFood} disabled={savingFood} className="h-11 w-full rounded-xl text-base font-semibold">
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="new-food-cals" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                  Calorías (kcal)
+                </label>
+                <Input
+                  id="new-food-cals"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.1"
+                  placeholder="0"
+                  value={newFoodForm.base_calories}
+                  onChange={(e) => setNewFoodForm((p) => ({ ...p, base_calories: e.target.value }))}
+                  className={NUTRITION_FORM_INPUT_CLASS}
+                />
+              </div>
+              <div>
+                <label htmlFor="new-food-prot" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                  Proteínas (g)
+                </label>
+                <Input
+                  id="new-food-prot"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.1"
+                  placeholder="0"
+                  value={newFoodForm.base_protein}
+                  onChange={(e) => setNewFoodForm((p) => ({ ...p, base_protein: e.target.value }))}
+                  className={NUTRITION_FORM_INPUT_CLASS}
+                />
+              </div>
+              <div>
+                <label htmlFor="new-food-carbs" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                  Carbohidratos (g)
+                </label>
+                <Input
+                  id="new-food-carbs"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.1"
+                  placeholder="0"
+                  value={newFoodForm.base_carbs}
+                  onChange={(e) => setNewFoodForm((p) => ({ ...p, base_carbs: e.target.value }))}
+                  className={NUTRITION_FORM_INPUT_CLASS}
+                />
+              </div>
+              <div>
+                <label htmlFor="new-food-fat" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                  Grasas (g)
+                </label>
+                <Input
+                  id="new-food-fat"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.1"
+                  placeholder="0"
+                  value={newFoodForm.base_fat}
+                  onChange={(e) => setNewFoodForm((p) => ({ ...p, base_fat: e.target.value }))}
+                  className={NUTRITION_FORM_INPUT_CLASS}
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-3 border-t border-border/40 bg-card p-4 sm:justify-between">
+            <DialogClose asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                className="min-h-12 flex-1 rounded-xl font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-200"
+              >
+                Cancelar
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              onClick={() => void saveNewFood()}
+              disabled={savingFood}
+              className="min-h-12 flex-1 rounded-xl bg-pink-500 px-6 text-base font-semibold text-white shadow-none hover:bg-pink-600 disabled:opacity-60"
+            >
               {savingFood
                 ? 'Guardando…'
                 : editingFoodId
                   ? 'Guardar cambios'
                   : newFoodContext === 'meal-picker'
                     ? 'Guardar y continuar'
-                    : 'Guardar en biblioteca'}
+                    : 'Guardar'}
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -799,29 +850,33 @@ const Nutrition = () => {
           }
         }}
       >
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-3xl border-0 bg-card px-4 pb-8 pt-2">
-          <SheetHeader className="mb-3 text-left">
-            <SheetTitle className="text-foreground">
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-3xl border-0 bg-card px-4 pb-8 pt-3">
+          <SheetHeader className="mb-4 text-left">
+            <SheetTitle className="text-lg font-bold tracking-tight text-foreground">
               {pickerMealType ? `Elegir alimento · ${MEALS.find((x) => x.key === pickerMealType)?.label ?? ''}` : 'Elegir alimento'}
             </SheetTitle>
           </SheetHeader>
 
           <Button
             type="button"
+            variant="ghost"
             onClick={openNewFoodFromMealPicker}
-            className="mb-3 h-12 w-full rounded-xl text-base font-semibold shadow-sm"
+            className="mb-4 h-12 w-full rounded-xl border-0 bg-pink-500/10 text-base font-semibold text-pink-600 shadow-none hover:bg-pink-500/20 dark:bg-pink-500/20 dark:text-pink-400 dark:hover:bg-pink-500/30"
           >
             <Plus className="mr-2 h-5 w-5" />
             Crear nuevo alimento
           </Button>
 
-          <div className="relative mb-3">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <div className="relative mb-4">
+            <Search
+              className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+              aria-hidden
+            />
             <Input
               placeholder="Buscar por nombre…"
               value={foodPickerSearch}
               onChange={(e) => setFoodPickerSearch(e.target.value)}
-              className="h-11 rounded-xl border-0 bg-secondary pl-10"
+              className="min-h-[52px] rounded-2xl border-0 bg-zinc-100 py-3.5 pl-12 pr-4 text-base text-foreground placeholder:text-muted-foreground dark:bg-zinc-800"
               aria-label="Buscar alimento"
             />
           </div>
@@ -846,20 +901,31 @@ const Nutrition = () => {
           ) : filteredPickerFoods.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">No hay alimentos que coincidan con «{foodPickerSearch.trim()}».</p>
           ) : (
-            <ul className="space-y-2 pb-2">
+            <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/50">
               {filteredPickerFoods.map((f) => (
-                <li key={f.id}>
+                <li key={f.id} className="flex items-stretch bg-card/30">
                   <button
                     type="button"
                     onClick={() => selectFoodFromPicker(f)}
-                    className="flex w-full items-center justify-between gap-3 rounded-2xl bg-secondary/70 p-4 text-left transition-colors hover:bg-secondary"
+                    className="flex min-w-0 flex-1 flex-col items-start gap-1 py-4 pl-3 pr-2 text-left transition-colors hover:bg-zinc-50/80 active:bg-zinc-100/80 dark:hover:bg-zinc-900/50 dark:active:bg-zinc-900/70"
                   >
-                    <div className="min-w-0">
-                      <p className="font-semibold text-foreground">{f.name}</p>
-                      <FoodMacroSummary f={f} className="mt-1.5" />
-                    </div>
-                    <span className="shrink-0 self-center text-xs font-medium text-primary">Elegir</span>
+                    <span className="font-semibold text-lg leading-snug text-foreground">{f.name}</span>
+                    <span className="text-sm tabular-nums text-zinc-500 dark:text-zinc-400">
+                      {Math.round(f.base_calories)} kcal · P{f.base_protein}g C{f.base_carbs}g G{f.base_fat}g
+                    </span>
                   </button>
+                  <div className="flex shrink-0 items-center pr-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => selectFoodFromPicker(f)}
+                      className="h-11 w-11 shrink-0 rounded-xl border-0 bg-pink-500/10 text-pink-600 shadow-none hover:bg-pink-500/20 dark:bg-pink-500/20 dark:text-pink-400 dark:hover:bg-pink-500/30"
+                      aria-label={`Elegir ${f.name}`}
+                    >
+                      <Plus className="h-5 w-5" />
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -901,7 +967,7 @@ const Nutrition = () => {
           </DialogHeader>
           {selectedFood && scaledFromSelected && (
             <div className="space-y-4">
-              <div className="rounded-xl bg-secondary/70 p-3 text-sm">
+              <div className="rounded-xl bg-zinc-100/80 p-4 text-sm dark:bg-zinc-800/80">
                 <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Por porción base</p>
                 <p className="mt-1 tabular-nums text-foreground">
                   {Math.round(selectedFood.base_calories)} kcal · P{selectedFood.base_protein}g C{selectedFood.base_carbs}g G{selectedFood.base_fat}g
@@ -909,15 +975,18 @@ const Nutrition = () => {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Cantidad / porción</label>
+                <label htmlFor="portion-qty" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                  Porciones
+                </label>
                 <Input
+                  id="portion-qty"
                   type="number"
                   inputMode="decimal"
                   min={0.01}
                   step={0.1}
                   value={portionQty}
                   onChange={(e) => setPortionQty(e.target.value)}
-                  className="h-11 rounded-xl border-0 bg-secondary"
+                  className={NUTRITION_FORM_INPUT_CLASS}
                 />
               </div>
 
@@ -955,13 +1024,58 @@ const Nutrition = () => {
                 </div>
               )}
 
-              <Button onClick={addLogFromLibrary} disabled={savingLog} className="h-11 w-full rounded-xl text-base font-semibold">
+              <Button
+                type="button"
+                onClick={() => void addLogFromLibrary()}
+                disabled={savingLog}
+                className="min-h-12 w-full rounded-xl bg-pink-500 text-base font-semibold text-white shadow-none hover:bg-pink-600 disabled:opacity-60"
+              >
                 {savingLog ? 'Guardando…' : 'Agregar al diario'}
               </Button>
             </div>
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+};
+
+const WELLBEING_LEVELS = [1, 2, 3, 4, 5] as const;
+
+const WellbeingScale = ({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) => {
+  const selected = value > 0 ? Math.min(5, Math.max(1, Math.round(value))) : null;
+  return (
+    <div>
+      <p className="mb-2 text-xs text-muted-foreground">{label}</p>
+      <div className="flex gap-1.5">
+        {WELLBEING_LEVELS.map((n) => {
+          const isOn = selected === n;
+          return (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onChange(n)}
+              className={
+                isOn
+                  ? 'flex-1 rounded-full bg-pink-500 py-2 text-sm font-semibold tabular-nums text-white transition-colors'
+                  : 'flex-1 rounded-full bg-zinc-100 py-2 text-sm font-semibold tabular-nums text-zinc-500 transition-colors dark:bg-zinc-800 dark:text-zinc-500'
+              }
+              aria-pressed={isOn}
+              aria-label={`${label}: ${n} de 5`}
+            >
+              {n}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 };
@@ -976,7 +1090,7 @@ const MacroBar = ({ label, value, goal, unit, color }: { label: string; value: n
           {Math.round(value)}{unit}{goal > 0 && <span className="text-muted-foreground"> / {goal}{unit}</span>}
         </span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+      <div className="h-2 overflow-hidden rounded-full bg-secondary">
         <div
           className="h-full rounded-full transition-all duration-300"
           style={{ width: `${pct}%`, background: color }}

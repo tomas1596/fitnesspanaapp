@@ -3,6 +3,8 @@ import * as React from "react";
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 
 const TOAST_LIMIT = 1;
+/** Tiempo que el toast permanece abierto antes del auto-cierre (Radix `duration`). */
+const TOAST_DURATION_MS = 2000;
 const TOAST_REMOVE_DELAY = 1000000;
 
 type ToasterToast = ToastProps & {
@@ -134,8 +136,10 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">;
 
-function toast({ ...props }: Toast) {
+function toast(props: Toast) {
   const id = genId();
+  const { duration: durationProp, ...rest } = props;
+  const duration = durationProp ?? TOAST_DURATION_MS;
 
   const update = (props: ToasterToast) =>
     dispatch({
@@ -147,7 +151,8 @@ function toast({ ...props }: Toast) {
   dispatch({
     type: "ADD_TOAST",
     toast: {
-      ...props,
+      ...rest,
+      duration,
       id,
       open: true,
       onOpenChange: (open) => {

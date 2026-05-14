@@ -10,19 +10,33 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import {
   LogOut, User, Activity, Flame, Beef, Droplets, Save, Camera, Lock,
-  Target, Plus, TrendingUp, Settings2, Sun, Moon, Pencil, LayoutDashboard, HelpCircle,
-  FileText, Heart, Sparkles, AlertTriangle, Loader2, Trash2, X, ZoomIn,
+  Target, Plus, TrendingUp, Settings2, Pencil, LayoutDashboard, HelpCircle,
+  FileText, Heart, Sparkles, AlertTriangle, Loader2, Trash2, X, ZoomIn, ChevronRight,
+  Eye, EyeOff,
 } from 'lucide-react';
 import StepsRing from '@/components/StepsRing';
+import { AvatarCropModal } from '@/components/AvatarCropModal';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
+import { ThemeSegmentedControl } from '@/components/ThemeSegmentedControl';
 import { FAQBottomSheet } from '@/components/FAQBottomSheet';
 import { useTheme } from '@/hooks/useTheme';
 import { ACTIVITY_LEVEL_OPTIONS, FITNESS_GOAL_OPTIONS } from '@/lib/profileOptions';
 import { calculateAge } from '@/lib/age';
+import { todayLocalYMD, localDayBoundsISO } from '@/lib/nutritionDay';
+import { cn } from '@/lib/utils';
+import { passwordMeetsPolicy } from '@/lib/passwordPolicy';
+import { PasswordRequirementsList } from '@/components/PasswordRequirementsList';
 
 const ADMIN_EMAIL = 'thomzonlyskills@gmail.com';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
+
+/** Fecha corta estilo feedback producto ("Lun. 11 Nov") para pasos diarios */
+const formatStepsHeaderDate = (d = new Date()) => {
+  const dow = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][d.getDay()];
+  const mon = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][d.getMonth()];
+  return `${dow}. ${d.getDate()} ${mon}`;
+};
 
 /** Convierte input de formulario a número para columnas numeric en `profiles` (null si vacío o inválido). */
 const parseProfileNumber = (raw: string): number | null => {
@@ -32,17 +46,64 @@ const parseProfileNumber = (raw: string): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+/** Inputs / selects en «Datos & objetivos»: contraste y focus neón. */
+const profileFormInputClass =
+  'min-h-[2.875rem] w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-base shadow-none outline-none ring-0 ring-offset-0 md:text-sm ' +
+  'text-zinc-900 placeholder:text-zinc-400 transition-[border-color,box-shadow] duration-200 ' +
+  'focus-visible:!border-pink-500 focus-visible:!outline-none focus-visible:!ring-1 focus-visible:!ring-pink-500 focus-visible:!ring-offset-0 ' +
+  'dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder:text-zinc-500 ' +
+  'dark:focus-visible:!border-pink-500 dark:focus-visible:!ring-pink-500 disabled:opacity-60';
+
+/** SelectTrigger: foco compacto tipo iOS sin doble ring gris por defecto. */
+const profileFormSelectTriggerClass =
+  'min-h-[2.875rem] h-auto w-full justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-base md:text-sm ' +
+  'text-zinc-900 shadow-none outline-none ring-0 ring-offset-0 transition-[border-color,box-shadow] duration-200 ' +
+  'focus:!border-pink-500 focus:!outline-none focus:!ring-1 focus:!ring-pink-500 focus:!ring-offset-0 ' +
+  'focus-visible:!border-pink-500 focus-visible:!ring-1 focus-visible:!ring-pink-500 focus-visible:!ring-offset-0 ' +
+  'data-[state=open]:!border-pink-500 data-[state=open]:!ring-1 data-[state=open]:!ring-pink-500 data-[state=open]:!ring-offset-0 ' +
+  'dark:border-zinc-700 dark:bg-zinc-900 dark:text-white ' +
+  'dark:focus:!border-pink-500 dark:focus:!ring-pink-500 dark:data-[state=open]:!border-pink-500 dark:data-[state=open]:!ring-pink-500 ' +
+  'disabled:opacity-60 data-[placeholder]:text-zinc-400 dark:data-[placeholder]:text-zinc-500';
+
+const settingsListCardCn =
+  'overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none';
+
+const settingsListRowCn =
+  'flex min-h-[3rem] w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-zinc-900 ' +
+  'transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-900/70 dark:active:bg-zinc-800/80';
+
+const settingsListSectionHeaderCn =
+  'border-b border-zinc-100 bg-zinc-50/90 px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/70';
+
+/** Inputs en modal «Editar perfil»: fondo suave y radios amplios */
+const editModalInputClass =
+  'h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-100 px-4 text-base text-zinc-900 shadow-none outline-none transition ' +
+  'placeholder:text-zinc-400 focus-visible:border-pink-500 focus-visible:ring-1 focus-visible:ring-pink-500 ' +
+  'dark:border-zinc-600/80 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus-visible:border-pink-500 dark:focus-visible:ring-pink-500';
+
+const modalSurfaceClass =
+  'max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 text-zinc-900 shadow-xl ' +
+  'dark:border-white/10 dark:bg-zinc-950 dark:text-zinc-100';
+
+const profileNeonButtonClass =
+  'w-full rounded-xl border-0 bg-[#FF1493] px-4 py-3 text-base font-bold text-zinc-950 shadow-md shadow-pink-500/20 transition hover:bg-[#FF4DA6] hover:shadow-lg hover:shadow-pink-500/25 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 dark:text-black';
+
 const AdminButton = () => {
   const navigate = useNavigate();
   return (
-    <Button
-      type="button"
-      onClick={() => navigate('/admin')}
-      className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-violet-500/40 bg-violet-600/15 text-sm font-semibold text-violet-700 shadow-sm transition hover:bg-violet-600/25 dark:text-violet-300"
-    >
-      <LayoutDashboard className="h-4 w-4" />
-      Panel de Control
-    </Button>
+    <div className={cn(settingsListCardCn)}>
+      <button
+        type="button"
+        onClick={() => navigate('/admin')}
+        className={cn(settingsListRowCn)}
+      >
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/15">
+          <LayoutDashboard className="h-[18px] w-[18px] text-violet-600 dark:text-violet-400" />
+        </span>
+        <span className="min-w-0 flex-1 text-left font-medium leading-snug">Panel de Control</span>
+        <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
+      </button>
+    </div>
   );
 };
 
@@ -103,6 +164,7 @@ const Profile = () => {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [passwordDialog, setPasswordDialog] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
 
   const [editProfileOpen, setEditProfileOpen] = useState(false);
@@ -119,8 +181,33 @@ const Profile = () => {
   const [draftGoal, setDraftGoal] = useState('10000');
 
   const [faqOpen, setFaqOpen] = useState(false);
+  /** Calorías y prote registradas hoy + vasos (hidratación) para barras de avance sutiles */
+  const [todayMacroTotals, setTodayMacroTotals] = useState({ calories: 0, protein: 0, glasses: 0 });
   /** Tema de marca leído de profiles.theme ('default' | 'pink') */
   const [brandTheme, setBrandTheme] = useState<string>('default');
+
+  /** Recorte de avatar: preview local + archivo original conservado para futura subida HR. */
+  const [avatarCropOpen, setAvatarCropOpen] = useState(false);
+  const [avatarCropSrc, setAvatarCropSrc] = useState<string | null>(null);
+  const avatarOriginalDraftRef = useRef<File | null>(null);
+
+  const endAvatarCropSession = useCallback(() => {
+    avatarOriginalDraftRef.current = null;
+    setAvatarCropOpen(false);
+    setAvatarCropSrc((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }, []);
+
+  const openAvatarCropFromFile = useCallback((file: File) => {
+    avatarOriginalDraftRef.current = file;
+    setAvatarCropSrc((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setAvatarCropOpen(true);
+  }, []);
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
@@ -155,7 +242,42 @@ const Profile = () => {
     if (s) { setSteps(s.steps); setStepsId(s.id); } else { setSteps(0); setStepsId(null); }
   }, [user]);
 
+  const loadTodayMacroTotals = useCallback(async () => {
+    if (!user) return;
+    const day = todayLocalYMD();
+    const { start, end } = localDayBoundsISO(day);
+    const [{ data: feRows }, { data: nlRows }, { data: hyd }] = await Promise.all([
+      supabase.from('food_entries').select('calories, protein').eq('user_id', user.id).eq('entry_date', day),
+      supabase
+        .from('nutrition_logs')
+        .select('calories, protein')
+        .eq('user_id', user.id)
+        .gte('consumed_at', start)
+        .lte('consumed_at', end),
+      supabase.from('hydration_logs').select('glasses').eq('user_id', user.id).eq('log_date', day).maybeSingle(),
+    ]);
+    let calories = 0;
+    let protein = 0;
+    for (const r of feRows || []) {
+      calories += Number((r as { calories: unknown }).calories ?? 0);
+      protein += Number((r as { protein: unknown }).protein ?? 0);
+    }
+    for (const r of nlRows || []) {
+      calories += Number((r as { calories: unknown }).calories ?? 0);
+      protein += Number((r as { protein: unknown }).protein ?? 0);
+    }
+    setTodayMacroTotals({
+      calories: Math.round(calories),
+      protein: Math.round(protein),
+      glasses: hyd?.glasses ?? 0,
+    });
+  }, [user]);
+
   useEffect(() => { loadProfile(); }, [loadProfile]);
+
+  useEffect(() => {
+    void loadTodayMacroTotals();
+  }, [loadTodayMacroTotals]);
 
   const openEditProfile = () => {
     setDraftFirst(firstName);
@@ -250,8 +372,8 @@ const Profile = () => {
     toast({ title: 'Guardado', description: 'Datos actualizados.' });
   };
 
-  const uploadAvatar = async (file: File) => {
-    if (!user) return;
+  const uploadAvatar = async (file: File): Promise<boolean> => {
+    if (!user) return false;
     setUploadingAvatar(true);
     const ext = file.name.split('.').pop()?.replace(/[^a-z0-9]/gi, '') || 'jpg';
     const path = `${user.id}/avatar.${ext}`;
@@ -259,7 +381,7 @@ const Profile = () => {
     if (uploadError) {
       toast({ title: 'Error al subir imagen', description: uploadError.message, variant: 'destructive' });
       setUploadingAvatar(false);
-      return;
+      return false;
     }
     const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
     const url = `${pub.publicUrl}?t=${Date.now()}`;
@@ -270,11 +392,12 @@ const Profile = () => {
     if (profileError) {
       toast({ title: 'Error al guardar foto', description: profileError.message, variant: 'destructive' });
       setUploadingAvatar(false);
-      return;
+      return false;
     }
     setAvatarUrl(url);
     setUploadingAvatar(false);
     toast({ title: 'Foto actualizada' });
+    return true;
   };
 
   const deleteAvatar = async () => {
@@ -322,8 +445,17 @@ const Profile = () => {
     await supabase.from('profiles').update({ step_goal: g }).eq('user_id', user.id);
   };
 
+  const newPasswordOk = passwordMeetsPolicy(newPassword);
+
   const changePassword = async () => {
-    if (newPassword.length < 6) { toast({ title: 'Error', description: 'Mínimo 6 caracteres', variant: 'destructive' }); return; }
+    if (!newPasswordOk) {
+      toast({
+        title: 'Contraseña no válida',
+        description: 'Revisá los requisitos debajo del campo.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setChangingPassword(true);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setChangingPassword(false);
@@ -342,37 +474,36 @@ const Profile = () => {
   const tdee = Math.round(bmr * 1.55);
   const proteinGoal = hasData ? Math.round(w * 2) : 0;
   const hydrationL = hasData ? ((w * 35) / 1000).toFixed(1) : '0';
+  const hydrationGlassGoal = hasData ? Math.max(8, Math.round((w * 35) / 250)) : 0;
   const weightDiff = w > 0 && tw > 0 ? (w - tw) : null;
+
+  const handleAvatarCropApply = async (blob: Blob) => {
+    const thumbnail = new File([blob], 'avatar.jpg', {
+      type: blob.type.startsWith('image/') ? blob.type : 'image/jpeg',
+    });
+    const ok = await uploadAvatar(thumbnail);
+    if (!ok) return;
+    /* Futuro HR: usar `avatarOriginalDraftRef.current` antes de `endAvatarCropSession`
+       para una segunda subida (`profiles.avatar_original_url`, bucket dedicado). */
+    endAvatarCropSession();
+  };
 
   const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
   const ageLabel = ageYears != null ? `${ageYears} años` : 'Completá tu fecha de nacimiento';
+  const stepsProgressPct = stepGoal > 0 ? Math.min(100, Math.round((steps / stepGoal) * 100)) : 0;
+  const kcalProgressPct = hasData && tdee > 0 ? Math.min(100, Math.round((todayMacroTotals.calories / tdee) * 100)) : 0;
+  const proteinProgressPct = hasData && proteinGoal > 0 ? Math.min(100, Math.round((todayMacroTotals.protein / proteinGoal) * 100)) : 0;
+  const hydrationProgressPct = hasData && hydrationGlassGoal > 0 ? Math.min(100, Math.round((todayMacroTotals.glasses / hydrationGlassGoal) * 100)) : 0;
 
   return (
     <div className="min-h-screen bg-background px-4 pb-24">
       <div className="mx-auto max-w-lg space-y-4">
         <PageScreenHeader
           title="Perfil"
-          right={
-            <div className="w-48">
-              <Select value={theme} onValueChange={(v) => setTheme(v as 'light' | 'dark' | 'system')}>
-                <SelectTrigger className="h-10 rounded-xl border border-input bg-card text-xs font-medium text-foreground shadow-sm">
-                  <SelectValue placeholder="Tema" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="light">
-                    <span className="flex items-center gap-2"><Sun className="h-3.5 w-3.5" /> Modo Día</span>
-                  </SelectItem>
-                  <SelectItem value="dark">
-                    <span className="flex items-center gap-2"><Moon className="h-3.5 w-3.5" /> Modo Noche</span>
-                  </SelectItem>
-                  <SelectItem value="system">Automático (Sistema)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          }
+          right={<ThemeSegmentedControl value={theme} onChange={setTheme} />}
         />
 
-        <div className="rounded-2xl bg-card p-4">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
           <div className="flex items-center gap-4">
             <div className="relative">
               <input
@@ -383,18 +514,31 @@ const Profile = () => {
                 onChange={e => {
                   const file = e.target.files?.[0];
                   e.target.value = '';
-                  if (file) void uploadAvatar(file);
+                  if (!file) return;
+                  if (!file.type.startsWith('image/')) {
+                    toast({
+                      title: 'Archivo no válido',
+                      description: 'Seleccioná una imagen (JPG, PNG, etc.).',
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+                  setAvatarModalOpen(false);
+                  openAvatarCropFromFile(file);
                 }}
               />
               <button
                 type="button"
                 onClick={() => { if (!uploadingAvatar) setAvatarModalOpen(true); }}
-                className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-accent"
+                className={cn(
+                  'relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-pink-500 bg-accent',
+                  'drop-shadow-none dark:drop-shadow-[0_0_8px_rgba(255,20,147,0.45)]',
+                )}
                 aria-label="Cambiar foto de perfil"
               >
                 {avatarUrl
                   ? <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
-                  : <User className="h-6 w-6 text-muted-foreground" />}
+                  : <User className="h-6 w-6 text-pink-600/85 dark:text-pink-400/90" />}
                 {uploadingAvatar ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/55">
                     <Loader2 className="h-5 w-5 animate-spin text-white" />
@@ -407,7 +551,7 @@ const Profile = () => {
               </button>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-lg font-semibold leading-tight text-foreground">
+              <p className="text-lg font-semibold leading-tight text-zinc-900 dark:text-zinc-100">
                 {fullName || 'Tu nombre'}
               </p>
               {/* ── Role badge ── */}
@@ -417,7 +561,7 @@ const Profile = () => {
                     Admin 👑
                   </span>
                 ) : isTester ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[#39FF14]/15 px-2.5 py-0.5 text-[11px] font-bold text-[#22c55e] dark:text-[#39FF14]">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#FF1493]/15 px-2.5 py-0.5 text-[11px] font-bold text-[#db2777] dark:text-[#FF1493]">
                     Tester ∞
                   </span>
                 ) : isPremium ? (
@@ -430,7 +574,7 @@ const Profile = () => {
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 text-sm text-muted-foreground">{ageLabel}</p>
+              <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{ageLabel}</p>
             </div>
             <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0 rounded-xl" onClick={openEditProfile} aria-label="Editar perfil">
               <Pencil className="h-4 w-4" />
@@ -494,17 +638,41 @@ const Profile = () => {
           </>
         )}
 
-        <div className="rounded-2xl bg-card p-4">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-zinc-900 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:shadow-none">
           <div className="flex items-center gap-4">
             <StepsRing steps={steps} goal={stepGoal} />
-            <div className="flex-1">
-              <div className="flex items-center justify-between">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Pasos hoy</p>
-                <button onClick={() => setGoalDialog(true)} className="flex items-center gap-1 text-[10px] text-primary">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
+                    Pasos hoy
+                  </p>
+                  <p className="text-sm font-semibold leading-tight tracking-tight text-zinc-800 dark:text-zinc-100">
+                    {formatStepsHeaderDate()}
+                  </p>
+                  <div className="flex flex-wrap items-baseline gap-x-2 pt-1 text-[13px] leading-snug sm:gap-x-3 sm:text-sm">
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      Meta:{' '}
+                      <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+                        {stepGoal.toLocaleString()}
+                      </span>
+                    </span>
+                    <span className="text-zinc-300 dark:text-zinc-600 select-none" aria-hidden>
+                      |
+                    </span>
+                    <span className="font-bold tabular-nums text-pink-600 dark:text-pink-400">
+                      {stepsProgressPct}%
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setGoalDialog(true)}
+                  className="flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-pink-600 transition hover:bg-pink-500/10 dark:text-pink-400"
+                >
                   <Settings2 className="h-3 w-3" /> Meta
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground/70">Meta: {stepGoal.toLocaleString()}</p>
               <div className="mt-2 flex items-center gap-2">
                 <Input
                   type="number"
@@ -512,9 +680,15 @@ const Profile = () => {
                   value={steps || ''}
                   placeholder="0"
                   onChange={e => updateSteps(parseInt(e.target.value) || 0)}
-                  className="h-10 rounded-xl border border-input bg-secondary text-sm"
+                  className={cn(profileFormInputClass, 'flex-1')}
                 />
-                <Button size="sm" variant="secondary" onClick={() => updateSteps(steps + 1000)} className="h-10 rounded-xl px-3">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  type="button"
+                  onClick={() => updateSteps(steps + 1000)}
+                  className="h-10 shrink-0 rounded-xl border border-zinc-200 bg-zinc-100 px-3 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                >
                   <Plus className="mr-1 h-3 w-3" /> 1k
                 </Button>
               </div>
@@ -523,24 +697,30 @@ const Profile = () => {
         </div>
 
         {hasData && (
-          <div className="grid grid-cols-4 gap-2">
-            <MiniStat icon={Activity} label="IMC" value={imc.toFixed(1)} />
-            <MiniStat icon={Flame} label="kcal" value={tdee.toString()} />
-            <MiniStat icon={Beef} label="Prot" value={`${proteinGoal}g`} />
-            <MiniStat icon={Droplets} label="Agua" value={`${hydrationL}L`} />
+          <div className="rounded-2xl border border-zinc-200 bg-white px-2 py-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none sm:px-5">
+            <div className="grid grid-cols-4 gap-x-2 sm:gap-x-8">
+              <MiniStat icon={Activity} label="IMC" value={imc.toFixed(1)} />
+              <MiniStat icon={Flame} label="kcal" value={tdee.toString()} progressPct={kcalProgressPct} />
+              <MiniStat icon={Beef} label="Prot" value={`${proteinGoal}g`} progressPct={proteinProgressPct} />
+              <MiniStat icon={Droplets} label="Agua" value={`${hydrationL}L`} progressPct={hydrationProgressPct} />
+            </div>
           </div>
         )}
 
-        <div className="rounded-2xl bg-card p-4">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Datos & objetivos</h2>
-          <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none sm:px-5">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
+            Datos & objetivos
+          </h2>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-4">
             <LabeledNum label="Altura (cm)" value={height} onChange={setHeight} />
             <LabeledNum label="Peso (kg)" value={weight} onChange={setWeight} />
             <LabeledNum label="Peso meta (kg)" value={targetWeight} onChange={setTargetWeight} />
-            <div className="col-span-2">
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Nivel de actividad</label>
+            <div className="col-span-2 space-y-1.5">
+              <label htmlFor="profile-activity-level" className="block text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                Nivel de actividad
+              </label>
               <Select value={activityLevel || undefined} onValueChange={setActivityLevel}>
-                <SelectTrigger className="h-10 rounded-xl border border-zinc-200 bg-white text-sm transition-colors focus:border-primary focus:ring-0 dark:border-border dark:bg-secondary">
+                <SelectTrigger id="profile-activity-level" className={cn(profileFormSelectTriggerClass)}>
                   <SelectValue placeholder="Elegir nivel" />
                 </SelectTrigger>
                 <SelectContent>
@@ -550,10 +730,12 @@ const Profile = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-2">
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Objetivo fitness</label>
+            <div className="col-span-2 space-y-1.5">
+              <label htmlFor="profile-fitness-goal" className="block text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                Objetivo fitness
+              </label>
               <Select value={fitnessGoal || undefined} onValueChange={setFitnessGoal}>
-                <SelectTrigger className="h-10 rounded-xl border border-zinc-200 bg-white text-sm transition-colors focus:border-primary focus:ring-0 dark:border-border dark:bg-secondary">
+                <SelectTrigger id="profile-fitness-goal" className={cn(profileFormSelectTriggerClass)}>
                   <SelectValue placeholder="Elegir objetivo" />
                 </SelectTrigger>
                 <SelectContent>
@@ -565,7 +747,7 @@ const Profile = () => {
             </div>
           </div>
           {weightDiff !== null && (
-            <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-primary">
+            <p className="mt-4 flex items-center gap-1.5 text-xs font-medium text-primary">
               <Target className="h-3 w-3" />
               {weightDiff > 0 ? `Faltan ${weightDiff.toFixed(1)} kg` :
                 weightDiff < 0 ? `${Math.abs(weightDiff).toFixed(1)} kg bajo la meta` : '¡En tu meta! 🎉'}
@@ -574,8 +756,7 @@ const Profile = () => {
           <Button
             onClick={saveProfile}
             disabled={saving}
-            className="mt-3 h-11 w-full rounded-xl text-sm font-bold text-black transition-all duration-300 active:scale-95 dark:text-primary-foreground"
-            style={{ boxShadow: '0 0 16px rgba(34,197,94,0.25)' }}
+            className="mt-5 w-full rounded-xl border-0 bg-[#FF1493] px-4 py-3 text-base font-bold text-zinc-950 shadow-md shadow-pink-500/20 transition hover:bg-[#FF4DA6] hover:shadow-lg hover:shadow-pink-500/25 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 dark:text-black"
           >
             <Save className="mr-2 h-4 w-4" /> {saving ? 'Guardando...' : 'Guardar'}
           </Button>
@@ -584,65 +765,97 @@ const Profile = () => {
         {isAdmin && user?.email === ADMIN_EMAIL && <AdminButton />}
 
         {/* ── Suscripción ── */}
-        <div className="rounded-2xl bg-card p-3">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setFaqOpen(true)}
-            className="h-10 w-full justify-start rounded-xl text-sm font-medium"
-          >
-            <HelpCircle className="mr-2 h-4 w-4 text-primary" /> Suscripción y Ayuda
-          </Button>
-        </div>
-
-        {/* ── Ayuda e Información ── */}
-        <div className="rounded-2xl bg-card p-3">
-          <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Ayuda e Información
-          </p>
-
-          {/* Soporte directo por WhatsApp */}
-          <a
-            href="https://wa.me/5493388414236?text=Hola,%20necesito%20ayuda%20con%20Pana%20Fitness"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-foreground transition hover:bg-accent"
-          >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15">
-              {/* WhatsApp official SVG */}
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="#25D366" aria-hidden="true">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-              </svg>
-            </span>
-            Soporte directo
-            <span className="ml-auto text-[10px] font-normal text-muted-foreground">WhatsApp</span>
-          </a>
-
-          {/* Términos y Condiciones — mismo patrón visual que el <a> de arriba */}
+        <div className={cn(settingsListCardCn)}>
           <button
             type="button"
-            onClick={() => navigate('/terminos')}
-            className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-foreground transition hover:bg-accent"
+            onClick={() => setFaqOpen(true)}
+            className={cn(settingsListRowCn)}
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted">
-              <FileText className="h-4 w-4 text-muted-foreground" />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-pink-500/12">
+              <HelpCircle className="h-[18px] w-[18px] text-pink-600 dark:text-pink-400" />
             </span>
-            Términos y Condiciones
+            <span className="min-w-0 flex-1 text-left font-medium leading-snug">Suscripción y Ayuda</span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
           </button>
         </div>
 
+        {/* ── Ayuda e Información ── */}
+        <div className={cn(settingsListCardCn)}>
+          <div className={cn(settingsListSectionHeaderCn)}>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Ayuda e Información
+            </p>
+          </div>
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <a
+              href="https://wa.me/5493388414236?text=Hola,%20necesito%20ayuda%20con%20Pana%20Fitness"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(settingsListRowCn)}
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-pink-500/15">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="#25D366" aria-hidden="true">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                </svg>
+              </span>
+              <span className="min-w-0 flex-1 truncate text-left leading-snug">Soporte directo</span>
+              <span className="mr-1 shrink-0 rounded-md bg-pink-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-pink-700 dark:text-pink-400">
+                WhatsApp
+              </span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
+            </a>
+            <button
+              type="button"
+              onClick={() => navigate('/terminos')}
+              className={cn(settingsListRowCn)}
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
+                <FileText className="h-[18px] w-[18px] text-zinc-600 dark:text-zinc-400" />
+              </span>
+              <span className="min-w-0 flex-1 text-left font-medium leading-snug">Términos y Condiciones</span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
+            </button>
+          </div>
+        </div>
+
         {/* ── Cuenta ── */}
-        <div className="rounded-2xl bg-card p-3">
-          <Button variant="ghost" onClick={() => setPasswordDialog(true)} className="h-10 w-full justify-start rounded-xl text-sm">
-            <Lock className="mr-2 h-4 w-4" /> Cambiar Contraseña
-          </Button>
-          <Button variant="ghost" onClick={signOut} className="h-10 w-full justify-start rounded-xl text-sm text-destructive hover:bg-destructive/10 hover:text-destructive">
-            <LogOut className="mr-2 h-4 w-4" /> Cerrar Sesión
-          </Button>
+        <div className={cn(settingsListCardCn)}>
+          <div className={cn(settingsListSectionHeaderCn)}>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Cuenta
+            </p>
+          </div>
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <button type="button" onClick={() => setPasswordDialog(true)} className={cn(settingsListRowCn)}>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
+                <Lock className="h-[18px] w-[18px] text-zinc-600 dark:text-zinc-400" />
+              </span>
+              <span className="min-w-0 flex-1 text-left font-medium leading-snug">Cambiar contraseña</span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={signOut}
+              className={cn(settingsListRowCn, 'text-red-600 hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40 dark:active:bg-red-950/60')}
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500/10">
+                <LogOut className="h-[18px] w-[18px] text-red-600 dark:text-red-400" />
+              </span>
+              <span className="min-w-0 flex-1 text-left font-semibold leading-snug">Cerrar sesión</span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-red-400/80 dark:text-red-400/70" aria-hidden />
+            </button>
+          </div>
         </div>
       </div>
 
       <FAQBottomSheet open={faqOpen} onOpenChange={setFaqOpen} />
+
+      <AvatarCropModal
+        imageSrc={avatarCropSrc}
+        open={avatarCropOpen}
+        onCancel={endAvatarCropSession}
+        onApply={handleAvatarCropApply}
+      />
 
       {/* ── Avatar options modal ── */}
       {avatarModalOpen && (
@@ -660,12 +873,15 @@ const Profile = () => {
                 type="button"
                 aria-label="Ver foto completa"
                 onClick={() => avatarUrl && setLightboxOpen(true)}
-                className="group relative h-24 w-24 overflow-hidden rounded-full bg-accent ring-4 ring-card shadow-lg transition-transform active:scale-95"
+                className={cn(
+                  'group relative h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-pink-500 bg-accent transition-transform active:scale-95',
+                  'drop-shadow-none dark:drop-shadow-[0_0_8px_rgba(255,20,147,0.45)]',
+                )}
               >
                 {avatarUrl
                   ? <img src={avatarUrl} alt="Foto de perfil" className="h-full w-full object-cover" />
                   : <div className="flex h-full w-full items-center justify-center">
-                      <User className="h-10 w-10 text-muted-foreground" />
+                      <User className="h-10 w-10 text-pink-600/85 dark:text-pink-400/90" />
                     </div>}
                 {avatarUrl && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/30">
@@ -732,21 +948,24 @@ const Profile = () => {
           }
         }}
       >
-        <DialogContent className="rounded-2xl border-0 bg-card text-center">
+        <DialogContent className={cn(modalSurfaceClass, 'text-center')}>
           <DialogHeader>
-            <DialogTitle className="text-center text-foreground">¡Bienvenido, Tester! 🎉</DialogTitle>
+            <DialogTitle className="text-center text-lg font-bold text-zinc-900 dark:text-zinc-50">
+              ¡Bienvenido, Tester! 🎉
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pb-2 pt-1">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#39FF14]/15">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#FF1493]/15">
               <span className="text-3xl">∞</span>
             </div>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Tenés <span className="font-semibold text-foreground">acceso de por vida</span> a todas las funciones de Pana Fitness.
+            <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+              Tenés <span className="font-semibold text-zinc-900 dark:text-zinc-100">acceso de por vida</span> a todas
+              las funciones de Pana Fitness.
               <br />
               ¡Gracias por testear y ayudarnos a mejorar la app! 🙌
             </p>
             <Button
-              className="h-11 w-full rounded-xl font-semibold"
+              className={cn('h-12', profileNeonButtonClass)}
               onClick={() => {
                 setTesterModalOpen(false);
                 void markTesterNotified();
@@ -768,21 +987,27 @@ const Profile = () => {
           }
         }}
       >
-        <DialogContent className="rounded-2xl border-0 bg-card text-center">
+        <DialogContent className={cn(modalSurfaceClass, 'text-center')}>
           <DialogHeader>
-            <DialogTitle className="text-center text-foreground">¡Premium activado! ✦</DialogTitle>
+            <DialogTitle className="text-center text-lg font-bold text-zinc-900 dark:text-zinc-50">
+              ¡Premium activado! ✦
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pb-2 pt-1">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/15">
               <span className="text-3xl">⭐</span>
             </div>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Tu suscripción <span className="font-semibold text-amber-600 dark:text-amber-400">Premium está activa por 30 días</span>.
+            <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+              Tu suscripción{' '}
+              <span className="font-semibold text-amber-600 dark:text-amber-400">
+                Premium está activa por 30 días
+              </span>
+              .
               <br />
               Tenés acceso completo a todos los entrenamientos y funciones de la app.
             </p>
             <Button
-              className="h-11 w-full rounded-xl bg-amber-500 font-semibold hover:bg-amber-600"
+              className="h-12 w-full rounded-xl border-0 bg-amber-500 font-bold text-zinc-950 shadow-md transition hover:bg-amber-600 active:scale-[0.98] dark:text-black"
               onClick={() => {
                 setPremiumModalOpen(false);
                 void markPremiumNotified();
@@ -795,36 +1020,74 @@ const Profile = () => {
       </Dialog>
 
       <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
-        <DialogContent className="rounded-2xl border-0 bg-card">
+        <DialogContent className={cn(modalSurfaceClass)}>
           <DialogHeader>
-            <DialogTitle className="text-foreground">Editar perfil</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Editar perfil</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Nombre</label>
-              <Input value={draftFirst} onChange={(e) => setDraftFirst(e.target.value)} className="h-11 rounded-xl border border-input bg-secondary" />
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Nombre
+              </label>
+              <Input
+                value={draftFirst}
+                onChange={(e) => setDraftFirst(e.target.value)}
+                className={editModalInputClass}
+              />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Apellido</label>
-              <Input value={draftLast} onChange={(e) => setDraftLast(e.target.value)} className="h-11 rounded-xl border border-input bg-secondary" />
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Apellido
+              </label>
+              <Input
+                value={draftLast}
+                onChange={(e) => setDraftLast(e.target.value)}
+                className={editModalInputClass}
+              />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Fecha de nacimiento</label>
-              <Input type="date" value={draftDob} onChange={(e) => setDraftDob(e.target.value)} className="h-11 rounded-xl border border-input bg-secondary" />
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Fecha de nacimiento
+              </label>
+              <Input
+                type="date"
+                value={draftDob}
+                onChange={(e) => setDraftDob(e.target.value)}
+                className={editModalInputClass}
+              />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Género</label>
-              <Select value={draftGender} onValueChange={setDraftGender}>
-                <SelectTrigger className="h-11 rounded-xl border border-input bg-secondary">
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="male">Masculino</SelectItem>
-                  <SelectItem value="female">Femenino</SelectItem>
-                </SelectContent>
-              </Select>
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Género
+              </label>
+              <div className="flex gap-2 rounded-2xl border border-zinc-200 bg-zinc-100/50 p-1 dark:border-zinc-700 dark:bg-zinc-900/50">
+                {(
+                  [
+                    { value: 'male' as const, label: 'Masculino' },
+                    { value: 'female' as const, label: 'Femenino' },
+                  ] as const
+                ).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setDraftGender(value)}
+                    className={cn(
+                      'flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all',
+                      draftGender === value
+                        ? 'bg-[#FF1493] text-zinc-950 shadow-md shadow-pink-500/25 dark:text-black'
+                        : 'text-zinc-500 hover:bg-white/60 dark:text-zinc-400 dark:hover:bg-zinc-800/80',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <Button onClick={() => void saveIdentity()} disabled={savingIdentity} className="h-11 w-full rounded-xl font-semibold">
+            <Button
+              onClick={() => void saveIdentity()}
+              disabled={savingIdentity}
+              className={cn('mt-1 h-12', profileNeonButtonClass)}
+            >
               {savingIdentity ? 'Guardando...' : 'Guardar cambios'}
             </Button>
           </div>
@@ -832,24 +1095,63 @@ const Profile = () => {
       </Dialog>
 
       <Dialog open={goalDialog} onOpenChange={setGoalDialog}>
-        <DialogContent className="rounded-2xl border-0 bg-card">
-          <DialogHeader><DialogTitle className="text-foreground">Meta diaria de pasos</DialogTitle></DialogHeader>
+        <DialogContent className={cn(modalSurfaceClass)}>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Meta diaria de pasos</DialogTitle>
+          </DialogHeader>
           <div className="space-y-3">
-            <Input type="number" inputMode="numeric" value={draftGoal}
-              onChange={e => setDraftGoal(e.target.value)} className="h-12 rounded-xl border border-input bg-secondary" />
-            <Button onClick={saveStepGoal} className="h-12 w-full rounded-xl text-base font-semibold">Guardar</Button>
+            <Input
+              type="number"
+              inputMode="numeric"
+              value={draftGoal}
+              onChange={(e) => setDraftGoal(e.target.value)}
+              className={editModalInputClass}
+            />
+            <Button onClick={saveStepGoal} className={cn('h-12', profileNeonButtonClass)}>
+              Guardar
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={passwordDialog} onOpenChange={setPasswordDialog}>
-        <DialogContent className="rounded-2xl border-0 bg-card">
-          <DialogHeader><DialogTitle className="text-foreground">Cambiar Contraseña</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <Input type="password" placeholder="Nueva contraseña (mín. 6)" value={newPassword}
-              onChange={e => setNewPassword(e.target.value)} className="h-12 rounded-xl border border-input bg-secondary" />
-            <Button onClick={changePassword} disabled={changingPassword} className="h-12 w-full rounded-xl text-base font-semibold">
-              {changingPassword ? 'Guardando...' : 'Actualizar'}
+      <Dialog
+        open={passwordDialog}
+        onOpenChange={(open) => {
+          setPasswordDialog(open);
+          if (!open) setShowNewPassword(false);
+        }}
+      >
+        <DialogContent className={cn(modalSurfaceClass)}>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Cambiar contraseña</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Input
+                type={showNewPassword ? 'text' : 'password'}
+                placeholder="Nueva contraseña"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className={cn(editModalInputClass, 'pr-12')}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowNewPassword((v) => !v)}
+                className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-zinc-200/80 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                aria-label={showNewPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <PasswordRequirementsList password={newPassword} />
+            <Button
+              onClick={() => void changePassword()}
+              disabled={changingPassword || !newPasswordOk}
+              className={cn('h-12', profileNeonButtonClass)}
+            >
+              {changingPassword ? 'Guardando...' : 'Actualizar contraseña'}
             </Button>
           </div>
         </DialogContent>
@@ -859,29 +1161,56 @@ const Profile = () => {
 };
 
 const LabeledNum = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => (
-  <div>
-    <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</label>
+  <div className="space-y-1.5">
+    <label className="block text-sm font-medium text-zinc-500 dark:text-zinc-400">{label}</label>
     <Input
       type="number"
       inputMode="decimal"
       value={value}
       onChange={e => onChange(e.target.value)}
-      className={[
-        'h-10 rounded-xl text-sm transition-colors duration-200',
-        'border border-zinc-200 bg-white text-foreground',
-        'focus-visible:border-primary focus-visible:ring-0 focus-visible:ring-offset-0',
-        'dark:border-border dark:bg-secondary',
-        'dark:focus-visible:border-primary',
-      ].join(' ')}
+      className={profileFormInputClass}
     />
   </div>
 );
 
-const MiniStat = ({ icon: Icon, label, value }: { icon: typeof Activity; label: string; value: string }) => (
-  <div className="rounded-xl bg-white p-2 text-center shadow-sm dark:bg-card/80 dark:shadow-none dark:border dark:border-border/40">
-    <Icon className="mx-auto mb-1 h-4 w-4 text-primary/80" />
-    <p className="text-sm font-bold text-foreground">{value}</p>
-    <p className="text-[10px] text-muted-foreground/70">{label}</p>
+const MiniStat = ({
+  icon: Icon,
+  label,
+  value,
+  progressPct,
+}: {
+  icon: typeof Activity;
+  label: string;
+  value: string;
+  /** Avance respecto del objetivo diario (% 0–100); si no viene, sin barra (ej. IMC). */
+  progressPct?: number;
+}) => (
+  <div className="flex min-w-0 flex-col items-center justify-center px-0.5 text-center sm:px-1">
+    <Icon className="mb-2 h-6 w-6 shrink-0 text-pink-500 sm:h-7 sm:w-7" strokeWidth={2.25} aria-hidden />
+    <p className="text-2xl font-bold tabular-nums leading-none tracking-tight text-zinc-900 dark:text-white">{value}</p>
+    {progressPct !== undefined ? (
+      <div
+        className="mt-2 h-1 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
+        role="progressbar"
+        aria-valuenow={Math.round(progressPct)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`Avance ${label}`}
+      >
+        <div
+          className="h-full rounded-full bg-pink-500 transition-[width] duration-300 ease-out"
+          style={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }}
+        />
+      </div>
+    ) : null}
+    <p
+      className={cn(
+        'max-w-full text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400',
+        progressPct !== undefined ? 'mt-1.5' : 'mt-2',
+      )}
+    >
+      {label}
+    </p>
   </div>
 );
 

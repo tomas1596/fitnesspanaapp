@@ -20,58 +20,14 @@ import Paywall from "./pages/Paywall";
 import VerifiedAccount from "./pages/VerifiedAccount";
 import Terminos from "./pages/Terminos";
 import NotFound from "./pages/NotFound";
+import { applyBrandTheme } from "@/lib/brandTheme";
 
 const queryClient = new QueryClient();
-
-// ── Brand theme (VIP Rosa / Verde neón) ──────────────────────────────────
-
-const BRAND_THEMES = {
-  default: {
-    // Hex para uso en inline styles / estilos de Leaflet
-    '--brand-color': '#39FF14',
-    '--brand-color-dim': 'rgba(57, 255, 20, 0.13)',
-    '--brand-glow-sm': 'rgba(57, 255, 20, 0.33)',
-    '--brand-glow': 'rgba(57, 255, 20, 0.45)',
-    '--brand-glow-lg': 'rgba(57, 255, 20, 0.65)',
-    // HSL para el sistema shadcn (text-primary, bg-primary, ring-primary, etc.)
-    // hsl(111, 100%, 54%) ≈ #39FF14
-    '--primary': '111 100% 54%',
-    '--primary-foreground': '220 13% 8%',
-    '--ring': '111 100% 54%',
-    '--sidebar-primary': '111 100% 54%',
-    '--sidebar-primary-foreground': '220 13% 8%',
-    '--sidebar-ring': '111 100% 54%',
-  },
-  pink: {
-    // Hex para uso en inline styles
-    '--brand-color': '#FF1493',
-    '--brand-color-dim': 'rgba(255, 20, 147, 0.13)',
-    '--brand-glow-sm': 'rgba(255, 20, 147, 0.33)',
-    '--brand-glow': 'rgba(255, 20, 147, 0.45)',
-    '--brand-glow-lg': 'rgba(255, 20, 147, 0.65)',
-    // HSL para el sistema shadcn — rosa vibrante VIP
-    // hsl(328, 100%, 54%) ≈ #FF1493
-    '--primary': '328 100% 54%',
-    '--primary-foreground': '0 0% 100%',
-    '--ring': '328 100% 54%',
-    '--sidebar-primary': '328 100% 54%',
-    '--sidebar-primary-foreground': '0 0% 100%',
-    '--sidebar-ring': '328 100% 54%',
-  },
-} as const;
-
-function applyBrandTheme(name: keyof typeof BRAND_THEMES) {
-  const vars = BRAND_THEMES[name];
-  const root = document.documentElement;
-  for (const [k, v] of Object.entries(vars)) {
-    root.style.setProperty(k, v);
-  }
-}
 
 /**
  * Componente sin UI: lee `profiles.theme` del usuario actual y aplica
  * las CSS custom properties de marca en el elemento raíz del documento.
- * Se resetea al verde por defecto cuando el usuario cierra sesión.
+ * Se resetea al rosa neón por defecto cuando el usuario cierra sesión.
  */
 const BrandThemeApplier = () => {
   const { user } = useAuth();

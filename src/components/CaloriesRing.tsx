@@ -1,17 +1,19 @@
-import { Footprints } from 'lucide-react';
+import { Flame } from 'lucide-react';
 
 interface Props {
-  steps: number;
-  goal?: number;
+  /** Calorías consumidas (u objetivo de ingesta del día). */
+  consumed: number;
+  /** Meta diaria (ej. TDEE). */
+  goal: number;
   size?: number;
 }
 
 /**
- * Anillo de pasos: SVG con viewBox + fill explícito (Android Chrome / modo oscuro).
- * Strokes vía clases Tailwind — evita `currentColor` y `hsl(var(--…))` que a veces rompen en móvil.
+ * Anillo de calorías (misma geometría que StepsRing): pista zinc, progreso verde neón.
+ * Glow suave solo en modo oscuro.
  */
-const StepsRing = ({ steps, goal = 10000, size = 96 }: Props) => {
-  const pct = Math.min(100, (steps / goal) * 100);
+const CaloriesRing = ({ consumed, goal, size = 96 }: Props) => {
+  const pct = goal > 0 ? Math.min(100, (consumed / goal) * 100) : 0;
   const radius = (size - 14) / 2;
   const circ = 2 * Math.PI * radius;
   const offset = circ - (pct / 100) * circ;
@@ -30,14 +32,7 @@ const StepsRing = ({ steps, goal = 10000, size = 96 }: Props) => {
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden
       >
-        <circle
-          cx={c}
-          cy={c}
-          r={radius}
-          fill="transparent"
-          className="stroke-zinc-200 dark:stroke-zinc-800"
-          strokeWidth="7"
-        />
+        <circle cx={c} cy={c} r={radius} fill="transparent" className="stroke-zinc-200 dark:stroke-zinc-800" strokeWidth="7" />
         <circle
           cx={c}
           cy={c}
@@ -52,11 +47,14 @@ const StepsRing = ({ steps, goal = 10000, size = 96 }: Props) => {
         />
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <Footprints className="mb-0.5 h-3.5 w-3.5 shrink-0 text-pink-600 dark:text-pink-400" aria-hidden />
-        <span className="text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{steps.toLocaleString()}</span>
+        <Flame className="mb-0.5 h-3.5 w-3.5 shrink-0 text-pink-600 dark:text-pink-400" aria-hidden />
+        <span className="text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{Math.round(consumed)}</span>
+        {goal > 0 && (
+          <span className="text-[10px] tabular-nums text-zinc-500 dark:text-zinc-400">/ {Math.round(goal)}</span>
+        )}
       </div>
     </div>
   );
 };
 
-export default StepsRing;
+export default CaloriesRing;
