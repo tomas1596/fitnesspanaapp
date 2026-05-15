@@ -11,8 +11,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import ExerciseCard, { type ExerciseSetRow } from '@/components/ExerciseCard';
 import DailyReportSheet from '@/components/DailyReportSheet';
+import PersonalRecordsSheet from '@/components/PersonalRecordsSheet';
 import TemplatesSheet from '@/components/TemplatesSheet';
-import { PersonalRecordsSheet } from '@/components/PersonalRecordsSheet';
+import { ExerciseNameSuggestInput } from '@/components/ExerciseNameSuggestInput';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { WorkoutModalityTabs } from '@/components/WorkoutModalityTabs';
 import { useToast } from '@/hooks/use-toast';
@@ -43,6 +44,13 @@ import {
   deriveCrossfitTotalTimeColumn,
   emptyCrossfitDraft,
 } from '@/lib/crossfitWodDraft';
+import {
+  LIBRARY_CONDITIONING_MUSCLE_GROUP,
+  collectCrossfitDraftManualNames,
+  collectFunctionalDraftManualNames,
+  modalityToLibraryCategory,
+} from '@/lib/exerciseLibraryNaming';
+import { insertMissingExerciseLibraryEntries } from '@/lib/exerciseLibrarySync';
 
 const WORKOUT_MODALITY_LS_KEY = 'fitnesspana.workout.activeModalidad';
 
@@ -127,9 +135,6 @@ const Workout = () => {
   const [addingExercise, setAddingExercise] = useState(false);
   const [newExName, setNewExName] = useState('');
   const [newExGroup, setNewExGroup] = useState('');
-  const [saveToLibrary, setSaveToLibrary] = useState(false);
-  // Names already in the library (lower-cased for comparison)
-  const [libraryNamesLower, setLibraryNamesLower] = useState<Set<string>>(new Set());
 
   // History hints per exercise name
   const [lastPerfMap, setLastPerfMap] = useState<Record<string, LastPerfHint>>({});
@@ -313,18 +318,6 @@ const Workout = () => {
   // Depending on exercises.length was unreliable: it fired *before* the DB write completed.
   useEffect(() => { fetchActiveDates(); }, [fetchActiveDates]);
 
-  // Keep a fast Set of library names for checkbox visibility check
-  const fetchLibraryNames = useCallback(async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from('exercises_library')
-      .select('name')
-      .eq('user_id', user.id);
-    setLibraryNamesLower(new Set((data || []).map((r) => r.name.toLowerCase())));
-  }, [user]);
-
-  useEffect(() => { fetchLibraryNames(); }, [fetchLibraryNames]);
-
   const resolveWorkoutLogId = useCallback(
     async (modality: 'crossfit' | 'funcional'): Promise<string | null> => {
       if (!user) return null;
@@ -426,9 +419,9 @@ const Workout = () => {
     [user],
   );
 
-  const persistWorkoutBlock = useCallback(
-    async (modality: 'crossfit' | 'funcional') => {
-      if (!user) return;
+  const executeConditioningPersist = useCallback(
+    async (modality: 'crossfit' | 'funcional'): Promise<boolean> => {
+      if (!user) return false;
       setBlockSaving(modality);
 
       let row: Record<string, unknown>;
@@ -489,7 +482,7 @@ const Workout = () => {
       setBlockSaving(null);
       if (error || !data) {
         toast({ title: 'Error', description: error?.message, variant: 'destructive' });
-        return;
+        return false;
       }
       await supabase
         .from('exercises')
@@ -508,13 +501,39 @@ const Workout = () => {
           .is('conditioning_block_id', null);
       }
       await syncMovementsToLog(data.id);
-      toast({ title: 'Bloque guardado', description: 'Tiempos y rondas guardados.' });
+      toast({ title: 'Bloque guardado', description: 'WOD y tiempos guardados.' });
       fetchExercises();
+      return true;
     },
     [user, dateStr, crossfitDraft, functionalSessionDraft, toast, fetchExercises, syncMovementsToLog],
   );
 
-  // ── Trigger auto-focus (reset after 1.5 s so re-adding a set later won't re-focus) ──
+  const saveConditioningWithAutoLibrary = useCallback(
+    async (modality: 'crossfit' | 'funcional') => {
+      const ok = await executeConditioningPersist(modality);
+      if (!ok || !user) return;
+      const names =
+        modality === 'crossfit'
+          ? collectCrossfitDraftManualNames(crossfitDraft)
+          : collectFunctionalDraftManualNames(functionalSessionDraft);
+      await insertMissingExerciseLibraryEntries(
+        supabase,
+        user.id,
+        names.map((n) => ({ name: n, muscle_group: LIBRARY_CONDITIONING_MUSCLE_GROUP })),
+        modalityToLibraryCategory(modality),
+      );
+    },
+    [
+      executeConditioningPersist,
+      user,
+      crossfitDraft,
+      functionalSessionDraft,
+    ],
+  );
+
+  useEffect(() => {
+    if (activeModalidad !== 'musculacion') setAddingExercise(false);
+  }, [activeModalidad]);
   const triggerFocus = (exerciseId: string) => {
     if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
     setFocusExerciseId(exerciseId);
@@ -551,7 +570,6 @@ const Workout = () => {
 
     const name = newExName.trim();
     const group = newExGroup;
-    const shouldSave = saveToLibrary;
     setNewExName(''); setNewExGroup(''); setAddingExercise(false);
 
     const { data, error } = await supabase.from('exercises').insert({
@@ -594,17 +612,12 @@ const Workout = () => {
       await syncMovementsToLog(logToSync);
     }
 
-    if (shouldSave) {
-      supabase.from('exercises_library').upsert(
-        {
-          user_id: user.id,
-          name,
-          muscle_group: group,
-          modalities: [activeModalidad],
-        },
-        { onConflict: 'user_id,name' },
-      ).then(() => fetchLibraryNames());
-    }
+    await insertMissingExerciseLibraryEntries(
+      supabase,
+      user.id,
+      [{ name, muscle_group: group }],
+      modalityToLibraryCategory(activeModalidad),
+    );
 
     if (activeModalidad === 'musculacion') {
       fetchLastPerformances([name]).then((perf) =>
@@ -618,6 +631,14 @@ const Workout = () => {
   // ── Add exercise from library ─────────────────────────────────────────────
   const handleAddExerciseFromLibrary = async (name: string, muscleGroup: string) => {
     if (!user) return;
+    if (activeModalidad === 'crossfit' || activeModalidad === 'funcional') {
+      toast({
+        title: 'Biblioteca en tus bloques',
+        description:
+          'En CrossFit/Funcional sumá movimientos dentro de cada AMRAP o fase: usá el campo con sugerencias o escribí uno nuevo.',
+      });
+      return;
+    }
     setEnableEmptyDay(true);
 
     let workout_log_id: string | null = null;
@@ -859,6 +880,13 @@ const Workout = () => {
 
   const applyTemplate = async (templateExercises: { name: string; muscle_group: string }[]) => {
     if (!user) return;
+    if (activeModalidad === 'crossfit' || activeModalidad === 'funcional') {
+      toast({
+        title: 'Plantillas en Musculación',
+        description: 'Pasá a la pestaña Musculación para cargar una plantilla con series y peso.',
+      });
+      return;
+    }
     let workout_log_id: string | null = null;
     if (activeModalidad === 'crossfit' || activeModalidad === 'funcional') {
       workout_log_id = await resolveWorkoutLogId(activeModalidad);
@@ -886,6 +914,12 @@ const Workout = () => {
     }));
     const { error } = await supabase.from('exercises').insert(rows);
     if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+    await insertMissingExerciseLibraryEntries(
+      supabase,
+      user.id,
+      templateExercises.map((ex) => ({ name: ex.name, muscle_group: ex.muscle_group })),
+      'Musculación',
+    );
     if (workout_log_id) await syncMovementsToLog(workout_log_id);
     toast({ title: 'Plantilla cargada', description: `${rows.length} ejercicios agregados.` });
     setEnableEmptyDay(true);
@@ -980,6 +1014,10 @@ const Workout = () => {
     id: b.id,
     label: `Bloque ${i + 1}${b.target_time.trim() ? ` · ${b.target_time}` : ''}`,
   }));
+
+  const hasAnyAssignedBlockExercise = sectionsForGrouping.some((s) =>
+    visibleExercises.some((e) => e.conditioning_block_id === s.id),
+  );
 
   const strengthExerciseCards = visibleExercises.map((ex) => (
     <ExerciseCard
@@ -1088,14 +1126,14 @@ const Workout = () => {
         ) : (
           <div className="space-y-3.5">
             {activeModalidad === 'crossfit' || activeModalidad === 'funcional' ? (
-              <div className={CONDITIONING_BLOCK_SHELL}>
+              <div className={cn(CONDITIONING_BLOCK_SHELL, activeModalidad === 'crossfit' && 'space-y-2')}>
                 {activeModalidad === 'crossfit' && (
                   <CrossfitWodLogPanel
                     draft={crossfitDraft}
                     onChange={setCrossfitDraft}
                     onSubtypeChange={handleCrossfitSubtypeChange}
                     onAmrapBlockRemoved={handleCrossfitAmrapBlockRemoved}
-                    onSave={() => void persistWorkoutBlock('crossfit')}
+                    onSave={() => void saveConditioningWithAutoLibrary('crossfit')}
                     saving={blockSaving === 'crossfit'}
                   />
                 )}
@@ -1104,13 +1142,15 @@ const Workout = () => {
                     draft={functionalSessionDraft}
                     onChange={setFunctionalSessionDraft}
                     onPhaseRemoved={handleFunctionalPhaseRemoved}
-                    onSave={() => void persistWorkoutBlock('funcional')}
+                    onSave={() => void saveConditioningWithAutoLibrary('funcional')}
                     saving={blockSaving === 'funcional'}
                   />
                 )}
                 <div className="space-y-4">
                   {sectionsForGrouping.map((sec, idx) => {
                     const inBlock = visibleExercises.filter((e) => e.conditioning_block_id === sec.id);
+                    if ((activeModalidad === 'crossfit' || activeModalidad === 'funcional') && inBlock.length === 0)
+                      return null;
                     return (
                       <div key={sec.id} className="space-y-2">
                         <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border/40 pb-1.5">
@@ -1158,7 +1198,14 @@ const Workout = () => {
                     );
                   })}
                   {conditioningUnassigned && conditioningUnassigned.length > 0 ? (
-                    <div className="space-y-2 border-t border-dashed border-border/50 pt-3">
+                    <div
+                      className={cn(
+                        'space-y-2',
+                        hasAnyAssignedBlockExercise
+                          ? 'border-t border-dashed border-border/50 pt-3'
+                          : 'pt-1',
+                      )}
+                    >
                       <span className="text-xs font-semibold text-muted-foreground">
                         {activeModalidad === 'funcional' ? 'Sin fase asignada' : 'Sin bloque asignado'}
                       </span>
@@ -1193,14 +1240,18 @@ const Workout = () => {
               <div className="space-y-3.5">{strengthExerciseCards}</div>
             )}
 
-            {hydrated && visibleExercises.length === 0 && !addingExercise && (isToday || enableEmptyDay) && (
-              <p className="py-12 text-center text-xs font-medium text-muted-foreground/50 tracking-wide">
-                Agrega tu primer ejercicio para comenzar
-              </p>
-            )}
+            {hydrated &&
+              activeModalidad === 'musculacion' &&
+              visibleExercises.length === 0 &&
+              !addingExercise &&
+              (isToday || enableEmptyDay) && (
+                <p className="py-12 text-center text-xs font-medium text-muted-foreground/50 tracking-wide">
+                  Agrega tu primer ejercicio para comenzar
+                </p>
+              )}
 
-            {/* Inline add-exercise form */}
-            {addingExercise ? (
+            {/* Inline add-exercise form (solo musculación — CF/FUNC usan bloques propios). */}
+            {addingExercise && activeModalidad === 'musculacion' ? (
               <div className="space-y-3 rounded-2xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold tracking-tight text-foreground">Nuevo ejercicio</h4>
@@ -1217,14 +1268,19 @@ const Workout = () => {
                   </button>
                 </div>
 
-                <Input
-                  placeholder="Nombre del ejercicio"
-                  value={newExName}
-                  onChange={(e) => setNewExName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && newExGroup && confirmAddExercise()}
-                  className="h-12 rounded-xl border-none bg-accent text-foreground"
-                  autoFocus
-                />
+                <div
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newExGroup) void confirmAddExercise();
+                  }}
+                >
+                  <ExerciseNameSuggestInput
+                    modality="musculacion"
+                    placeholder="Nombre del ejercicio"
+                    value={newExName}
+                    onChange={setNewExName}
+                    className="[&_input]:h-12 [&_input]:rounded-xl [&_input]:border-none [&_input]:bg-accent [&_input]:text-foreground"
+                  />
+                </div>
 
                 <Select value={newExGroup} onValueChange={setNewExGroup}>
                   <SelectTrigger className="h-12 rounded-xl border-none bg-accent text-foreground">
@@ -1243,21 +1299,6 @@ const Workout = () => {
                   </SelectContent>
                 </Select>
 
-                {/* Save to library checkbox — only visible when name isn't already saved */}
-                {newExName.trim() !== '' &&
-                  !libraryNamesLower.has(newExName.trim().toLowerCase()) && (
-                  <label className="flex cursor-pointer items-center gap-2.5 rounded-xl bg-accent px-3 py-2.5">
-                    <input
-                      type="checkbox"
-                      checked={saveToLibrary}
-                      onChange={(e) => setSaveToLibrary(e.target.checked)}
-                      className="h-4 w-4 rounded"
-                      style={{ accentColor: 'var(--brand-color)' }}
-                    />
-                    <span className="text-sm text-foreground">Guardar en mi biblioteca</span>
-                  </label>
-                )}
-
                 <Button
                   onClick={confirmAddExercise}
                   disabled={!newExName.trim() || !newExGroup}
@@ -1267,6 +1308,7 @@ const Workout = () => {
                 </Button>
               </div>
             ) : (
+              activeModalidad === 'musculacion' &&
               (isToday || enableEmptyDay || visibleExercises.length > 0) && (
                 <Button
                   onClick={() => setAddingExercise(true)}

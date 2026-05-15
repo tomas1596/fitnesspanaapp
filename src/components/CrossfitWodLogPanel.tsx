@@ -16,6 +16,7 @@ import {
   emptyWarmupSkillDraft,
   CROSSFIT_SUBTYPE_LABELS,
 } from '@/lib/crossfitWodDraft';
+import { ExerciseNameSuggestInput } from '@/components/ExerciseNameSuggestInput';
 import {
   WORKOUT_LOG_DIVIDER,
   WORKOUT_LOG_FIELD_LABEL,
@@ -65,8 +66,33 @@ function ManualExerciseEditor({
   const removeAt = (i: number) => {
     onLinesChange(lines.filter((_, idx) => idx !== i));
   };
+
+  const onSuggestKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      add();
+    }
+  };
+
   return (
     <div className="space-y-2">
+      <div className="flex gap-2" onKeyDown={onSuggestKeyDown}>
+        <ExerciseNameSuggestInput
+          modality="crossfit"
+          placeholder={placeholder ?? 'Ejercicio'}
+          value={pending}
+          onChange={setPending}
+          className="min-w-0 flex-1"
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          className={WORKOUT_LOG_SECONDARY_BTN}
+          onClick={add}
+        >
+          Añadir
+        </Button>
+      </div>
       {lines.length > 0 ? (
         <ul className={WORKOUT_LOG_LIST_SURFACE}>
           {lines.map((line, i) => (
@@ -83,31 +109,7 @@ function ManualExerciseEditor({
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="text-[11px] text-muted-foreground">Aún no hay ejercicios en este bloque.</p>
-      )}
-      <div className="flex gap-2">
-        <Input
-          placeholder={placeholder ?? 'Ejercicio'}
-          value={pending}
-          onChange={(e) => setPending(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              add();
-            }
-          }}
-          className={cn(WORKOUT_LOG_INPUT, 'h-10 flex-1')}
-        />
-        <Button
-          type="button"
-          variant="secondary"
-          className={WORKOUT_LOG_SECONDARY_BTN}
-          onClick={add}
-        >
-          Añadir
-        </Button>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -143,8 +145,8 @@ export function CrossfitWodLogPanel({
       <div>
         <h4 className="text-sm font-semibold tracking-tight text-foreground">Registro CrossFit</h4>
         <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-          Calentamiento o técnica opcional, luego el formato del WOD principal. También puedes usar las tarjetas de
-          abajo.
+          Calentamiento o técnica opcional y el WOD principal; los movimientos van aquí en cada formato. Para entreno
+          de musculación con series y cargas pasá a la pestaña correspondiente y usá biblioteca / agregar ejercicio ahí.
         </p>
       </div>
 

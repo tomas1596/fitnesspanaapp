@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ExerciseNameSuggestInput } from '@/components/ExerciseNameSuggestInput';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -78,8 +79,28 @@ function ManualExerciseListEditor({
   const removeAt = (i: number) => {
     onLinesChange(lines.filter((_, idx) => idx !== i));
   };
+
+  const onRowKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      add();
+    }
+  };
+
   return (
     <div className="space-y-2">
+      <div className="flex gap-2" onKeyDown={onRowKeyDown}>
+        <ExerciseNameSuggestInput
+          modality="funcional"
+          placeholder={placeholder ?? 'Ejercicio'}
+          value={pending}
+          onChange={setPending}
+          className="min-w-0 flex-1"
+        />
+        <Button type="button" variant="secondary" className={WORKOUT_LOG_SECONDARY_BTN} onClick={add}>
+          Añadir
+        </Button>
+      </div>
       {lines.length > 0 ? (
         <ul className={WORKOUT_LOG_LIST_SURFACE}>
           {lines.map((line, i) => (
@@ -96,26 +117,7 @@ function ManualExerciseListEditor({
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="text-[11px] text-muted-foreground">Sin ejercicios en esta fase.</p>
-      )}
-      <div className="flex gap-2">
-        <Input
-          placeholder={placeholder ?? 'Ejercicio'}
-          value={pending}
-          onChange={(e) => setPending(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              add();
-            }
-          }}
-          className={cn(WORKOUT_LOG_INPUT, 'h-10 flex-1')}
-        />
-        <Button type="button" variant="secondary" className={WORKOUT_LOG_SECONDARY_BTN} onClick={add}>
-          Añadir
-        </Button>
-      </div>
+      ) : null}
     </div>
   );
 }

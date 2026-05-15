@@ -1,18 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, ChevronRight, ChevronLeft, Play, Search } from 'lucide-react';
+import { Plus, Trash2, ChevronRight, ChevronLeft, Play, Search, Pencil } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import SwipeToDelete from '@/components/SwipeToDelete';
-import {
-  libraryMatchesModality,
-  type WorkoutModalityId,
-} from '@/lib/workoutModality';
+import { type ExerciseLibraryCategory, EXERCISE_LIBRARY_CATEGORIES } from '@/lib/exerciseLibraryNaming';
+import type { WorkoutModalityId } from '@/lib/workoutModality';
 
 const MUSCLE_GROUPS = ['Pecho', 'Espalda', 'Piernas', 'Brazos', 'Hombros', 'Core'];
 
@@ -34,6 +40,7 @@ interface LibraryExercise {
   name: string;
   muscle_group: string;
   modalities: string[];
+  category: ExerciseLibraryCategory;
 }
 
 type LibraryExerciseHist =
@@ -78,8 +85,12 @@ const TemplatesSheet = ({
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
-  const [showAllLibraryModalities, setShowAllLibraryModalities] = useState(false);
+  const [libraryCategoryFilter, setLibraryCategoryFilter] = useState<'all' | ExerciseLibraryCategory>('all');
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const [renameTarget, setRenameTarget] = useState<LibraryExercise | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [renameSaving, setRenameSaving] = useState(false);
 
   // ── Load routines ──────────────────────────────────────────────────────────
   const loadTemplates = async () => {
@@ -98,12 +109,17 @@ const TemplatesSheet = ({
     setLibraryLoading(true);
     const { data } = await supabase
       .from('exercises_library')
-      .select('id, name, muscle_group, modalities')
+      .select('id, name, muscle_group, modalities, category')
       .eq('user_id', user.id)
       .order('name');
-    const items = (data || []).map((row) => ({
-      ...row,
+    const items: LibraryExercise[] = (data || []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      muscle_group: row.muscle_group,
       modalities: row.modalities ?? [],
+      category: (EXERCISE_LIBRARY_CATEGORIES.includes((row.category ?? '') as ExerciseLibraryCategory)
+        ? (row.category as ExerciseLibraryCategory)
+        : 'Musculación') as ExerciseLibraryCategory,
     }));
     setLibraryExercises(items);
 
@@ -169,7 +185,9 @@ const TemplatesSheet = ({
       setExGroup('');
       setSearchQuery('');
       setActiveFilter('');
-      setShowAllLibraryModalities(false);
+      setLibraryCategoryFilter('all');
+      setRenameTarget(null);
+      setRenameDraft('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, user]);
@@ -283,15 +301,59 @@ const TemplatesSheet = ({
   const filteredLibrary = libraryExercises.filter((ex) => {
     const matchSearch = ex.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchFilter = activeFilter === '' || ex.muscle_group === activeFilter;
-    const matchModality =
-      showAllLibraryModalities || libraryMatchesModality(ex.modalities, libraryModalityFilter);
-    return matchSearch && matchFilter && matchModality;
+    const matchCategory = libraryCategoryFilter === 'all' || ex.category === libraryCategoryFilter;
+    return matchSearch && matchFilter && matchCategory;
   });
 
   const handleAddFromLibrary = (ex: LibraryExercise) => {
     onAddExercise(ex.name, ex.muscle_group);
     toast({ title: ex.name, description: 'Agregado a tu sesión' });
     onClose();
+  };
+
+  const confirmRenameLibraryEntry = async () => {
+    if (!user || !renameTarget) return;
+    const nextName = renameDraft.trim();
+    if (!nextName) {
+      toast({ title: 'Nombre vacío', description: 'Escribí el nombre corregido.', variant: 'destructive' });
+      return;
+    }
+    if (nextName.toLowerCase() === renameTarget.name.trim().toLowerCase()) {
+      setRenameTarget(null);
+      return;
+    }
+    setRenameSaving(true);
+    const { error } = await supabase
+      .from('exercises_library')
+      .update({ name: nextName })
+      .eq('id', renameTarget.id)
+      .eq('user_id', user.id);
+    setRenameSaving(false);
+    if (error) {
+      toast({
+        title: 'No se pudo renombrar',
+        description:
+          error.code === '23505' || error.message.includes('duplicate')
+            ? 'Ya tenés otro ejercicio con ese nombre.'
+            : error.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+    const oldName = renameTarget.name;
+    setLibraryExercises((prev) =>
+      prev.map((e) => (e.id === renameTarget.id ? { ...e, name: nextName } : e)),
+    );
+    setLibraryHistory((prev) => {
+      const h = prev[oldName];
+      if (!h) return prev;
+      const next = { ...prev };
+      delete next[oldName];
+      next[nextName] = h;
+      return next;
+    });
+    toast({ title: 'Nombre actualizado', description: nextName });
+    setRenameTarget(null);
   };
 
   const deleteFromLibrary = async (id: string) => {
@@ -324,7 +386,8 @@ const TemplatesSheet = ({
     view === 'list' ? 'Mis Rutinas' : view === 'create' ? 'Nueva Plantilla' : selected?.name ?? '';
 
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+    <>
+      <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent
         side="bottom"
         className="max-h-[88vh] overflow-y-auto rounded-t-3xl border-none bg-background p-5"
@@ -539,41 +602,47 @@ const TemplatesSheet = ({
         {/* ══════════════ LIBRARY TAB ═══════════════════════════════════════ */}
         {activeTab === 'library' && (
           <div className="space-y-3">
-            {/* Search */}
-            <div className="relative">
+            <div className="relative min-w-0">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 ref={searchRef}
                 placeholder="Buscar ejercicio..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-12 rounded-xl border-none bg-card pl-9 text-foreground"
+                className="h-12 w-full rounded-xl border-none bg-card pl-9 text-foreground"
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              Los ejercicios se agregan solos al guardar un entrenamiento. Acá podés corregir nombres o borrar duplicados.
+            </p>
+
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => setShowAllLibraryModalities(false)}
+                onClick={() => setLibraryCategoryFilter('all')}
                 className={cn(
                   'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
-                  !showAllLibraryModalities ? 'text-black' : 'bg-card text-muted-foreground',
+                  libraryCategoryFilter === 'all' ? 'text-black' : 'bg-card text-muted-foreground',
                 )}
-                style={!showAllLibraryModalities ? { backgroundColor: 'var(--brand-color)' } : {}}
+                style={libraryCategoryFilter === 'all' ? { backgroundColor: 'var(--brand-color)' } : {}}
               >
-                Solo esta modalidad
+                Todas las categorías
               </button>
-              <button
-                type="button"
-                onClick={() => setShowAllLibraryModalities(true)}
-                className={cn(
-                  'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
-                  showAllLibraryModalities ? 'text-black' : 'bg-card text-muted-foreground',
-                )}
-                style={showAllLibraryModalities ? { backgroundColor: 'var(--brand-color)' } : {}}
-              >
-                Todas las modalidades
-              </button>
+              {EXERCISE_LIBRARY_CATEGORIES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setLibraryCategoryFilter(c)}
+                  className={cn(
+                    'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+                    libraryCategoryFilter === c ? 'text-black' : 'bg-card text-muted-foreground',
+                  )}
+                  style={libraryCategoryFilter === c ? { backgroundColor: 'var(--brand-color)' } : {}}
+                >
+                  {c}
+                </button>
+              ))}
             </div>
 
             {/* Muscle group filter chips */}
@@ -603,10 +672,10 @@ const TemplatesSheet = ({
               <div className="py-10 text-center">
                 <p className="text-sm text-muted-foreground">
                   {libraryExercises.length === 0
-                    ? 'Tu biblioteca está vacía.\nAgrega ejercicios marcando "Guardar en mi biblioteca" al crear uno.'
-                    : showAllLibraryModalities
-                      ? 'Sin resultados para tu búsqueda.'
-                      : 'Nada coincide con esta modalidad. Prueba "Todas las modalidades" o ajusta la búsqueda.'}
+                    ? 'Tu biblioteca está vacía. Registrá un entrenamiento: los ejercicios que escribas se guardarán aquí.'
+                    : libraryCategoryFilter === 'all'
+                      ? 'Sin resultados para tu búsqueda o filtros.'
+                      : 'Sin resultados para esta categoría. Probá «Todas las categorías» o ajustá la búsqueda.'}
                 </p>
               </div>
             ) : (
@@ -615,30 +684,47 @@ const TemplatesSheet = ({
                   const hist = libraryHistory[ex.name];
                   return (
                     <SwipeToDelete key={ex.id} onDelete={() => deleteFromLibrary(ex.id)}>
-                      <button
-                        onClick={() => handleAddFromLibrary(ex)}
-                        className="flex w-full items-center justify-between rounded-xl bg-card p-3 text-left transition-colors active:bg-accent"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-foreground">{ex.name}</p>
-                          <p className="text-xs text-muted-foreground">{ex.muscle_group}</p>
-                          {hist &&
-                            hist.kind === 'strength' && (
-                              <p
-                                className="mt-0.5 text-xs font-medium"
-                                style={{ color: 'var(--brand-color)' }}
-                              >
-                                Último: {hist.weight}kg × {hist.reps}
-                              </p>
-                            )}
-                        </div>
-                        <div
-                          className="ml-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                          style={{ backgroundColor: 'var(--brand-color-dim)' }}
+                      <div className="flex overflow-hidden rounded-xl bg-card">
+                        <button
+                          type="button"
+                          onClick={() => handleAddFromLibrary(ex)}
+                          className="flex min-w-0 flex-1 items-center justify-between p-3 text-left transition-colors active:bg-accent"
                         >
-                          <Plus className="h-4 w-4" style={{ color: 'var(--brand-color)' }} />
-                        </div>
-                      </button>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-foreground">{ex.name}</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/80">
+                              {ex.category}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{ex.muscle_group}</p>
+                            {hist &&
+                              hist.kind === 'strength' && (
+                                <p
+                                  className="mt-0.5 text-xs font-medium"
+                                  style={{ color: 'var(--brand-color)' }}
+                                >
+                                  Último: {hist.weight}kg × {hist.reps}
+                                </p>
+                              )}
+                          </div>
+                          <div
+                            className="ml-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                            style={{ backgroundColor: 'var(--brand-color-dim)' }}
+                          >
+                            <Plus className="h-4 w-4" style={{ color: 'var(--brand-color)' }} />
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Renombrar ${ex.name}`}
+                          onClick={() => {
+                            setRenameTarget(ex);
+                            setRenameDraft(ex.name);
+                          }}
+                          className="flex w-11 shrink-0 items-center justify-center border-l border-border/50 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      </div>
                     </SwipeToDelete>
                   );
                 })}
@@ -648,6 +734,50 @@ const TemplatesSheet = ({
         )}
       </SheetContent>
     </Sheet>
+
+    <Dialog
+      open={renameTarget !== null}
+      onOpenChange={(v) => {
+        if (!v) setRenameTarget(null);
+      }}
+    >
+      <DialogContent className="rounded-2xl border border-border bg-background sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Renombrar ejercicio</DialogTitle>
+          <DialogDescription>
+            Corregí ortografía o unificá dos entradas duplicadas sin perder el historial registrado en tus días de entreno.
+          </DialogDescription>
+        </DialogHeader>
+        <Input
+          value={renameDraft}
+          onChange={(e) => setRenameDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void confirmRenameLibraryEntry();
+          }}
+          className="h-12 rounded-xl border-none bg-accent text-foreground"
+          autoFocus
+        />
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setRenameTarget(null)}
+            disabled={renameSaving}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            onClick={() => void confirmRenameLibraryEntry()}
+            disabled={renameSaving}
+            className="font-semibold"
+          >
+            {renameSaving ? 'Guardando…' : 'Guardar nombre'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };
 

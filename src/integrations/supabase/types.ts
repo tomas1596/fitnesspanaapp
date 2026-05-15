@@ -16,28 +16,31 @@ export type Database = {
     Tables: {
       exercises_library: {
         Row: {
-          id: string
-          user_id: string
-          name: string
-          muscle_group: string
+          category: string
           created_at: string
+          id: string
           modalities: string[]
+          muscle_group: string
+          name: string
+          user_id: string
         }
         Insert: {
-          id?: string
-          user_id: string
-          name: string
-          muscle_group: string
+          category?: string
           created_at?: string
+          id?: string
           modalities?: string[]
+          muscle_group: string
+          name: string
+          user_id: string
         }
         Update: {
-          id?: string
-          user_id?: string
-          name?: string
-          muscle_group?: string
+          category?: string
           created_at?: string
+          id?: string
           modalities?: string[]
+          muscle_group?: string
+          name?: string
+          user_id?: string
         }
         Relationships: []
       }

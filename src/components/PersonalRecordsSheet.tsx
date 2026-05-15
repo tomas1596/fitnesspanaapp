@@ -86,7 +86,7 @@ function buildExerciseGroups(rows: PersonalRecordRow[]): ExercisePrGroup[] {
   return groups;
 }
 
-export function PersonalRecordsSheet({ open, onClose }: PersonalRecordsSheetProps) {
+function PersonalRecordsSheet({ open, onClose }: PersonalRecordsSheetProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [rows, setRows] = useState<PersonalRecordRow[]>([]);
@@ -471,3 +471,5 @@ export function PersonalRecordsSheet({ open, onClose }: PersonalRecordsSheetProp
     </>
   );
 }
+
+export default PersonalRecordsSheet;
