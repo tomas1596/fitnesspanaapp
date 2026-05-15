@@ -149,6 +149,19 @@ Deno.serve(async (req) => {
       return json({ error: 'No se pueden eliminar cuentas administradoras.' }, 403);
     }
 
+    const { data: targetPid } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('user_id', target_user_id)
+      .maybeSingle();
+
+    if (targetPid?.id) {
+      const { error: grErr } = await admin.from('gym_routines').delete().eq('coach_id', targetPid.id);
+      if (grErr) {
+        console.warn('[admin-delete-user] gym_routines:', grErr.code ?? 'unknown', grErr.message);
+      }
+    }
+
     for (const table of TABLES_DELETE_BY_USER_ORDER) {
       await deleteByUserIdOrContinue(admin, table, target_user_id);
     }

@@ -22,19 +22,35 @@ type Props = {
 
 const DEBOUNCE_MS = 180;
 const MAX_SUGGESTIONS = 12;
-const PER_QUERY = 8;
+const FETCH_LIMIT = 48;
 
-function mergePriorityRows(primary: Row[], secondary: Row[]): Row[] {
-  const out: Row[] = [];
+function normNameKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function dedupeGlobalRows(
+  rows: { name: string; muscle_group: string; category: string | null }[],
+): Row[] {
   const seen = new Set<string>();
-  for (const r of [...primary, ...secondary]) {
-    const k = r.name.trim().toLowerCase();
-    if (!k || seen.has(k)) continue;
-    seen.add(k);
-    out.push(r);
-    if (out.length >= MAX_SUGGESTIONS) break;
+  const out: Row[] = [];
+  for (const r of rows) {
+    const kn = normNameKey(r.name);
+    if (!kn || seen.has(kn)) continue;
+    seen.add(kn);
+    out.push({
+      name: r.name.trim(),
+      muscle_group: r.muscle_group?.trim() || '—',
+      category: (r.category as ExerciseLibraryCategory) || 'Musculación',
+    });
   }
   return out;
+}
+
+/** Prioriza categoría acorde a la pestaña activa; orden alfabético dentro de cada grupo. */
+function prioritizeCategory(rows: Row[], preferred: ExerciseLibraryCategory): Row[] {
+  const pref = rows.filter((r) => r.category === preferred).sort((a, b) => a.name.localeCompare(b.name));
+  const rest = rows.filter((r) => r.category !== preferred).sort((a, b) => a.name.localeCompare(b.name));
+  return [...pref, ...rest];
 }
 
 export function ExerciseNameSuggestInput({
@@ -68,42 +84,20 @@ export function ExerciseNameSuggestInput({
         setLoading(true);
         const safe = q.replace(/%/g, '').replace(/_/g, '');
         const pattern = `%${safe}%`;
-        const [{ data: sameCat, error: e1 }, { data: otherCat, error: e2 }] = await Promise.all([
-          supabase
-            .from('exercises_library')
-            .select('name, muscle_group, category')
-            .eq('user_id', user.id)
-            .eq('category', activeCategory)
-            .ilike('name', pattern)
-            .order('name')
-            .limit(PER_QUERY),
-          supabase
-            .from('exercises_library')
-            .select('name, muscle_group, category')
-            .eq('user_id', user.id)
-            .neq('category', activeCategory)
-            .ilike('name', pattern)
-            .order('name')
-            .limit(PER_QUERY),
-        ]);
-        if (e1 || e2) {
+        const { data, error } = await supabase
+          .from('exercises_library')
+          .select('name, muscle_group, category')
+          .ilike('name', pattern)
+          .order('name')
+          .limit(FETCH_LIMIT);
+        if (error) {
           setHits([]);
           setOpen(false);
         } else {
-          const mapRow = (r: {
-            name: string;
-            muscle_group: string;
-            category: string | null;
-          }): Row => ({
-            name: r.name,
-            muscle_group: r.muscle_group,
-            category: (r.category as ExerciseLibraryCategory) || 'Musculación',
-          });
-          const prim = (sameCat ?? []).map(mapRow);
-          const sec = (otherCat ?? []).map(mapRow);
-          const rows = mergePriorityRows(prim, sec);
-          setHits(rows);
-          setOpen(rows.length > 0);
+          const deduped = dedupeGlobalRows(data ?? []);
+          const ranked = prioritizeCategory(deduped, activeCategory).slice(0, MAX_SUGGESTIONS);
+          setHits(ranked);
+          setOpen(ranked.length > 0);
         }
         setLoading(false);
       })();
@@ -167,7 +161,9 @@ export function ExerciseNameSuggestInput({
                 }}
               >
                 <span className="truncate font-medium text-foreground">{h.name}</span>
-                <span className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">{h.muscle_group}</span>
+                <span className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {h.muscle_group} · {h.category}
+                </span>
               </button>
             </li>
           ))}

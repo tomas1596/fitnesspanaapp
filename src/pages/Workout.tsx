@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef , useMemo} from 'react';
 import {
   Plus, ChevronLeft, ChevronRight,
   Calendar as CalendarIcon, Dumbbell, Trophy, FileText, X,
@@ -16,10 +16,15 @@ import TemplatesSheet from '@/components/TemplatesSheet';
 import { ExerciseNameSuggestInput } from '@/components/ExerciseNameSuggestInput';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { WorkoutModalityTabs } from '@/components/WorkoutModalityTabs';
+import { GymRoutineBlockViewer } from "@/components/GymRoutineBlockViewer";
+import { GymRoutineLeaderboard } from '@/components/GymRoutineLeaderboard';
+import { GymRoutineRegisterSheet } from '@/components/GymRoutineRegisterSheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { LastPerfHint, WorkoutModalityId } from '@/lib/workoutModality';
-import { parseWorkoutBlockSections, newConditioningBlockId } from '@/lib/workoutModality';
+import { modalityIdsAllowedByGymLabels, parseWorkoutBlockSections, newConditioningBlockId } from '@/lib/workoutModality';
+import { parseGymRoutineWorkoutData } from '@/lib/gymRoutineWorkoutData';
 import type { Tables } from '@/integrations/supabase/types';
 import {
   FunctionalSessionLogPanel,
@@ -44,15 +49,13 @@ import {
   deriveCrossfitTotalTimeColumn,
   emptyCrossfitDraft,
 } from '@/lib/crossfitWodDraft';
-import {
-  LIBRARY_CONDITIONING_MUSCLE_GROUP,
-  collectCrossfitDraftManualNames,
-  collectFunctionalDraftManualNames,
-  modalityToLibraryCategory,
-} from '@/lib/exerciseLibraryNaming';
+import { modalityToLibraryCategory } from '@/lib/exerciseLibraryNaming';
+import { insertConditioningRoutineTemplate } from '@/lib/workoutTemplatesConditioning';
 import { insertMissingExerciseLibraryEntries } from '@/lib/exerciseLibrarySync';
+import { deriveGymQuickResultFormFromLog } from '@/lib/gymRoutineQuickResult';
 
 const WORKOUT_MODALITY_LS_KEY = 'fitnesspana.workout.activeModalidad';
+const WORKOUT_SCOPE_LS_KEY = 'fitnesspana.workout.scope';
 
 function readStoredWorkoutModality(): WorkoutModalityId {
   try {
@@ -113,6 +116,11 @@ const Workout = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const dateStr = formatDateISO(selectedDate);
+  const todayStr = formatDateISO(new Date());
+  const isToday = dateStr === todayStr;
+  const isPast = dateStr < todayStr;
+
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [activeDates, setActiveDates] = useState<Set<string>>(new Set());
@@ -130,6 +138,165 @@ const Workout = () => {
       /* ignore */
     }
   }, []);
+
+  const [studentCoachProfileId, setStudentCoachProfileId] = useState<string | null>(null);
+  const [isCoachUser, setIsCoachUser] = useState(false);
+  const [myProfileId, setMyProfileId] = useState<string | null>(null);
+  const [gymModalitiesLabels, setGymModalitiesLabels] = useState<string[]>([]);
+  const [coachCtxReady, setCoachCtxReady] = useState(false);
+  const [workoutScope, setWorkoutScope] = useState<'personal' | 'gimnasio'>('personal');
+
+  const showGymSwitch = coachCtxReady && !!user && (!!studentCoachProfileId || isCoachUser);
+
+  const gymSourceCoachProfileId = useMemo(() => {
+    if (!coachCtxReady || !user) return null;
+    if (isCoachUser && myProfileId) return myProfileId;
+    if (studentCoachProfileId) return studentCoachProfileId;
+    return null;
+  }, [coachCtxReady, user, isCoachUser, myProfileId, studentCoachProfileId]);
+
+  const gymAllowedModalities = useMemo(
+    () => modalityIdsAllowedByGymLabels(gymModalitiesLabels),
+    [gymModalitiesLabels],
+  );
+
+  useEffect(() => {
+    if (!user?.id) {
+      setStudentCoachProfileId(null);
+      setIsCoachUser(false);
+      setMyProfileId(null);
+      setGymModalitiesLabels([]);
+      setWorkoutScope('personal');
+      setCoachCtxReady(true);
+      return;
+    }
+    let cancelled = false;
+    setCoachCtxReady(false);
+    void (async () => {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('id, coach_id, is_coach, gym_modalities')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (cancelled) return;
+
+      const row = prof as {
+        id?: string;
+        coach_id?: string | null;
+        is_coach?: boolean | null;
+        gym_modalities?: string[] | null;
+      } | null;
+
+      const pid = typeof row?.id === 'string' ? row.id : null;
+      const coachFlag = row?.is_coach === true;
+      const studentCoachId = typeof row?.coach_id === 'string' ? row.coach_id : null;
+
+      setMyProfileId(pid);
+      setIsCoachUser(coachFlag);
+      setStudentCoachProfileId(studentCoachId);
+
+      const canUseGymSwitch = coachFlag || Boolean(studentCoachId);
+      let mods: string[] = [];
+
+      if (coachFlag && pid) {
+        mods = Array.isArray(row?.gym_modalities) ? row!.gym_modalities! : [];
+      } else if (studentCoachId) {
+        const { data: rpcRows } = await supabase.rpc('get_linked_coach_gym');
+        if (cancelled) return;
+        const rpcRow = Array.isArray(rpcRows) ? rpcRows[0] : null;
+        const modsRaw =
+          rpcRow != null && typeof rpcRow === 'object'
+            ? (rpcRow as { gym_modalities?: unknown }).gym_modalities
+            : undefined;
+        mods =
+          Array.isArray(modsRaw) && modsRaw.every((x): x is string => typeof x === 'string') ? modsRaw : [];
+      }
+
+      setGymModalitiesLabels(mods);
+
+      if (!canUseGymSwitch) {
+        setWorkoutScope('personal');
+        setCoachCtxReady(true);
+        return;
+      }
+
+      let scope: 'personal' | 'gimnasio' = 'personal';
+      try {
+        if (localStorage.getItem(WORKOUT_SCOPE_LS_KEY) === 'gimnasio') scope = 'gimnasio';
+      } catch {
+        /* ignore */
+      }
+      setWorkoutScope(scope);
+      setCoachCtxReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!coachCtxReady || !user) return;
+    if (!(studentCoachProfileId || isCoachUser)) return;
+    try {
+      localStorage.setItem(WORKOUT_SCOPE_LS_KEY, workoutScope);
+    } catch {
+      /* ignore */
+    }
+  }, [workoutScope, coachCtxReady, user, studentCoachProfileId, isCoachUser]);
+
+  useEffect(() => {
+    if (!coachCtxReady || workoutScope !== 'gimnasio') return;
+    if (!gymAllowedModalities.includes(activeModalidad)) {
+      setActiveModalidad(gymAllowedModalities[0] ?? 'musculacion');
+    }
+  }, [coachCtxReady, workoutScope, gymAllowedModalities, activeModalidad, setActiveModalidad]);
+
+  useEffect(() => {
+    setPersonalConditioningEditorOpen(false);
+  }, [activeModalidad, dateStr]);
+
+  const [gymRoutines, setGymRoutines] = useState<Tables<'gym_routines'>[]>([]);
+  const [gymRoutinesLoading, setGymRoutinesLoading] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewingRoutine, setViewingRoutine] = useState<Tables<'gym_routines'> | null>(null);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [registerRoutine, setRegisterRoutine] = useState<Tables<'gym_routines'> | null>(null);
+  const [leaderboardNonce, setLeaderboardNonce] = useState(0);
+  const [registerQuickPrefill, setRegisterQuickPrefill] = useState<{
+    resultado: string;
+    notas: string;
+  } | null>(null);
+  const [registerSheetVariant, setRegisterSheetVariant] = useState<'register' | 'edit'>('register');
+  const [personalConditioningEditorOpen, setPersonalConditioningEditorOpen] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id || workoutScope !== 'gimnasio' || !gymSourceCoachProfileId) {
+      setGymRoutines([]);
+      setGymRoutinesLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setGymRoutinesLoading(true);
+    void (async () => {
+      const { data, error } = await supabase
+        .from('gym_routines')
+        .select('*')
+        .eq('coach_id', gymSourceCoachProfileId)
+        .eq('modality', activeModalidad)
+        .order('day_number');
+      if (cancelled) return;
+      if (error) {
+        console.error(error);
+        setGymRoutines([]);
+      } else {
+        setGymRoutines(data ?? []);
+      }
+      setGymRoutinesLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, workoutScope, gymSourceCoachProfileId, activeModalidad]);
 
   // Inline add form
   const [addingExercise, setAddingExercise] = useState(false);
@@ -153,11 +320,6 @@ const Workout = () => {
     defaultFunctionalSessionDraft(),
   );
   const [blockSaving, setBlockSaving] = useState<'crossfit' | 'funcional' | null>(null);
-
-  const dateStr = formatDateISO(selectedDate);
-  const todayStr = formatDateISO(new Date());
-  const isToday = dateStr === todayStr;
-  const isPast = dateStr < todayStr;
 
   const formattedDate = selectedDate.toLocaleDateString('es-ES', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -318,6 +480,82 @@ const Workout = () => {
   // Depending on exercises.length was unreliable: it fired *before* the DB write completed.
   useEffect(() => { fetchActiveDates(); }, [fetchActiveDates]);
 
+  const handleGymResultRecorded = useCallback(() => {
+    void fetchExercises();
+    void fetchActiveDates();
+    setLeaderboardNonce((n) => n + 1);
+  }, [fetchExercises, fetchActiveDates]);
+
+  const closeGymRegisterSheet = useCallback(() => {
+    setRegisterOpen(false);
+    setRegisterQuickPrefill(null);
+    setRegisterSheetVariant('register');
+  }, []);
+
+  const openGymRegisterFresh = useCallback(() => {
+    if (!viewingRoutine) return;
+    setRegisterQuickPrefill(null);
+    setRegisterSheetVariant('register');
+    setRegisterRoutine(viewingRoutine);
+    setViewerOpen(false);
+    setRegisterOpen(true);
+  }, [viewingRoutine]);
+
+  const handleEditOwnGymRanking = useCallback(async () => {
+    if (!user?.id || !viewingRoutine) return;
+    const modality = viewingRoutine.modality as WorkoutModalityId;
+    if (modality !== 'crossfit' && modality !== 'funcional') return;
+    const { data, error } = await supabase
+      .from('workout_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('workout_date', dateStr)
+      .eq('modality', modality)
+      .eq('gym_routine_id', viewingRoutine.id)
+      .maybeSingle();
+    if (error || !data) {
+      toast({
+        title: 'No encontramos tu registro',
+        description: 'Probá registrar de nuevo o actualizar la página.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setRegisterRoutine(viewingRoutine);
+    setRegisterQuickPrefill(deriveGymQuickResultFormFromLog(data));
+    setRegisterSheetVariant('edit');
+    setViewerOpen(false);
+    setRegisterOpen(true);
+  }, [user?.id, viewingRoutine, dateStr, toast]);
+
+  const handleDeleteOwnGymRanking = useCallback(async () => {
+    if (!user?.id || !viewingRoutine) return;
+    const modality = viewingRoutine.modality as WorkoutModalityId;
+    if (modality !== 'crossfit' && modality !== 'funcional') return;
+    if (
+      !globalThis.confirm(
+        '¿Eliminar tu resultado del ranking para esta fecha? Podrás registrar uno nuevo después.',
+      )
+    ) {
+      return;
+    }
+    const { error } = await supabase
+      .from('workout_logs')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('workout_date', dateStr)
+      .eq('modality', modality)
+      .eq('gym_routine_id', viewingRoutine.id);
+    if (error) {
+      toast({ title: 'No se pudo eliminar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Resultado eliminado' });
+    setLeaderboardNonce((n) => n + 1);
+    void fetchExercises();
+    void fetchActiveDates();
+  }, [user?.id, viewingRoutine, dateStr, toast, fetchExercises, fetchActiveDates]);
+
   const resolveWorkoutLogId = useCallback(
     async (modality: 'crossfit' | 'funcional'): Promise<string | null> => {
       if (!user) return null;
@@ -420,14 +658,24 @@ const Workout = () => {
   );
 
   const executeConditioningPersist = useCallback(
-    async (modality: 'crossfit' | 'funcional'): Promise<boolean> => {
+    async (
+      modality: 'crossfit' | 'funcional',
+      overrides?: {
+        crossfitDraft?: CrossfitLogDraft;
+        functionalSessionDraft?: FunctionalSessionDraft;
+      },
+      opts?: { silent?: boolean },
+    ): Promise<boolean> => {
       if (!user) return false;
+      const cfDraft = overrides?.crossfitDraft ?? crossfitDraft;
+      const fnDraft = overrides?.functionalSessionDraft ?? functionalSessionDraft;
+
       setBlockSaving(modality);
 
       let row: Record<string, unknown>;
 
       if (modality === 'crossfit') {
-        const block_sections_payload = deriveCrossfitBlockSections(crossfitDraft).map((b, i) => ({
+        const block_sections_payload = deriveCrossfitBlockSections(cfDraft).map((b, i) => ({
           id: b.id,
           sort_order: i,
           target_time: b.target_time.trim(),
@@ -436,18 +684,18 @@ const Workout = () => {
           user_id: user.id,
           workout_date: dateStr,
           modality,
-          total_time: deriveCrossfitTotalTimeColumn(crossfitDraft),
+          total_time: deriveCrossfitTotalTimeColumn(cfDraft),
           target_time: null,
-          wod_title: crossfitWodTitle(crossfitDraft) || null,
+          wod_title: crossfitWodTitle(cfDraft) || null,
           round_count: null,
           split_times: [],
           block_sections: block_sections_payload,
-          crossfit_details: serializeCrossfitDetails(crossfitDraft),
+          crossfit_details: serializeCrossfitDetails(cfDraft),
           circuit_name: null,
           work_rest_note: null,
         };
       } else {
-        const draft = functionalSessionDraft;
+        const draft = fnDraft;
         const block_sections_payload = deriveFunctionalBlockSections(draft).map((b, i) => ({
           id: b.id,
           sort_order: i,
@@ -472,8 +720,8 @@ const Workout = () => {
 
       const draftForExerciseDefaults =
         modality === 'crossfit'
-          ? deriveCrossfitBlockSections(crossfitDraft)
-          : deriveFunctionalBlockSections(functionalSessionDraft);
+          ? deriveCrossfitBlockSections(cfDraft)
+          : deriveFunctionalBlockSections(fnDraft);
       const { data, error } = await supabase
         .from('workout_logs')
         .upsert(row as Tables<'workout_logs'>['Insert'], { onConflict: 'user_id,workout_date,modality' })
@@ -501,7 +749,9 @@ const Workout = () => {
           .is('conditioning_block_id', null);
       }
       await syncMovementsToLog(data.id);
-      toast({ title: 'Bloque guardado', description: 'WOD y tiempos guardados.' });
+      if (!opts?.silent) {
+        toast({ title: 'Bloque guardado', description: 'WOD y tiempos guardados.' });
+      }
       fetchExercises();
       return true;
     },
@@ -512,23 +762,54 @@ const Workout = () => {
     async (modality: 'crossfit' | 'funcional') => {
       const ok = await executeConditioningPersist(modality);
       if (!ok || !user) return;
-      const names =
+      const draft = modality === 'crossfit' ? crossfitDraft : functionalSessionDraft;
+      const templateName =
         modality === 'crossfit'
-          ? collectCrossfitDraftManualNames(crossfitDraft)
-          : collectFunctionalDraftManualNames(functionalSessionDraft);
-      await insertMissingExerciseLibraryEntries(
-        supabase,
-        user.id,
-        names.map((n) => ({ name: n, muscle_group: LIBRARY_CONDITIONING_MUSCLE_GROUP })),
-        modalityToLibraryCategory(modality),
-      );
+          ? crossfitWodTitle(crossfitDraft).trim() || `CrossFit · ${dateStr}`
+          : functionalSessionDraft.session_name.trim() || `Funcional · ${dateStr}`;
+      const { error: tplErr } = await insertConditioningRoutineTemplate(supabase, user.id, {
+        name: templateName,
+        modality,
+        draft,
+      });
+      if (tplErr) {
+        toast({
+          title: 'Entrenamiento guardado',
+          description: 'No se pudo guardar la copia en Mis Rutinas.',
+          variant: 'destructive',
+        });
+      }
     },
     [
       executeConditioningPersist,
       user,
       crossfitDraft,
       functionalSessionDraft,
+      dateStr,
+      toast,
     ],
+  );
+
+  const applyConditioningFromSavedTemplate = useCallback(
+    async (modality: 'crossfit' | 'funcional', draft: CrossfitLogDraft | FunctionalSessionDraft) => {
+      if (!user) return;
+      setActiveModalidad(modality);
+      setPersonalConditioningEditorOpen(true);
+      if (modality === 'crossfit') {
+        const cf = draft as CrossfitLogDraft;
+        setCrossfitDraft(cf);
+        await executeConditioningPersist('crossfit', { crossfitDraft: cf }, { silent: true });
+      } else {
+        const fn = draft as FunctionalSessionDraft;
+        setFunctionalSessionDraft(fn);
+        await executeConditioningPersist('funcional', { functionalSessionDraft: fn }, { silent: true });
+      }
+      toast({
+        title: 'Rutina cargada',
+        description: 'Ya está aplicada al día actual; podés editarla y volver a guardar.',
+      });
+    },
+    [user, executeConditioningPersist, toast, setActiveModalidad],
   );
 
   useEffect(() => {
@@ -1106,13 +1387,89 @@ const Workout = () => {
           </Popover>
         </div>
 
+        {coachCtxReady && user && showGymSwitch ? (
+          <div
+            className={cn(
+              'mb-5 flex gap-1 rounded-2xl border border-border/40 bg-muted/90 p-1 transition-colors duration-200 dark:bg-secondary/90',
+              "[html[data-brand='pink']_&]:border-pink-700/35 [html[data-brand='pink']_&]:bg-zinc-900/95",
+              "dark:[html[data-brand='pink']_&]:border-pink-800/45 dark:[html[data-brand='pink']_&]:bg-zinc-950/90",
+            )}
+            style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)' }}
+            role="tablist"
+            aria-label="Ámbito del entrenamiento"
+          >
+            {(['personal', 'gimnasio'] as const).map((scope) => (
+              <button
+                key={scope}
+                type="button"
+                role="tab"
+                aria-selected={workoutScope === scope}
+                onClick={() => setWorkoutScope(scope)}
+                className={cn(
+                  'flex-1 rounded-xl px-2 py-2.5 text-center text-xs font-semibold transition-colors duration-200 sm:text-sm',
+                  workoutScope === scope
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : cn(
+                        'bg-transparent text-muted-foreground hover:bg-background/60 hover:text-foreground',
+                        "[html[data-brand='pink']_&]:hover:bg-zinc-800/90 [html[data-brand='pink']_&]:hover:text-pink-100",
+                      ),
+                )}
+              >
+                {scope === 'personal' ? 'Personal' : 'Gimnasio'}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <WorkoutModalityTabs
           value={activeModalidad}
           onChange={setActiveModalidad}
+          allowedModalities={workoutScope === 'gimnasio' ? gymAllowedModalities : undefined}
           className="mb-5"
         />
 
-        {showEmptyPastState ? (
+        {workoutScope === 'gimnasio' ? (
+          <div className="space-y-4">
+            <p className="text-center text-xs font-medium text-muted-foreground">
+              Tocá un día para ver la rutina del coach y registrar tu resultado en esta fecha (
+              <span className="tabular-nums">{dateStr}</span>).
+            </p>
+            {gymRoutinesLoading ? (
+              <p className="text-center text-sm text-muted-foreground">Cargando rutinas…</p>
+            ) : null}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[1, 2, 3, 4, 5, 6].map((d) => {
+                const row = gymRoutines.find((r) => r.day_number === d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    disabled={!row}
+                    onClick={() => {
+                      if (!row) return;
+                      setViewingRoutine(row);
+                      setViewerOpen(true);
+                    }}
+                    className={cn(
+                      'flex min-h-[5rem] flex-col rounded-2xl border px-3 py-3 text-left transition-colors',
+                      row
+                        ? cn(
+                            'border-primary/35 bg-card shadow-sm hover:bg-accent/40',
+                            "[html[data-brand='pink']_&]:border-pink-700/40 [html[data-brand='pink']_&]:bg-zinc-950/85",
+                          )
+                        : 'cursor-default border-dashed border-border/50 bg-muted/25 opacity-80',
+                    )}
+                  >
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary">Día {d}</span>
+                    <span className="mt-1 line-clamp-3 text-xs font-semibold text-foreground">
+                      {row?.title?.trim() || (row ? 'Ver rutina' : 'Sin rutina')}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : showEmptyPastState ? (
           <div className="flex flex-col items-center py-20 text-center">
             <p className="text-xs font-medium text-muted-foreground/60">No registraste entrenamiento este día</p>
             <Button
@@ -1126,51 +1483,115 @@ const Workout = () => {
         ) : (
           <div className="space-y-3.5">
             {activeModalidad === 'crossfit' || activeModalidad === 'funcional' ? (
-              <div className={cn(CONDITIONING_BLOCK_SHELL, activeModalidad === 'crossfit' && 'space-y-2')}>
-                {activeModalidad === 'crossfit' && (
-                  <CrossfitWodLogPanel
-                    draft={crossfitDraft}
-                    onChange={setCrossfitDraft}
-                    onSubtypeChange={handleCrossfitSubtypeChange}
-                    onAmrapBlockRemoved={handleCrossfitAmrapBlockRemoved}
-                    onSave={() => void saveConditioningWithAutoLibrary('crossfit')}
-                    saving={blockSaving === 'crossfit'}
-                  />
-                )}
-                {activeModalidad === 'funcional' && (
-                  <FunctionalSessionLogPanel
-                    draft={functionalSessionDraft}
-                    onChange={setFunctionalSessionDraft}
-                    onPhaseRemoved={handleFunctionalPhaseRemoved}
-                    onSave={() => void saveConditioningWithAutoLibrary('funcional')}
-                    saving={blockSaving === 'funcional'}
-                  />
-                )}
-                <div className="space-y-4">
-                  {sectionsForGrouping.map((sec, idx) => {
-                    const inBlock = visibleExercises.filter((e) => e.conditioning_block_id === sec.id);
-                    if ((activeModalidad === 'crossfit' || activeModalidad === 'funcional') && inBlock.length === 0)
-                      return null;
-                    return (
-                      <div key={sec.id} className="space-y-2">
-                        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border/40 pb-1.5">
-                          <span className="text-xs font-semibold text-foreground">
-                            {activeModalidad === 'funcional' ? `Fase ${idx + 1}` : `Bloque ${idx + 1}`}
+              <>
+                {!personalConditioningEditorOpen ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setPersonalConditioningEditorOpen(true)}
+                    className={cn(
+                      'h-14 w-full rounded-2xl border border-border/60 bg-secondary text-base font-bold tracking-tight text-foreground shadow-none hover:bg-accent',
+                      "[html[data-brand='pink']_&]:border-0 [html[data-brand='pink']_&]:bg-primary [html[data-brand='pink']_&]:text-primary-foreground",
+                      "[html[data-brand='pink']_&]:shadow-sm [html[data-brand='pink']_&]:hover:bg-[color:var(--brand-hover)] [html[data-brand='pink']_&]:hover:text-primary-foreground",
+                    )}
+                  >
+                    <Plus
+                      className={cn(
+                        'mr-2 h-5 w-5 text-primary',
+                        "[html[data-brand='pink']_&]:text-primary-foreground",
+                      )}
+                      strokeWidth={2}
+                    />
+                    Agregar rutina de {activeModalidad === 'crossfit' ? 'CrossFit' : 'Funcional'}
+                  </Button>
+                ) : (
+                  <div className={cn(CONDITIONING_BLOCK_SHELL, activeModalidad === 'crossfit' && 'space-y-2')}>
+                    {activeModalidad === 'crossfit' && (
+                      <CrossfitWodLogPanel
+                        draft={crossfitDraft}
+                        onChange={setCrossfitDraft}
+                        onSubtypeChange={handleCrossfitSubtypeChange}
+                        onAmrapBlockRemoved={handleCrossfitAmrapBlockRemoved}
+                        onSave={() => void saveConditioningWithAutoLibrary('crossfit')}
+                        saving={blockSaving === 'crossfit'}
+                      />
+                    )}
+                    {activeModalidad === 'funcional' && (
+                      <FunctionalSessionLogPanel
+                        draft={functionalSessionDraft}
+                        onChange={setFunctionalSessionDraft}
+                        onPhaseRemoved={handleFunctionalPhaseRemoved}
+                        onSave={() => void saveConditioningWithAutoLibrary('funcional')}
+                        saving={blockSaving === 'funcional'}
+                      />
+                    )}
+                    <div className="space-y-4">
+                      {sectionsForGrouping.map((sec, idx) => {
+                        const inBlock = visibleExercises.filter((e) => e.conditioning_block_id === sec.id);
+                        if (
+                          (activeModalidad === 'crossfit' || activeModalidad === 'funcional') &&
+                          inBlock.length === 0
+                        )
+                          return null;
+                        return (
+                          <div key={sec.id} className="space-y-2">
+                            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border/40 pb-1.5">
+                              <span className="text-xs font-semibold text-foreground">
+                                {activeModalidad === 'funcional' ? `Fase ${idx + 1}` : `Bloque ${idx + 1}`}
+                              </span>
+                              {sec.target_time.trim() ? (
+                                <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
+                                  {activeModalidad === 'funcional'
+                                    ? sec.target_time
+                                    : `Objetivo coach: ${sec.target_time}`}
+                                </span>
+                              ) : null}
+                            </div>
+                            {inBlock.length === 0 ? (
+                              <p className="py-2 text-center text-[11px] text-muted-foreground">
+                                Ningún ejercicio en este bloque
+                              </p>
+                            ) : (
+                              inBlock.map((ex) => (
+                                <ExerciseCard
+                                  key={ex.id}
+                                  id={ex.id}
+                                  name={ex.name}
+                                  muscleGroup={ex.muscle_group}
+                                  modality={ex.modality}
+                                  sets={ex.sets}
+                                  className={conditioningCardSurface}
+                                  conditioningBlockOptions={blockOptions}
+                                  conditioningBlockId={ex.conditioning_block_id}
+                                  onConditioningBlockChange={(bid) =>
+                                    void updateExerciseConditioningBlock(ex.id, bid)
+                                  }
+                                  lastPerformance={lastPerfMap[ex.name]}
+                                  autoFocusWeight={focusExerciseId === ex.id}
+                                  onAddSet={addSet}
+                                  onUpdateSet={updateSet}
+                                  onDeleteSet={deleteSet}
+                                  onDeleteExercise={() => deleteExercise(ex.id)}
+                                  onRenameExercise={(newName) => renameExercise(ex.id, newName)}
+                                />
+                              ))
+                            )}
+                          </div>
+                        );
+                      })}
+                      {conditioningUnassigned && conditioningUnassigned.length > 0 ? (
+                        <div
+                          className={cn(
+                            'space-y-2',
+                            hasAnyAssignedBlockExercise
+                              ? 'border-t border-dashed border-border/50 pt-3'
+                              : 'pt-1',
+                          )}
+                        >
+                          <span className="text-xs font-semibold text-muted-foreground">
+                            {activeModalidad === 'funcional' ? 'Sin fase asignada' : 'Sin bloque asignado'}
                           </span>
-                          {sec.target_time.trim() ? (
-                            <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
-                              {activeModalidad === 'funcional'
-                                ? sec.target_time
-                                : `Objetivo coach: ${sec.target_time}`}
-                            </span>
-                          ) : null}
-                        </div>
-                        {inBlock.length === 0 ? (
-                          <p className="py-2 text-center text-[11px] text-muted-foreground">
-                            Ningún ejercicio en este bloque
-                          </p>
-                        ) : (
-                          inBlock.map((ex) => (
+                          {conditioningUnassigned.map((ex) => (
                             <ExerciseCard
                               key={ex.id}
                               id={ex.id}
@@ -1192,50 +1613,22 @@ const Workout = () => {
                               onDeleteExercise={() => deleteExercise(ex.id)}
                               onRenameExercise={(newName) => renameExercise(ex.id, newName)}
                             />
-                          ))
-                        )}
-                      </div>
-                    );
-                  })}
-                  {conditioningUnassigned && conditioningUnassigned.length > 0 ? (
-                    <div
-                      className={cn(
-                        'space-y-2',
-                        hasAnyAssignedBlockExercise
-                          ? 'border-t border-dashed border-border/50 pt-3'
-                          : 'pt-1',
-                      )}
-                    >
-                      <span className="text-xs font-semibold text-muted-foreground">
-                        {activeModalidad === 'funcional' ? 'Sin fase asignada' : 'Sin bloque asignado'}
-                      </span>
-                      {conditioningUnassigned.map((ex) => (
-                        <ExerciseCard
-                          key={ex.id}
-                          id={ex.id}
-                          name={ex.name}
-                          muscleGroup={ex.muscle_group}
-                          modality={ex.modality}
-                          sets={ex.sets}
-                          className={conditioningCardSurface}
-                          conditioningBlockOptions={blockOptions}
-                          conditioningBlockId={ex.conditioning_block_id}
-                          onConditioningBlockChange={(bid) =>
-                            void updateExerciseConditioningBlock(ex.id, bid)
-                          }
-                          lastPerformance={lastPerfMap[ex.name]}
-                          autoFocusWeight={focusExerciseId === ex.id}
-                          onAddSet={addSet}
-                          onUpdateSet={updateSet}
-                          onDeleteSet={deleteSet}
-                          onDeleteExercise={() => deleteExercise(ex.id)}
-                          onRenameExercise={(newName) => renameExercise(ex.id, newName)}
-                        />
-                      ))}
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-              </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground"
+                      onClick={() => setPersonalConditioningEditorOpen(false)}
+                    >
+                      Ocultar editor de rutina
+                    </Button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="space-y-3.5">{strengthExerciseCards}</div>
             )}
@@ -1333,7 +1726,7 @@ const Workout = () => {
           </div>
         )}
 
-        {showWorkoutUI && (exercises.length > 0 || isToday) && (
+        {workoutScope !== 'gimnasio' && showWorkoutUI && (exercises.length > 0 || isToday) && (
           <button
             onClick={() => setReportOpen(true)}
             className="mt-5 flex w-full items-center justify-between rounded-2xl border border-border/40 bg-card/70 p-5 backdrop-blur-sm transition-colors hover:bg-accent/70"
@@ -1364,6 +1757,65 @@ const Workout = () => {
         )}
       </div>
 
+      <Sheet open={viewerOpen} onOpenChange={setViewerOpen}>
+        <SheetContent
+          side="bottom"
+          className={cn(
+            'flex max-h-[88vh] flex-col gap-3 overflow-hidden rounded-t-3xl border border-border/60 px-4 pb-6 pt-4',
+            "[html[data-brand='pink']_&]:border-pink-800/45 [html[data-brand='pink']_&]:bg-zinc-950",
+          )}
+        >
+          <SheetHeader className="flex-shrink-0 border-b border-border/40 pb-3 text-left">
+            <SheetTitle className="text-lg font-bold tracking-tight">Rutina del gimnasio</SheetTitle>
+          </SheetHeader>
+          {viewingRoutine ? (
+            <>
+              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
+                <GymRoutineBlockViewer
+                  payload={parseGymRoutineWorkoutData(
+                    viewingRoutine.modality as WorkoutModalityId,
+                    viewingRoutine.workout_data,
+                  )}
+                  title={viewingRoutine.title ?? ''}
+                  dayNumber={viewingRoutine.day_number}
+                  coachNotes={viewingRoutine.coach_notes}
+                />
+                {viewingRoutine.modality === 'crossfit' || viewingRoutine.modality === 'funcional' ? (
+                  <GymRoutineLeaderboard
+                    routine={viewingRoutine}
+                    workoutDate={dateStr}
+                    currentUserId={user?.id ?? null}
+                    refreshNonce={leaderboardNonce}
+                    onEditOwnResult={user?.id ? handleEditOwnGymRanking : undefined}
+                    onDeleteOwnResult={user?.id ? handleDeleteOwnGymRanking : undefined}
+                  />
+                ) : null}
+              </div>
+              <Button
+                type="button"
+                className="h-12 w-full shrink-0 rounded-2xl font-semibold"
+                onClick={openGymRegisterFresh}
+              >
+                Registrar mi resultado
+              </Button>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
+
+      {user?.id ? (
+        <GymRoutineRegisterSheet
+          open={registerOpen}
+          onClose={closeGymRegisterSheet}
+          userId={user.id}
+          dateStr={dateStr}
+          routine={registerRoutine}
+          initialQuickResult={registerQuickPrefill}
+          variant={registerSheetVariant}
+          onRecorded={handleGymResultRecorded}
+        />
+      ) : null}
+
       <DailyReportSheet
         open={reportOpen}
         onClose={() => setReportOpen(false)}
@@ -1378,6 +1830,7 @@ const Workout = () => {
         libraryModalityFilter={activeModalidad}
         onApplyTemplate={applyTemplate}
         onAddExercise={handleAddExerciseFromLibrary}
+        onApplyConditioningTemplate={applyConditioningFromSavedTemplate}
       />
 
       <PersonalRecordsSheet open={prSheetOpen} onClose={() => setPrSheetOpen(false)} />

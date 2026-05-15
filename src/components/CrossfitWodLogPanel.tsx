@@ -17,6 +17,7 @@ import {
   CROSSFIT_SUBTYPE_LABELS,
 } from '@/lib/crossfitWodDraft';
 import { ExerciseNameSuggestInput } from '@/components/ExerciseNameSuggestInput';
+import { sanitizeTimeDigitColonInput, sanitizeUnsignedIntegerInput } from '@/lib/workoutNumericInput';
 import {
   WORKOUT_LOG_DIVIDER,
   WORKOUT_LOG_FIELD_LABEL,
@@ -45,6 +46,8 @@ type Props = {
   onSave: () => void;
   saving?: boolean;
   className?: string;
+  /** Si es false, no se muestra «Guardar registro» (p. ej. editor embebido en un Dialog con acción externa). */
+  showSaveButton?: boolean;
 };
 
 function ManualExerciseEditor({
@@ -122,6 +125,7 @@ export function CrossfitWodLogPanel({
   onSave,
   saving,
   className,
+  showSaveButton = true,
 }: Props) {
   const switchSubtype = (s: CrossfitWodSubtype) => {
     if (draft.subtype === s) return;
@@ -189,7 +193,7 @@ export function CrossfitWodLogPanel({
           </CollapsibleTrigger>
           <CollapsibleContent className="border-t border-border/60 px-3 pb-3 pt-2 dark:border-border/50">
             <div className="space-y-1">
-              <label className={WORKOUT_LOG_FIELD_LABEL}>Ejercicios (manual)</label>
+              <label className={WORKOUT_LOG_FIELD_LABEL}>Ejercicios</label>
               <ManualExerciseEditor
                 lines={draft.warmup_skill.exercises}
                 onLinesChange={(exercises) => patchWarmup({ ...draft.warmup_skill!, exercises })}
@@ -240,7 +244,12 @@ export function CrossfitWodLogPanel({
             <label className={WORKOUT_LOG_FIELD_LABEL}>Tiempo total de los AMRAPs (opcional)</label>
             <Input
               value={draft.global_amraps_total_time}
-              onChange={(e) => onChange({ ...draft, global_amraps_total_time: e.target.value })}
+              onChange={(e) =>
+                onChange({
+                  ...draft,
+                  global_amraps_total_time: sanitizeTimeDigitColonInput(e.target.value),
+                })
+              }
               className={cn(WORKOUT_LOG_INPUT, 'font-mono tabular-nums')}
               placeholder="ej. 15 min total"
             />
@@ -294,8 +303,9 @@ export function CrossfitWodLogPanel({
                   <Input
                     value={block.duration}
                     onChange={(e) => {
+                      const v = sanitizeTimeDigitColonInput(e.target.value);
                       const blocks = draft.blocks.map((b, i) =>
-                        i === index ? { ...b, duration: e.target.value } : b,
+                        i === index ? { ...b, duration: v } : b,
                       );
                       onChange({ ...draft, blocks });
                     }}
@@ -304,7 +314,7 @@ export function CrossfitWodLogPanel({
                   />
                 </div>
                 <div className="mt-3 space-y-1">
-                  <label className={WORKOUT_LOG_FIELD_LABEL}>Ejercicios (manual)</label>
+                  <label className={WORKOUT_LOG_FIELD_LABEL}>Ejercicios</label>
                   <ManualExerciseEditor
                     lines={block.exercises}
                     onLinesChange={(exercises) => {
@@ -315,12 +325,13 @@ export function CrossfitWodLogPanel({
                   />
                 </div>
                 <div className="mt-3 space-y-1">
-                  <label className={WORKOUT_LOG_FIELD_LABEL}>Rondas / vueltas logradas</label>
+                  <label className={WORKOUT_LOG_FIELD_LABEL}>Rondas</label>
                   <Input
                     value={block.rounds_completed}
                     onChange={(e) => {
+                      const v = sanitizeUnsignedIntegerInput(e.target.value);
                       const blocks = draft.blocks.map((b, i) =>
-                        i === index ? { ...b, rounds_completed: e.target.value } : b,
+                        i === index ? { ...b, rounds_completed: v } : b,
                       );
                       onChange({ ...draft, blocks });
                     }}
@@ -340,7 +351,9 @@ export function CrossfitWodLogPanel({
             <label className={WORKOUT_LOG_FIELD_LABEL}>Tiempo total del EMOM</label>
             <Input
               value={draft.total_emom_time}
-              onChange={(e) => onChange({ ...draft, total_emom_time: e.target.value })}
+              onChange={(e) =>
+                onChange({ ...draft, total_emom_time: sanitizeTimeDigitColonInput(e.target.value) })
+              }
               className={cn(WORKOUT_LOG_INPUT, 'font-mono tabular-nums')}
               placeholder="ej. 10 min"
             />
@@ -362,7 +375,7 @@ export function CrossfitWodLogPanel({
             <label className={WORKOUT_LOG_FIELD_LABEL}>Time cap / tiempo límite (opcional)</label>
             <Input
               value={draft.time_cap}
-              onChange={(e) => onChange({ ...draft, time_cap: e.target.value })}
+              onChange={(e) => onChange({ ...draft, time_cap: sanitizeTimeDigitColonInput(e.target.value) })}
               className={cn(WORKOUT_LOG_INPUT, 'font-mono tabular-nums')}
               placeholder="ej. 20 min cap"
             />
@@ -371,20 +384,22 @@ export function CrossfitWodLogPanel({
             <label className={WORKOUT_LOG_FIELD_LABEL}>Cantidad de vueltas / rondas</label>
             <Input
               value={draft.rounds_to_complete}
-              onChange={(e) => onChange({ ...draft, rounds_to_complete: e.target.value })}
+              onChange={(e) =>
+                onChange({ ...draft, rounds_to_complete: sanitizeUnsignedIntegerInput(e.target.value) })
+              }
               className={cn(WORKOUT_LOG_INPUT, 'font-mono tabular-nums')}
               placeholder="ej. 5 rondas"
             />
           </div>
           <div className="space-y-1">
-            <label className={WORKOUT_LOG_FIELD_LABEL}>Ejercicios (manual)</label>
+            <label className={WORKOUT_LOG_FIELD_LABEL}>Ejercicios</label>
             <ManualExerciseEditor lines={draft.exercises} onLinesChange={(exercises) => onChange({ ...draft, exercises })} />
           </div>
           <div className={WORKOUT_LOG_RESULT_WRAP_FOR_TIME}>
             <label className={WORKOUT_LOG_RESULT_LABEL_FOR_TIME}>Tiempo real de finalización</label>
             <Input
               value={draft.final_time}
-              onChange={(e) => onChange({ ...draft, final_time: e.target.value })}
+              onChange={(e) => onChange({ ...draft, final_time: sanitizeTimeDigitColonInput(e.target.value) })}
               className={cn(WORKOUT_LOG_RESULT_INPUT_FOR_TIME, 'text-foreground')}
               placeholder="ej. 14:32"
             />
@@ -398,20 +413,22 @@ export function CrossfitWodLogPanel({
             <label className={WORKOUT_LOG_FIELD_LABEL}>Tiempo objetivo (opcional)</label>
             <Input
               value={draft.target_time}
-              onChange={(e) => onChange({ ...draft, target_time: e.target.value })}
+              onChange={(e) => onChange({ ...draft, target_time: sanitizeTimeDigitColonInput(e.target.value) })}
               className={cn(WORKOUT_LOG_INPUT, 'font-mono tabular-nums')}
               placeholder="ej. 12 min"
             />
           </div>
           <div className={cn('space-y-1', WORKOUT_LOG_DIVIDER)}>
-            <label className={WORKOUT_LOG_FIELD_LABEL}>Ejercicios (manual)</label>
+            <label className={WORKOUT_LOG_FIELD_LABEL}>Ejercicios</label>
             <ManualExerciseEditor lines={draft.exercises} onLinesChange={(exercises) => onChange({ ...draft, exercises })} />
           </div>
           <div className={WORKOUT_LOG_RESULT_WRAP_CLASSIC}>
             <label className={WORKOUT_LOG_RESULT_LABEL_CLASSIC}>Tiempo real</label>
             <Input
               value={draft.final_real_time}
-              onChange={(e) => onChange({ ...draft, final_real_time: e.target.value })}
+              onChange={(e) =>
+                onChange({ ...draft, final_real_time: sanitizeTimeDigitColonInput(e.target.value) })
+              }
               className={cn(WORKOUT_LOG_RESULT_INPUT_CLASSIC, 'text-foreground')}
               placeholder="Cuánto tardaste"
             />
@@ -419,14 +436,16 @@ export function CrossfitWodLogPanel({
         </div>
       )}
 
-      <Button
-        type="button"
-        disabled={saving}
-        onClick={onSave}
-        className={WORKOUT_LOG_SAVE_BTN}
-      >
-        {saving ? 'Guardando…' : 'Guardar registro'}
-      </Button>
+      {showSaveButton ? (
+        <Button
+          type="button"
+          disabled={saving}
+          onClick={onSave}
+          className={WORKOUT_LOG_SAVE_BTN}
+        >
+          {saving ? 'Guardando…' : 'Guardar registro'}
+        </Button>
+      ) : null}
     </div>
   );
 }

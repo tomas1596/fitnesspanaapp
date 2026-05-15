@@ -5,9 +5,18 @@ type Props = {
   value: WorkoutModalityId;
   onChange: (m: WorkoutModalityId) => void;
   className?: string;
+  /** Si se pasa, solo se muestran estas modalidades (vista Gimnasio). */
+  allowedModalities?: WorkoutModalityId[] | null;
 };
 
-export function WorkoutModalityTabs({ value, onChange, className }: Props) {
+export function WorkoutModalityTabs({ value, onChange, className, allowedModalities }: Props) {
+  const options =
+    allowedModalities != null && allowedModalities.length > 0
+      ? WORKOUT_MODALITY_OPTIONS.filter((o) => allowedModalities.includes(o.id))
+      : WORKOUT_MODALITY_OPTIONS;
+
+  const visible = options.length > 0 ? options : WORKOUT_MODALITY_OPTIONS;
+
   return (
     <div
       className={cn(
@@ -19,7 +28,7 @@ export function WorkoutModalityTabs({ value, onChange, className }: Props) {
       )}
       style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)' }}
     >
-      {WORKOUT_MODALITY_OPTIONS.map((opt) => {
+      {visible.map((opt) => {
         const active = value === opt.id;
         return (
           <button

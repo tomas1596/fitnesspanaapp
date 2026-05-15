@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -23,6 +23,11 @@ import {
   FileText, Heart, Sparkles, AlertTriangle, Loader2, Trash2, X, ZoomIn, ChevronRight,
   Eye, EyeOff,
   Scale,
+  Medal,
+  Copy,
+  Building2,
+  Link2,
+  Unlink,
 } from 'lucide-react';
 import StepsRing from '@/components/StepsRing';
 import { AvatarCropModal } from '@/components/AvatarCropModal';
@@ -216,6 +221,18 @@ const Profile = () => {
   const [logoutWorking, setLogoutWorking] = useState(false);
   const [weightEvolutionOpen, setWeightEvolutionOpen] = useState(false);
 
+  const [profileIsCoach, setProfileIsCoach] = useState(false);
+  const [profileCoachCode, setProfileCoachCode] = useState<string | null>(null);
+  const [profileCoachLinkId, setProfileCoachLinkId] = useState<string | null>(null);
+  /** Gimnasio del coach vinculado (alumno); desde RPC `get_linked_coach_gym`. */
+  const [linkedCoachGymDisplay, setLinkedCoachGymDisplay] = useState<string | null>(null);
+  /** Nombre del box en `profiles.gym_name` cuando el usuario es coach. */
+  const [coachOwnGymName, setCoachOwnGymName] = useState<string | null>(null);
+  const [linkCoachOpen, setLinkCoachOpen] = useState(false);
+  const [linkCoachCodeInput, setLinkCoachCodeInput] = useState('');
+  const [linkCoachSubmitting, setLinkCoachSubmitting] = useState(false);
+  const [unlinkCoachSubmitting, setUnlinkCoachSubmitting] = useState(false);
+
   /** Recorte de avatar: preview local + archivo original conservado para futura subida HR. */
   const [avatarCropOpen, setAvatarCropOpen] = useState(false);
   const [avatarCropSrc, setAvatarCropSrc] = useState<string | null>(null);
@@ -244,7 +261,7 @@ const Profile = () => {
     const today = todayStr();
     const meta = (user.user_metadata ?? {}) as Record<string, string | undefined>;
     const { data, error } = await supabase.from('profiles').select(
-      'first_name, last_name, date_of_birth, height, weight, gender, target_weight, avatar_url, step_goal, activity_level, fitness_goal, theme',
+      'first_name, last_name, date_of_birth, height, weight, gender, target_weight, avatar_url, step_goal, activity_level, fitness_goal, theme, is_coach, coach_code, coach_id, gym_name',
     ).eq('user_id', user.id).maybeSingle();
     const pick = (db: string | null | undefined, metaKey: string) =>
       (db != null && String(db).trim() !== '' ? String(db).trim() : '') || (meta[metaKey]?.trim() ?? '');
@@ -262,11 +279,37 @@ const Profile = () => {
       setStepGoal(data.step_goal || 10000);
       setDraftGoal((data.step_goal || 10000).toString());
       setBrandTheme((data as { theme?: string }).theme || 'default');
+      const rowCoach = data as {
+        is_coach?: boolean | null;
+        coach_code?: string | null;
+        coach_id?: string | null;
+        gym_name?: string | null;
+      };
+      const isCoachUser = rowCoach.is_coach === true;
+      setProfileIsCoach(isCoachUser);
+      setProfileCoachCode(isCoachUser ? (rowCoach.coach_code ?? null) : null);
+      setProfileCoachLinkId(!isCoachUser ? (rowCoach.coach_id ?? null) : null);
+      setCoachOwnGymName(isCoachUser ? (rowCoach.gym_name?.trim() ? rowCoach.gym_name : null) : null);
+      if (!isCoachUser && rowCoach.coach_id) {
+        const { data: gymRows } = await supabase.rpc('get_linked_coach_gym');
+        const gname =
+          Array.isArray(gymRows) && gymRows[0] && typeof gymRows[0].gym_name === 'string'
+            ? gymRows[0].gym_name
+            : null;
+        setLinkedCoachGymDisplay(gname);
+      } else {
+        setLinkedCoachGymDisplay(null);
+      }
     } else {
       setFirstName(meta.first_name?.trim() ?? '');
       setLastName(meta.last_name?.trim() ?? '');
       setDateOfBirth(meta.date_of_birth?.trim() ?? '');
       setGender(meta.gender?.trim() ?? '');
+      setProfileIsCoach(false);
+      setProfileCoachCode(null);
+      setProfileCoachLinkId(null);
+      setLinkedCoachGymDisplay(null);
+      setCoachOwnGymName(null);
     }
     const { data: s } = await supabase.from('step_logs').select('*').eq('user_id', user.id).eq('log_date', today).maybeSingle();
     if (s) { setSteps(s.steps); setStepsId(s.id); } else { setSteps(0); setStepsId(null); }
@@ -555,6 +598,94 @@ const Profile = () => {
     }
   }, [signOut, navigate]);
 
+  const handleCopyCoachCode = useCallback(async () => {
+    if (!profileCoachCode) return;
+    try {
+      await navigator.clipboard.writeText(profileCoachCode);
+      toast({ title: 'Código copiado', description: profileCoachCode });
+    } catch {
+      toast({
+        title: 'No se pudo copiar',
+        description: 'Copiá el código manualmente si hace falta.',
+        variant: 'destructive',
+      });
+    }
+  }, [profileCoachCode, toast]);
+
+  const handleSubmitLinkCoach = useCallback(async () => {
+    if (!user) return;
+    const code = linkCoachCodeInput.trim();
+    if (!code) {
+      toast({
+        title: 'Falta el código',
+        description: 'Ingresá el código que te dio tu coach.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setLinkCoachSubmitting(true);
+    try {
+      const { data, error } = await supabase.rpc('link_student_to_coach', { p_code: code });
+      if (error) throw error;
+      const gym =
+        Array.isArray(data) && data[0] && typeof (data[0] as { gym_name?: string }).gym_name === 'string'
+          ? (data[0] as { gym_name: string }).gym_name
+          : null;
+      toast({
+        title: '¡Listo!',
+        description: gym ? `Te uniste a ${gym}` : 'Vinculación correcta con tu coach.',
+      });
+      setLinkCoachOpen(false);
+      setLinkCoachCodeInput('');
+      await loadProfile();
+    } catch (err: unknown) {
+      const raw =
+        err != null && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : '';
+      if (raw.includes('INVALID_COACH_CODE')) {
+        toast({
+          title: 'Código inválido',
+          description: 'No encontramos un coach con ese código. Revisá mayúsculas y guiones.',
+          variant: 'destructive',
+        });
+      } else if (raw.includes('COACH_CANNOT_LINK')) {
+        toast({
+          title: 'No disponible',
+          description: 'Los perfiles coach no pueden vincularse como alumno desde aquí.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'No se pudo vincular',
+          description: raw || 'Intentá de nuevo en un momento.',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setLinkCoachSubmitting(false);
+    }
+  }, [user, linkCoachCodeInput, toast, loadProfile]);
+
+  const handleUnlinkCoach = useCallback(async () => {
+    if (!user) return;
+    setUnlinkCoachSubmitting(true);
+    try {
+      const { error } = await supabase.rpc('unlink_student_from_coach');
+      if (error) throw error;
+      toast({ title: 'Desvinculado', description: 'Ya no estás unido a ese gimnasio.' });
+      await loadProfile();
+    } catch (err: unknown) {
+      const msg =
+        err != null && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'No se pudo desvincular';
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
+    } finally {
+      setUnlinkCoachSubmitting(false);
+    }
+  }, [user, toast, loadProfile]);
+
   const w = parseFloat(weight);
   const h = parseFloat(height);
   const tw = parseFloat(targetWeight);
@@ -580,7 +711,6 @@ const Profile = () => {
   };
 
   const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
-  const ageLabel = ageYears != null ? `${ageYears} años` : 'Completá tu fecha de nacimiento';
   const stepsProgressPct = stepGoal > 0 ? Math.min(100, Math.round((steps / stepGoal) * 100)) : 0;
   const kcalProgressPct = hasData && tdee > 0 ? Math.min(100, Math.round((todayMacroTotals.calories / tdee) * 100)) : 0;
   const proteinProgressPct = hasData && proteinGoal > 0 ? Math.min(100, Math.round((todayMacroTotals.protein / proteinGoal) * 100)) : 0;
@@ -645,8 +775,8 @@ const Profile = () => {
               <p className="text-lg font-semibold leading-tight text-zinc-900 dark:text-zinc-100">
                 {fullName || 'Tu nombre'}
               </p>
-              {/* ── Role badge ── */}
-              <div className="mt-1">
+              {/* ── Badges rol suscripción + Coach ── */}
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {isAdmin ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2.5 py-0.5 text-[11px] font-bold text-blue-600 dark:text-blue-400">
                     Admin 👑
@@ -664,14 +794,121 @@ const Profile = () => {
                     Free
                   </span>
                 )}
+                {profileIsCoach ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                    <Medal className="h-3 w-3 shrink-0 opacity-90" aria-hidden />
+                    {coachOwnGymName ?? 'Coach'}
+                  </span>
+                ) : null}
               </div>
-              <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{ageLabel}</p>
             </div>
             <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0 rounded-xl" onClick={openEditProfile} aria-label="Editar perfil">
               <Pencil className="h-4 w-4" />
             </Button>
           </div>
         </div>
+
+        {profileIsCoach && profileCoachCode ? (
+          <div className="space-y-2">
+          <div className="rounded-2xl border border-primary/35 bg-gradient-to-br from-primary/15 via-primary/8 to-transparent p-4 shadow-sm dark:border-primary/30 dark:from-primary/12 dark:via-primary/6 dark:to-transparent dark:shadow-none">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary dark:text-primary">
+                  Código de invitación
+                </p>
+                <p className="break-all font-mono text-2xl font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
+                  {profileCoachCode}
+                </p>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                  Compartilo con tus alumnos para que se unan desde su perfil.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="icon"
+                variant="secondary"
+                className="h-11 w-11 shrink-0 rounded-xl border border-primary/25 bg-white shadow-sm dark:border-primary/30 dark:bg-zinc-900"
+                title="Copiar código"
+                onClick={() => void handleCopyCoachCode()}
+              >
+                <Copy className="h-4 w-4 text-primary" />
+              </Button>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full rounded-xl border-primary/30 font-semibold text-zinc-900 dark:border-primary/35 dark:text-zinc-100"
+            onClick={() => navigate('/coach')}
+          >
+            Panel de Coach
+          </Button>
+          </div>
+        ) : null}
+
+        {!profileIsCoach ? (
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
+            {profileCoachLinkId ? (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12">
+                    <Building2 className="h-5 w-5 text-primary" aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                      Mi gimnasio
+                    </p>
+                    <p className="mt-0.5 truncate text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                      {linkedCoachGymDisplay ?? 'Coach vinculado'}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={unlinkCoachSubmitting}
+                  className="shrink-0 rounded-xl border-zinc-200 font-semibold dark:border-zinc-700"
+                  onClick={() => void handleUnlinkCoach()}
+                >
+                  {unlinkCoachSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                      …
+                    </>
+                  ) : (
+                    <>
+                      <Unlink className="mr-2 h-4 w-4" aria-hidden />
+                      Desvincular
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setLinkCoachOpen(true)}
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3.5 text-left transition',
+                  'hover:bg-primary/15 active:scale-[0.99] dark:border-primary/35 dark:bg-primary/12 dark:hover:bg-primary/18',
+                )}
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/20 dark:bg-primary/25">
+                  <Link2 className="h-5 w-5 text-primary" aria-hidden />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                    Vincularme a un Gimnasio/Coach
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-600 dark:text-zinc-400">
+                    Ingresá el código que te dio tu profe (ej. PANA-X7B9).
+                  </span>
+                </span>
+                <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
+              </button>
+            )}
+          </div>
+        ) : null}
 
         {/* ── Banner Modo Rosita (solo para usuarios VIP) ── */}
         {brandTheme === 'pink' && (
@@ -798,25 +1035,6 @@ const Profile = () => {
           </div>
         )}
 
-        <div className={cn(settingsListCardCn)}>
-          <button
-            type="button"
-            onClick={() => setWeightEvolutionOpen(true)}
-            className={cn(settingsListRowCn)}
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/12">
-              <Scale className="h-[18px] w-[18px] text-primary dark:text-primary" aria-hidden />
-            </span>
-            <span className="min-w-0 flex-1 text-left">
-              <span className="block font-medium leading-snug">Evolución de peso</span>
-              <span className="mt-0.5 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
-                Gráfico e historial de pesajes
-              </span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
-          </button>
-        </div>
-
         <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none sm:px-5">
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
             Datos & objetivos
@@ -825,6 +1043,23 @@ const Profile = () => {
             <LabeledNum label="Altura (cm)" value={height} onChange={setHeight} />
             <LabeledNum label="Peso (kg)" value={weight} onChange={setWeight} />
             <LabeledNum label="Peso meta (kg)" value={targetWeight} onChange={setTargetWeight} />
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                Evolución de peso
+              </label>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setWeightEvolutionOpen(true)}
+                className={cn(
+                  'flex min-h-[2.875rem] w-full items-center justify-center gap-2 rounded-xl border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-semibold text-zinc-900 shadow-none',
+                  'transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800',
+                )}
+              >
+                <Scale className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                Ver gráfico e historial
+              </Button>
+            </div>
             <div className="col-span-2 space-y-1.5">
               <label htmlFor="profile-activity-level" className="block text-sm font-medium text-zinc-500 dark:text-zinc-400">
                 Nivel de actividad
@@ -969,6 +1204,58 @@ const Profile = () => {
           </div>
         </div>
       </div>
+
+      <Dialog open={linkCoachOpen} onOpenChange={(open) => {
+        setLinkCoachOpen(open);
+        if (!open) setLinkCoachCodeInput('');
+      }}
+      >
+        <DialogContent className={cn(modalSurfaceClass)}>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+              Vincular a un Coach
+            </DialogTitle>
+            <DialogDescription className="text-sm text-zinc-600 dark:text-zinc-400">
+              Pegá el código de invitación que te compartió tu profe o gimnasio.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="link-coach-code" className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Código
+              </label>
+              <Input
+                id="link-coach-code"
+                placeholder="PANA-X7B9"
+                value={linkCoachCodeInput}
+                onChange={(e) => setLinkCoachCodeInput(e.target.value)}
+                autoCapitalize="characters"
+                autoComplete="off"
+                disabled={linkCoachSubmitting}
+                className={cn(editModalInputClass, 'font-mono uppercase')}
+              />
+            </div>
+            <Button
+              type="button"
+              disabled={linkCoachSubmitting}
+              className={cn('h-12', profileNeonButtonClass)}
+              onClick={() => void handleSubmitLinkCoach()}
+            >
+              {linkCoachSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                  Buscando…
+                </>
+              ) : (
+                <>
+                  <Link2 className="mr-2 h-4 w-4" aria-hidden />
+                  Vincular
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <FAQBottomSheet open={faqOpen} onOpenChange={setFaqOpen} />
 

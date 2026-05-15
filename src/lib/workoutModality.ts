@@ -6,6 +6,26 @@ export const WORKOUT_MODALITY_OPTIONS: { id: WorkoutModalityId; label: string }[
   { id: 'funcional', label: 'Funcional' },
 ];
 
+/** Etiquetas guardadas en `profiles.gym_modalities` → ids de pestaña. */
+export const GYM_LABEL_TO_MODALITY_ID: Record<string, WorkoutModalityId> = WORKOUT_MODALITY_OPTIONS.reduce(
+  (acc, o) => {
+    acc[o.label] = o.id;
+    return acc;
+  },
+  {} as Record<string, WorkoutModalityId>,
+);
+
+/** Si no hay etiquetas reconocidas (o array vacío), se muestran las tres modalidades. */
+export function modalityIdsAllowedByGymLabels(labels: string[] | null | undefined): WorkoutModalityId[] {
+  if (!labels?.length) return WORKOUT_MODALITY_OPTIONS.map((o) => o.id);
+  const out: WorkoutModalityId[] = [];
+  for (const l of labels) {
+    const id = GYM_LABEL_TO_MODALITY_ID[l];
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out.length ? out : WORKOUT_MODALITY_OPTIONS.map((o) => o.id);
+}
+
 export function isStrengthModality(m: WorkoutModalityId): boolean {
   return m === 'musculacion';
 }

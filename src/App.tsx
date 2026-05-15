@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,6 +16,7 @@ import Cardio from "./pages/Cardio";
 import ActivityDetail from "./pages/ActivityDetail";
 import Profile from "./pages/Profile";
 import AdminPanel from "./pages/AdminPanel";
+import CoachPanel from "./pages/CoachPanel";
 import Paywall from "./pages/Paywall";
 import VerifiedAccount from "./pages/VerifiedAccount";
 import Terminos from "./pages/Terminos";
@@ -95,6 +96,41 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+/** Solo usuarios con `profiles.is_coach === true`. */
+const CoachRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  const [gateLoading, setGateLoading] = useState(true);
+  const [isCoach, setIsCoach] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setGateLoading(false);
+      setIsCoach(false);
+      return;
+    }
+    let cancelled = false;
+    setGateLoading(true);
+    void (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("is_coach")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      setIsCoach((data as { is_coach?: boolean } | null)?.is_coach === true);
+      setGateLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  if (loading || gateLoading) return null;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!isCoach) return <Navigate to="/profile" replace />;
+  return <>{children}</>;
+};
+
 /** Bloquea rutas cuando la suscripción expiró; redirige a /paywall. */
 const SubscriptionGuard = ({ children }: { children: React.ReactNode }) => {
   const sub = useSubscriptionStatus();
@@ -131,6 +167,7 @@ const AppRoutes = () => {
         <Route path="/actividad/:id" element={<AppRoute><ActivityDetail /></AppRoute>} />
         <Route path="/nutrition" element={<AppRoute><Nutrition /></AppRoute>} />
         <Route path="/profile" element={<AppRoute><Profile /></AppRoute>} />
+        <Route path="/coach" element={<AppRoute><CoachRoute><CoachPanel /></CoachRoute></AppRoute>} />
         {/* /paywall y /verificado: sólo requieren auth, sin subscription guard */}
         <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />
         <Route path="/verificado" element={<ProtectedRoute><VerifiedAccount /></ProtectedRoute>} />

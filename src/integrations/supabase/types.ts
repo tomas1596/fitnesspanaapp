@@ -329,6 +329,47 @@ export type Database = {
         }
         Relationships: []
       }
+      gym_routines: {
+        Row: {
+          id: string
+          coach_id: string
+          modality: string
+          day_number: number
+          title: string
+          workout_data: Json
+          coach_notes: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          coach_id: string
+          modality: string
+          day_number: number
+          title?: string
+          workout_data?: Json
+          coach_notes?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          coach_id?: string
+          modality?: string
+          day_number?: number
+          title?: string
+          workout_data?: Json
+          coach_notes?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'gym_routines_coach_id_fkey'
+            columns: ['coach_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       nutrition_logs: {
         Row: {
           calories: number
@@ -396,15 +437,20 @@ export type Database = {
         Row: {
           activity_level: string | null
           avatar_url: string | null
+          coach_code: string | null
+          coach_id: string | null
           created_at: string
           date_of_birth: string | null
           display_name: string | null
           first_name: string | null
           fitness_goal: string | null
           gender: string | null
+          gym_name: string | null
+          gym_modalities: string[]
           height: number | null
           id: string
           is_admin: boolean
+          is_coach: boolean
           last_active_at: string | null
           last_name: string | null
           step_goal: number
@@ -416,15 +462,20 @@ export type Database = {
         Insert: {
           activity_level?: string | null
           avatar_url?: string | null
+          coach_code?: string | null
+          coach_id?: string | null
           created_at?: string
           date_of_birth?: string | null
           display_name?: string | null
           first_name?: string | null
           fitness_goal?: string | null
           gender?: string | null
+          gym_name?: string | null
+          gym_modalities?: string[]
           height?: number | null
           id?: string
           is_admin?: boolean
+          is_coach?: boolean
           last_active_at?: string | null
           last_name?: string | null
           step_goal?: number
@@ -436,15 +487,20 @@ export type Database = {
         Update: {
           activity_level?: string | null
           avatar_url?: string | null
+          coach_code?: string | null
+          coach_id?: string | null
           created_at?: string
           date_of_birth?: string | null
           display_name?: string | null
           first_name?: string | null
           fitness_goal?: string | null
           gender?: string | null
+          gym_name?: string | null
+          gym_modalities?: string[]
           height?: number | null
           id?: string
           is_admin?: boolean
+          is_coach?: boolean
           last_active_at?: string | null
           last_name?: string | null
           step_goal?: number
@@ -453,7 +509,15 @@ export type Database = {
           user_id?: string
           weight?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       progress_photos: {
         Row: {
@@ -609,6 +673,7 @@ export type Database = {
           work_rest_note: string | null
           crossfit_details: Json
           functional_details: Json
+          gym_routine_id: string | null
           created_at: string
           updated_at: string
         }
@@ -628,6 +693,7 @@ export type Database = {
           work_rest_note?: string | null
           crossfit_details?: Json
           functional_details?: Json
+          gym_routine_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -647,6 +713,7 @@ export type Database = {
           work_rest_note?: string | null
           crossfit_details?: Json
           functional_details?: Json
+          gym_routine_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -654,23 +721,32 @@ export type Database = {
       }
       workout_templates: {
         Row: {
+          coach_notes: string | null
           created_at: string
           id: string
           name: string
+          routine_category: string
+          structured_payload: Json | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          coach_notes?: string | null
           created_at?: string
           id?: string
           name: string
+          routine_category?: string
+          structured_payload?: Json | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          coach_notes?: string | null
           created_at?: string
           id?: string
           name?: string
+          routine_category?: string
+          structured_payload?: Json | null
           updated_at?: string
           user_id?: string
         }
@@ -681,6 +757,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_set_coach_profile: {
+        Args: {
+          p_target_user_id: string
+          p_is_coach: boolean
+          p_gym_name?: string | null
+          p_gym_modalities?: string[] | null
+        }
+        Returns: {
+          coach_code: string | null
+          gym_name: string | null
+          is_coach: boolean
+          gym_modalities: string[]
+        }[]
+      }
       admin_user_directory: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -698,7 +788,61 @@ export type Database = {
           notified_premium: boolean
           theme: string
           last_active_at: string | null
+          is_coach: boolean
+          coach_code: string | null
+          gym_name: string | null
+          gym_modalities: string[]
         }[]
+      }
+      coach_remove_student: {
+        Args: {
+          p_student_id: string
+        }
+        Returns: null
+      }
+      get_linked_coach_gym: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          gym_name: string | null
+          gym_modalities: string[] | null
+        }[]
+      }
+      get_coach_students: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          full_name: string | null
+          email: string
+          avatar_url: string | null
+          last_active_at: string | null
+        }[]
+      }
+      get_gym_routine_leaderboard: {
+        Args: {
+          p_gym_routine_id: string
+          p_workout_date: string
+        }
+        Returns: {
+          user_id: string
+          display_name: string
+          avatar_url: string | null
+          total_time: string | null
+          round_count: number | null
+          work_rest_note: string | null
+          modality: string
+        }[]
+      }
+      link_student_to_coach: {
+        Args: {
+          p_code: string
+        }
+        Returns: {
+          gym_name: string
+        }[]
+      }
+      unlink_student_from_coach: {
+        Args: Record<PropertyKey, never>
+        Returns: null
       }
     }
     Enums: {

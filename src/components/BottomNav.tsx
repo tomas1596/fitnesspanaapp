@@ -15,7 +15,8 @@ const BottomNav = () => {
 
   if (location.pathname.startsWith('/actividad/')) return null;
   if (/^\/cardio\/.+/.test(location.pathname)) return null;
-  if (location.pathname === '/admin') return null;
+      if (location.pathname === '/admin') return null;
+      if (location.pathname === '/coach') return null;
 
   return (
     <nav

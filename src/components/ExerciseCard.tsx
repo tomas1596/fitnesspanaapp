@@ -62,6 +62,10 @@ interface ExerciseCardProps {
   conditioningBlockOptions?: { id: string; label: string }[];
   conditioningBlockId?: string | null;
   onConditioningBlockChange?: (blockId: string | null) => void;
+  /** Oculta menú renombrar/eliminar ejercicio (p. ej. rutina gimnasio). */
+  hideExerciseMenu?: boolean;
+  /** Oculta eliminar serie en tabla de sets (rutina gimnasio sin borrar series coach). */
+  hideSetDelete?: boolean;
 }
 
 const muscleGroupColors: Record<string, string> = {
@@ -90,6 +94,8 @@ const ExerciseCard = ({
   conditioningBlockOptions,
   conditioningBlockId,
   onConditioningBlockChange,
+  hideExerciseMenu,
+  hideSetDelete,
 }: ExerciseCardProps) => {
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState(name);
@@ -144,34 +150,38 @@ const ExerciseCard = ({
             )}
           </div>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 rounded-lg text-muted-foreground/50 hover:bg-accent hover:text-foreground"
-            >
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="border-border bg-card">
-            <DropdownMenuItem
-              onClick={() => {
-                setEditName(name);
-                setEditOpen(true);
-              }}
-              className="cursor-pointer text-foreground focus:bg-accent"
-            >
-              <Pencil className="mr-2 h-4 w-4" /> Editar nombre
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={onDeleteExercise}
-              className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
-            >
-              <Trash2 className="mr-2 h-4 w-4" /> Eliminar ejercicio
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {hideExerciseMenu ? (
+          <div className="h-8 w-8 shrink-0" aria-hidden />
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 rounded-lg text-muted-foreground/50 hover:bg-accent hover:text-foreground"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="border-border bg-card">
+              <DropdownMenuItem
+                onClick={() => {
+                  setEditName(name);
+                  setEditOpen(true);
+                }}
+                className="cursor-pointer text-foreground focus:bg-accent"
+              >
+                <Pencil className="mr-2 h-4 w-4" /> Editar nombre
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={onDeleteExercise}
+                className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" /> Eliminar ejercicio
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {renderLastPerf()}
@@ -213,18 +223,30 @@ const ExerciseCard = ({
 
       {sets.length > 0 && isStrength && (
         <div className="mb-3 space-y-2">
-          <div className="grid grid-cols-[32px_minmax(0,1fr)_minmax(0,1fr)_48px_44px_44px] items-end gap-2 px-0.5">
+          <div
+            className={cn(
+              'grid items-end gap-2 px-0.5',
+              hideSetDelete
+                ? 'grid-cols-[32px_minmax(0,1fr)_minmax(0,1fr)_48px_44px]'
+                : 'grid-cols-[32px_minmax(0,1fr)_minmax(0,1fr)_48px_44px_44px]',
+            )}
+          >
             <span className="text-center text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">#</span>
             <span className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Reps</span>
             <span className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Peso</span>
             <span className="text-center text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">RIR</span>
             <span className="sr-only">Al fallo</span>
-            <span className="sr-only">Eliminar</span>
+            {!hideSetDelete ? <span className="sr-only">Eliminar</span> : null}
           </div>
           {sets.map((set, index) => (
             <div
               key={set.id}
-              className="grid grid-cols-[32px_minmax(0,1fr)_minmax(0,1fr)_48px_44px_44px] items-center gap-2 rounded-xl bg-accent/80 p-2.5 dark:bg-accent/50"
+              className={cn(
+                'grid items-center gap-2 rounded-xl bg-accent/80 p-2.5 dark:bg-accent/50',
+                hideSetDelete
+                  ? 'grid-cols-[32px_minmax(0,1fr)_minmax(0,1fr)_48px_44px]'
+                  : 'grid-cols-[32px_minmax(0,1fr)_minmax(0,1fr)_48px_44px_44px]',
+              )}
             >
               <span className="text-center text-xl font-bold tabular-nums text-zinc-600 dark:text-zinc-300">
                 {set.set_number}
@@ -279,14 +301,16 @@ const ExerciseCard = ({
                   strokeWidth={2}
                 />
               </button>
-              <button
-                type="button"
-                onClick={() => onDeleteSet(set.id)}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 transition-colors hover:bg-zinc-200/90 hover:text-destructive dark:bg-zinc-800 dark:hover:bg-zinc-700"
-                aria-label="Eliminar serie"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {!hideSetDelete ? (
+                <button
+                  type="button"
+                  onClick={() => onDeleteSet(set.id)}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 transition-colors hover:bg-zinc-200/90 hover:text-destructive dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                  aria-label="Eliminar serie"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              ) : null}
             </div>
           ))}
         </div>

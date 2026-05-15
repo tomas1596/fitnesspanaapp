@@ -19,6 +19,7 @@ import {
   type FunctionalPhaseType,
   type FunctionalSessionDraft,
 } from '@/lib/functionalSessionDraft';
+import { sanitizeTimeDigitColonInput, sanitizeUnsignedIntegerInput } from '@/lib/workoutNumericInput';
 import {
   WORKOUT_LOG_DIVIDER,
   WORKOUT_LOG_FIELD_LABEL,
@@ -38,6 +39,7 @@ type Props = {
   onSave: () => void;
   saving?: boolean;
   className?: string;
+  showSaveButton?: boolean;
 };
 
 const PHASE_CARD_BORDER: Record<FunctionalPhaseType, string> = {
@@ -129,6 +131,7 @@ export function FunctionalSessionLogPanel({
   onSave,
   saving,
   className,
+  showSaveButton = true,
 }: Props) {
   const patchPhase = React.useCallback(
     (id: string, fn: (p: FunctionalPhaseDraft) => FunctionalPhaseDraft) => {
@@ -179,7 +182,9 @@ export function FunctionalSessionLogPanel({
         <label className={WORKOUT_LOG_FIELD_LABEL}>Tiempo total de la sesión (opcional)</label>
         <Input
           value={draft.total_session_time}
-          onChange={(e) => onChange({ ...draft, total_session_time: e.target.value })}
+          onChange={(e) =>
+            onChange({ ...draft, total_session_time: sanitizeTimeDigitColonInput(e.target.value) })
+          }
           className={cn(WORKOUT_LOG_INPUT, 'font-mono tabular-nums')}
           placeholder="ej. 50 min"
         />
@@ -292,7 +297,9 @@ export function FunctionalSessionLogPanel({
                         value={phase.round_count}
                         onChange={(e) =>
                           patchPhase(phase.id, (p) =>
-                            p.method === 'rounds_circuit' ? { ...p, round_count: e.target.value } : p,
+                            p.method === 'rounds_circuit'
+                              ? { ...p, round_count: sanitizeUnsignedIntegerInput(e.target.value) }
+                              : p,
                           )
                         }
                         className={cn(WORKOUT_LOG_INPUT, 'font-mono tabular-nums')}
@@ -322,7 +329,9 @@ export function FunctionalSessionLogPanel({
                           value={phase.work_time}
                           onChange={(e) =>
                             patchPhase(phase.id, (p) =>
-                              p.method === 'time_intervals' ? { ...p, work_time: e.target.value } : p,
+                              p.method === 'time_intervals'
+                                ? { ...p, work_time: sanitizeTimeDigitColonInput(e.target.value) }
+                                : p,
                             )
                           }
                           className={cn(WORKOUT_LOG_INPUT, 'font-mono tabular-nums')}
@@ -335,7 +344,9 @@ export function FunctionalSessionLogPanel({
                           value={phase.rest_time}
                           onChange={(e) =>
                             patchPhase(phase.id, (p) =>
-                              p.method === 'time_intervals' ? { ...p, rest_time: e.target.value } : p,
+                              p.method === 'time_intervals'
+                                ? { ...p, rest_time: sanitizeTimeDigitColonInput(e.target.value) }
+                                : p,
                             )
                           }
                           className={cn(WORKOUT_LOG_INPUT, 'font-mono tabular-nums')}
@@ -348,7 +359,9 @@ export function FunctionalSessionLogPanel({
                           value={phase.rounds}
                           onChange={(e) =>
                             patchPhase(phase.id, (p) =>
-                              p.method === 'time_intervals' ? { ...p, rounds: e.target.value } : p,
+                              p.method === 'time_intervals'
+                                ? { ...p, rounds: sanitizeUnsignedIntegerInput(e.target.value) }
+                                : p,
                             )
                           }
                           className={cn(WORKOUT_LOG_INPUT, 'font-mono tabular-nums')}
@@ -407,9 +420,11 @@ export function FunctionalSessionLogPanel({
         </div>
       )}
 
-      <Button type="button" disabled={saving} onClick={onSave} className={WORKOUT_LOG_SAVE_BTN}>
-        {saving ? 'Guardando…' : 'Guardar registro'}
-      </Button>
+      {showSaveButton ? (
+        <Button type="button" disabled={saving} onClick={onSave} className={WORKOUT_LOG_SAVE_BTN}>
+          {saving ? 'Guardando…' : 'Guardar registro'}
+        </Button>
+      ) : null}
     </div>
   );
 }

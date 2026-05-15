@@ -239,19 +239,18 @@ export function hydrateCrossfitDetails(raw: unknown): CrossfitLogDraft | null {
   }
 
   if (subtype === 'amrap') {
-    const blocksRaw = o.amrap_blocks;
+    const blocksRaw =
+      Array.isArray(o.amrap_blocks) ? o.amrap_blocks : Array.isArray(o.blocks) ? o.blocks : [];
     const blocks: AmrapBlockDraft[] = [];
-    if (Array.isArray(blocksRaw)) {
-      for (const br of blocksRaw) {
-        if (typeof br !== 'object' || br === null) continue;
-        const b = br as Record<string, unknown>;
-        blocks.push({
-          id: typeof b.id === 'string' ? b.id : newConditioningBlockId(),
-          duration: typeof b.duration === 'string' ? b.duration : '',
-          exercises: parseManualLines(b.exercises),
-          rounds_completed: typeof b.rounds_completed === 'string' ? b.rounds_completed : '',
-        });
-      }
+    for (const br of blocksRaw) {
+      if (typeof br !== 'object' || br === null) continue;
+      const b = br as Record<string, unknown>;
+      blocks.push({
+        id: typeof b.id === 'string' ? b.id : newConditioningBlockId(),
+        duration: typeof b.duration === 'string' ? b.duration : '',
+        exercises: parseManualLines(b.exercises),
+        rounds_completed: typeof b.rounds_completed === 'string' ? b.rounds_completed : '',
+      });
     }
     return mergeWarmupIntoDraft(o, {
       subtype: 'amrap',

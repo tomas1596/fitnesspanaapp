@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -19,12 +19,29 @@ import { cn } from '@/lib/utils';
 import SwipeToDelete from '@/components/SwipeToDelete';
 import { type ExerciseLibraryCategory, EXERCISE_LIBRARY_CATEGORIES } from '@/lib/exerciseLibraryNaming';
 import type { WorkoutModalityId } from '@/lib/workoutModality';
+import type { Json } from '@/integrations/supabase/types';
+import type { CrossfitLogDraft } from '@/lib/crossfitWodDraft';
+import type { FunctionalSessionDraft } from '@/lib/functionalSessionDraft';
+import {
+  conditioningPayloadToViewerPayload,
+  parseConditioningTemplatePayload,
+  type WorkoutTemplateRoutineCategory,
+} from '@/lib/workoutTemplatesConditioning';
+import { GymRoutineBlockViewer } from '@/components/GymRoutineBlockViewer';
 
 const MUSCLE_GROUPS = ['Pecho', 'Espalda', 'Piernas', 'Brazos', 'Hombros', 'Core'];
+
+function routineCategoryFromWorkoutModality(m: WorkoutModalityId): WorkoutTemplateRoutineCategory {
+  if (m === 'crossfit') return 'crossfit';
+  if (m === 'funcional') return 'funcional';
+  return 'musculacion';
+}
 
 interface Template {
   id: string;
   name: string;
+  routine_category: WorkoutTemplateRoutineCategory;
+  structured_payload: Json | null;
 }
 interface TemplateExercise {
   id: string;
@@ -54,6 +71,10 @@ interface TemplatesSheetProps {
   libraryModalityFilter: WorkoutModalityId;
   onApplyTemplate: (exercises: TemplateExercise[]) => Promise<void>;
   onAddExercise: (name: string, muscleGroup: string) => void;
+  onApplyConditioningTemplate?: (
+    modality: 'crossfit' | 'funcional',
+    draft: CrossfitLogDraft | FunctionalSessionDraft,
+  ) => Promise<void>;
 }
 
 const TemplatesSheet = ({
@@ -62,6 +83,7 @@ const TemplatesSheet = ({
   libraryModalityFilter,
   onApplyTemplate,
   onAddExercise,
+  onApplyConditioningTemplate,
 }: TemplatesSheetProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -71,7 +93,9 @@ const TemplatesSheet = ({
 
   // ── Routines tab state ──────────────────────────────────────────────────────
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [view, setView] = useState<'list' | 'create' | 'detail'>('list');
+  const [routineListCategory, setRoutineListCategory] =
+    useState<WorkoutTemplateRoutineCategory>('musculacion');
+  const [view, setView] = useState<'list' | 'create' | 'detail' | 'structured-detail'>('list');
   const [selected, setSelected] = useState<Template | null>(null);
   const [exercises, setExercises] = useState<TemplateExercise[]>([]);
   const [newName, setNewName] = useState('');
@@ -97,10 +121,19 @@ const TemplatesSheet = ({
     if (!user) return;
     const { data } = await supabase
       .from('workout_templates')
-      .select('id, name')
+      .select('id, name, routine_category, structured_payload')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
-    setTemplates(data || []);
+    const mapped: Template[] = (data || []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      routine_category:
+        row.routine_category === 'crossfit' || row.routine_category === 'funcional'
+          ? row.routine_category
+          : 'musculacion',
+      structured_payload: row.structured_payload ?? null,
+    }));
+    setTemplates(mapped);
   };
 
   // ── Load library ──────────────────────────────────────────────────────────
@@ -188,9 +221,10 @@ const TemplatesSheet = ({
       setLibraryCategoryFilter('all');
       setRenameTarget(null);
       setRenameDraft('');
+      setRoutineListCategory(routineCategoryFromWorkoutModality(libraryModalityFilter));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, user]);
+  }, [open, user, libraryModalityFilter]);
 
   useEffect(() => {
     if (open && activeTab === 'library') {
@@ -203,6 +237,14 @@ const TemplatesSheet = ({
   // ── Routines helpers ──────────────────────────────────────────────────────
   const openTemplate = async (t: Template) => {
     setSelected(t);
+    if (t.routine_category === 'crossfit' || t.routine_category === 'funcional') {
+      const structured = parseConditioningTemplatePayload(t.structured_payload);
+      if (structured) {
+        setExercises([]);
+        setView('structured-detail');
+        return;
+      }
+    }
     const { data } = await supabase
       .from('template_exercises')
       .select('id, name, muscle_group')
@@ -230,7 +272,12 @@ const TemplatesSheet = ({
     }
     const { data: tpl, error } = await supabase
       .from('workout_templates')
-      .insert({ user_id: user.id, name: newName.trim() })
+      .insert({
+        user_id: user.id,
+        name: newName.trim(),
+        routine_category: 'musculacion',
+        structured_payload: null,
+      })
       .select()
       .single();
     if (error || !tpl) {
@@ -296,6 +343,35 @@ const TemplatesSheet = ({
     await onApplyTemplate(exercises);
     onClose();
   };
+
+  const structuredPreviewPayload = useMemo(() => {
+    if (!selected?.structured_payload) return null;
+    const p = parseConditioningTemplatePayload(selected.structured_payload);
+    return p ? conditioningPayloadToViewerPayload(p) : null;
+  }, [selected]);
+
+  const applyStructuredTemplate = async () => {
+    if (!selected || !onApplyConditioningTemplate) return;
+    const parsed = parseConditioningTemplatePayload(selected.structured_payload);
+    if (!parsed) {
+      toast({
+        title: 'Plantilla inválida',
+        description: 'No pudimos leer esta rutina guardada.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    await onApplyConditioningTemplate(parsed.modality === 'crossfit' ? 'crossfit' : 'funcional', parsed.draft);
+    onClose();
+  };
+
+  const filteredTemplates = templates.filter((t) => t.routine_category === routineListCategory);
+
+  const routineCategoryTabCls = (cat: WorkoutTemplateRoutineCategory) =>
+    cn(
+      'flex-1 rounded-lg py-2 text-xs font-semibold transition-colors',
+      routineListCategory === cat ? 'text-black' : 'bg-transparent text-muted-foreground',
+    );
 
   // ── Library helpers ────────────────────────────────────────────────────────
   const filteredLibrary = libraryExercises.filter((ex) => {
@@ -428,36 +504,64 @@ const TemplatesSheet = ({
             </SheetHeader>
 
             {view === 'list' && (
-              <div className="space-y-2">
-                {templates.length === 0 && (
-                  <p className="py-8 text-center text-sm text-muted-foreground">
-                    No tienes plantillas todavía.
-                  </p>
-                )}
-                {templates.map((t) => (
-                  <div key={t.id} className="flex items-center gap-2 rounded-xl bg-card p-3">
-                    <button
-                      onClick={() => openTemplate(t)}
-                      className="flex flex-1 items-center justify-between text-left"
-                    >
-                      <span className="font-medium text-foreground">{t.name}</span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                    <button
-                      onClick={() => deleteTemplate(t.id)}
-                      className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-                <Button
-                  onClick={() => setView('create')}
-                  variant="ghost"
-                  className="mt-3 h-12 w-full rounded-xl border-0 bg-primary/10 text-base font-semibold text-primary shadow-none hover:bg-primary/20 dark:bg-primary/20 dark:text-primary dark:hover:bg-primary/30"
+              <div className="space-y-3">
+                <div
+                  className="flex gap-1 rounded-2xl bg-card p-1"
+                  style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.08)' }}
                 >
-                  <Plus className="mr-1 h-4 w-4" /> Nueva plantilla
-                </Button>
+                  {(['musculacion', 'crossfit', 'funcional'] as const).map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      className={routineCategoryTabCls(cat)}
+                      style={routineListCategory === cat ? { backgroundColor: 'var(--brand-color)' } : {}}
+                      onClick={() => setRoutineListCategory(cat)}
+                    >
+                      {cat === 'musculacion' ? 'Musculación' : cat === 'crossfit' ? 'CrossFit' : 'Funcional'}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="space-y-2">
+                  {filteredTemplates.length === 0 && (
+                    <p className="px-1 py-6 text-center text-sm leading-relaxed text-muted-foreground">
+                      {routineListCategory === 'musculacion'
+                        ? 'No tenés rutinas de musculación guardadas.'
+                        : routineListCategory === 'crossfit'
+                          ? 'Las rutinas de CrossFit aparecen acá al guardar tu bloque o al registrar un WOD en el gimnasio.'
+                          : 'Las sesiones de Funcional aparecen acá al guardar tu bloque o al registrar en el gimnasio.'}
+                    </p>
+                  )}
+                  {filteredTemplates.map((t) => (
+                    <div key={t.id} className="flex items-center gap-2 rounded-xl bg-card p-3">
+                      <button
+                        type="button"
+                        onClick={() => void openTemplate(t)}
+                        className="flex flex-1 items-center justify-between text-left"
+                      >
+                        <span className="font-medium text-foreground">{t.name}</span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteTemplate(t.id)}
+                        className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {routineListCategory === 'musculacion' ? (
+                  <Button
+                    onClick={() => setView('create')}
+                    variant="ghost"
+                    className="mt-1 h-12 w-full rounded-xl border-0 bg-primary/10 text-base font-semibold text-primary shadow-none hover:bg-primary/20 dark:bg-primary/20 dark:text-primary dark:hover:bg-primary/30"
+                  >
+                    <Plus className="mr-1 h-4 w-4" /> Nueva plantilla
+                  </Button>
+                ) : null}
               </div>
             )}
 
@@ -589,8 +693,29 @@ const TemplatesSheet = ({
                   </Button>
                 </div>
                 <Button
-                  onClick={applyTemplate}
+                  onClick={() => void applyTemplate()}
                   className="h-14 w-full rounded-2xl border-0 bg-primary text-base font-semibold text-primary-foreground shadow-none hover:bg-[color:var(--brand-hover)]"
+                >
+                  <Play className="mr-2 h-4 w-4" /> Cargar al día actual
+                </Button>
+              </div>
+            )}
+
+            {view === 'structured-detail' && selected && structuredPreviewPayload && (
+              <div className="space-y-3">
+                <div className="max-h-[min(52vh,520px)] overflow-y-auto rounded-xl border border-border/40 bg-background/80 p-2">
+                  <GymRoutineBlockViewer
+                    payload={structuredPreviewPayload}
+                    title={selected.name}
+                    dayNumber={1}
+                    hideDayBanner
+                    hideCoachNotesSection
+                  />
+                </div>
+                <Button
+                  onClick={() => void applyStructuredTemplate()}
+                  disabled={!onApplyConditioningTemplate}
+                  className="h-14 w-full rounded-2xl border-0 bg-primary text-base font-semibold text-primary-foreground shadow-none hover:bg-[color:var(--brand-hover)] disabled:opacity-60"
                 >
                   <Play className="mr-2 h-4 w-4" /> Cargar al día actual
                 </Button>

@@ -5,6 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +34,9 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  Copy,
   Crown,
+  Medal,
   Palette,
   Search,
   Shield,
@@ -49,6 +54,7 @@ import {
   isActivityWithinAge,
   lastActiveDotTone,
 } from '@/lib/lastActivityLabel';
+import { WORKOUT_MODALITY_OPTIONS } from '@/lib/workoutModality';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -68,7 +74,34 @@ type DirectoryRow = {
   subscription_expires_at: string | null;
   notified_tester: boolean;
   notified_premium: boolean;
+  is_coach: boolean;
+  coach_code: string | null;
+  gym_name: string | null;
+  gym_modalities: string[];
 };
+
+const COACH_MODALITY_LABELS = WORKOUT_MODALITY_OPTIONS.map((o) => o.label);
+
+function normalizeCoachGymModalities(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((x): x is string => typeof x === 'string' && COACH_MODALITY_LABELS.includes(x));
+}
+
+function parseCoachRpcResponse(data: unknown): {
+  coach_code: string | null;
+  gym_name: string | null;
+  is_coach: boolean;
+  gym_modalities: string[];
+} | null {
+  if (!Array.isArray(data) || data.length === 0) return null;
+  const row = data[0] as Record<string, unknown>;
+  return {
+    coach_code: typeof row.coach_code === 'string' ? row.coach_code : null,
+    gym_name: typeof row.gym_name === 'string' ? row.gym_name : null,
+    is_coach: row.is_coach === true,
+    gym_modalities: normalizeCoachGymModalities(row.gym_modalities),
+  };
+}
 
 type SubRole = 'free' | 'premium' | 'tester';
 
@@ -259,6 +292,15 @@ const AdminPanel = () => {
   const [activitySort, setActivitySort] = useState<'default' | 'recent' | 'oldest'>('default');
   /** Sin refetch RPC: re-render cada 1 min y al abrir para recalcular relativo / «En Línea». */
   const [activityRefreshTick, setActivityRefreshTick] = useState(0);
+  const [coachDialogUserId, setCoachDialogUserId] = useState<string | null>(null);
+  const [coachGymDraft, setCoachGymDraft] = useState('');
+  const [coachModalitiesDraft, setCoachModalitiesDraft] = useState<string[]>([]);
+  const [coachRevokeTarget, setCoachRevokeTarget] = useState<DirectoryRow | null>(null);
+
+  const coachDialogRow = useMemo(
+    () => (coachDialogUserId ? rows.find((r) => r.user_id === coachDialogUserId) ?? null : null),
+    [rows, coachDialogUserId],
+  );
 
   // ── Data ───────────────────────────────────────────────────────────────
 
@@ -305,6 +347,10 @@ const AdminPanel = () => {
       is_admin:              (r.is_admin             as boolean) ?? false,
       notified_tester:       (r.notified_tester      as boolean) ?? false,
       notified_premium:      (r.notified_premium     as boolean) ?? false,
+      is_coach:              (r.is_coach             as boolean) ?? false,
+      coach_code:            (r.coach_code           as string) ?? null,
+      gym_name:              (r.gym_name             as string) ?? null,
+      gym_modalities:        normalizeCoachGymModalities(r.gym_modalities),
     }));
 
     // 2. If admin_user_directory does NOT include subscription_role (all null),
@@ -320,7 +366,7 @@ const AdminPanel = () => {
       const { data: subData, error: subError } = await supabase
         .from('profiles')
         .select(
-          'user_id, subscription_role, subscription_expires_at, is_admin, notified_tester, notified_premium, last_active_at',
+          'user_id, subscription_role, subscription_expires_at, is_admin, notified_tester, notified_premium, last_active_at, is_coach, coach_code, gym_name, gym_modalities',
         )
         .in('user_id', userIds);
 
@@ -340,6 +386,10 @@ const AdminPanel = () => {
           notified_tester: boolean | null;
           notified_premium: boolean | null;
           last_active_at: string | null;
+          is_coach: boolean | null;
+          coach_code: string | null;
+          gym_name: string | null;
+          gym_modalities: string[] | null;
         };
         subMap[r.user_id] = {
           subscription_role: (r.subscription_role as DirectoryRow['subscription_role']) ?? null,
@@ -348,6 +398,10 @@ const AdminPanel = () => {
           notified_tester: r.notified_tester === true,
           notified_premium: r.notified_premium === true,
           last_active_at: r.last_active_at ?? null,
+          is_coach: r.is_coach === true,
+          coach_code: r.coach_code ?? null,
+          gym_name: r.gym_name ?? null,
+          gym_modalities: normalizeCoachGymModalities(r.gym_modalities),
         };
       }
 
@@ -560,6 +614,154 @@ const AdminPanel = () => {
     [toast, currentUser?.id],
   );
 
+  const applyCoachRpcPatch = useCallback(
+    (userId: string, patch: Pick<DirectoryRow, 'coach_code' | 'gym_name' | 'is_coach' | 'gym_modalities'>) => {
+      setRows((prev) =>
+        prev.map((r) =>
+          r.user_id === userId
+            ? {
+                ...r,
+                coach_code: patch.coach_code,
+                gym_name: patch.gym_name,
+                is_coach: patch.is_coach,
+                gym_modalities: patch.gym_modalities,
+              }
+            : r,
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleEnableCoachRole = useCallback(
+    async (row: DirectoryRow, gymDraft: string, modalitiesDraft: string[]) => {
+      if (!row.user_id) return;
+      setToggling((prev) => new Set([...prev, row.user_id]));
+      try {
+        const { data, error: rpcError } = await supabase.rpc('admin_set_coach_profile', {
+          p_target_user_id: row.user_id,
+          p_is_coach: true,
+          p_gym_name: gymDraft.trim() || null,
+          p_gym_modalities: modalitiesDraft,
+        });
+        if (rpcError) throw rpcError;
+        const patch = parseCoachRpcResponse(data);
+        if (patch) {
+          applyCoachRpcPatch(row.user_id, patch);
+          setCoachGymDraft(patch.gym_name ?? '');
+          setCoachModalitiesDraft(patch.gym_modalities);
+        }
+        toast({
+          title: 'Rol Coach activado',
+          description: patch?.coach_code ? `Código ${patch.coach_code}` : row.email,
+        });
+      } catch (err) {
+        const msg =
+          err != null && typeof err === 'object' && 'message' in err
+            ? String((err as { message: unknown }).message)
+            : 'No se pudo activar el rol Coach';
+        toast({ title: 'Error Coach', description: msg, variant: 'destructive' });
+      } finally {
+        setToggling((prev) => {
+          const next = new Set(prev);
+          next.delete(row.user_id);
+          return next;
+        });
+      }
+    },
+    [toast, applyCoachRpcPatch],
+  );
+
+  const handleSaveCoachGym = useCallback(
+    async (row: DirectoryRow, gymDraft: string, modalitiesDraft: string[]) => {
+      if (!row.user_id || !row.is_coach) return;
+      setToggling((prev) => new Set([...prev, row.user_id]));
+      try {
+        const { data, error: rpcError } = await supabase.rpc('admin_set_coach_profile', {
+          p_target_user_id: row.user_id,
+          p_is_coach: true,
+          p_gym_name: gymDraft.trim() || null,
+          p_gym_modalities: modalitiesDraft,
+        });
+        if (rpcError) throw rpcError;
+        const patch = parseCoachRpcResponse(data);
+        if (patch) {
+          applyCoachRpcPatch(row.user_id, patch);
+          setCoachGymDraft(patch.gym_name ?? '');
+          setCoachModalitiesDraft(patch.gym_modalities);
+        }
+        toast({ title: 'Gimnasio actualizado', description: row.email });
+        setCoachDialogUserId(null);
+      } catch (err) {
+        const msg =
+          err != null && typeof err === 'object' && 'message' in err
+            ? String((err as { message: unknown }).message)
+            : 'No se pudo guardar el gimnasio';
+        toast({ title: 'Error', description: msg, variant: 'destructive' });
+      } finally {
+        setToggling((prev) => {
+          const next = new Set(prev);
+          next.delete(row.user_id);
+          return next;
+        });
+      }
+    },
+    [toast, applyCoachRpcPatch],
+  );
+
+  const handleConfirmCoachRevoke = useCallback(async () => {
+    const row = coachRevokeTarget;
+    if (!row?.user_id) return;
+    setCoachRevokeTarget(null);
+    setToggling((prev) => new Set([...prev, row.user_id]));
+    try {
+      const { data, error: rpcError } = await supabase.rpc('admin_set_coach_profile', {
+        p_target_user_id: row.user_id,
+        p_is_coach: false,
+      });
+      if (rpcError) throw rpcError;
+      const patch = parseCoachRpcResponse(data);
+      applyCoachRpcPatch(
+        row.user_id,
+        patch ?? { is_coach: false, coach_code: null, gym_name: null, gym_modalities: [] },
+      );
+      setCoachGymDraft('');
+      setCoachModalitiesDraft([]);
+      toast({
+        title: 'Rol Coach quitado',
+        description: 'Se eliminó el código y los vínculos de alumnos con este perfil.',
+      });
+    } catch (err) {
+      const msg =
+        err != null && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'No se pudo revocar el rol Coach';
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
+    } finally {
+      setToggling((prev) => {
+        const next = new Set(prev);
+        next.delete(row.user_id);
+        return next;
+      });
+    }
+  }, [coachRevokeTarget, toast, applyCoachRpcPatch]);
+
+  const handleCopyCoachCode = useCallback(
+    async (code: string) => {
+      try {
+        await navigator.clipboard.writeText(code);
+        toast({ title: 'Código copiado', description: code });
+      } catch {
+        toast({
+          title: 'No se pudo copiar',
+          description: 'Probá copiar manualmente.',
+          variant: 'destructive',
+        });
+      }
+    },
+    [toast],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
@@ -628,7 +830,7 @@ const AdminPanel = () => {
         </div>
 
         <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          Directorio de usuarios · Cambiá el rol desde el menú en cada fila.
+          Directorio de usuarios · Roles, tema VIP y configuración Modo Coach (código + gimnasio).
         </p>
 
         {/* Stats */}
@@ -779,6 +981,15 @@ const AdminPanel = () => {
                       </div>
 
                       <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-auto sm:flex-nowrap">
+                        {r.is_coach ? (
+                          <Badge
+                            variant="outline"
+                            className="pointer-events-none shrink-0 gap-1 rounded-full border-emerald-500/35 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-800 shadow-none dark:border-emerald-500/40 dark:bg-emerald-500/12 dark:text-emerald-200"
+                          >
+                            <Medal className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+                            Coach
+                          </Badge>
+                        ) : null}
                         {isBusy ? (
                           <span className="inline-flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                             <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -798,6 +1009,21 @@ const AdminPanel = () => {
                               <Crown className="h-3.5 w-3.5 shrink-0" aria-hidden />
                               Admin
                             </Badge>
+                            <button
+                              type="button"
+                              title="Modo Coach — código y gimnasio"
+                              disabled={!r.user_id || isBusy || deleteAccountDoing}
+                              onClick={() => {
+                                setCoachDialogUserId(r.user_id);
+                                setCoachGymDraft(r.gym_name ?? '');
+                                setCoachModalitiesDraft(normalizeCoachGymModalities(r.gym_modalities));
+                              }}
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200/90 bg-white text-xs shadow-sm transition hover:bg-zinc-100 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                            >
+                              <Medal
+                                className={`h-4 w-4 ${r.is_coach ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400'}`}
+                              />
+                            </button>
                             <button
                               type="button"
                               title={r.theme === 'pink' ? 'Quitar Modo Rosa' : 'Activar Modo Rosa'}
@@ -832,6 +1058,21 @@ const AdminPanel = () => {
                               current={currentRole}
                               onSelect={(row2, role) => requestRoleChange(row2, role)}
                             />
+                            <button
+                              type="button"
+                              title="Modo Coach — código y gimnasio"
+                              disabled={!r.user_id || isBusy || deleteAccountDoing}
+                              onClick={() => {
+                                setCoachDialogUserId(r.user_id);
+                                setCoachGymDraft(r.gym_name ?? '');
+                                setCoachModalitiesDraft(normalizeCoachGymModalities(r.gym_modalities));
+                              }}
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200/90 bg-white text-xs shadow-sm transition hover:bg-zinc-100 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                            >
+                              <Medal
+                                className={`h-4 w-4 ${r.is_coach ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400'}`}
+                              />
+                            </button>
                             <button
                               type="button"
                               title={r.theme === 'pink' ? 'Quitar Modo Rosa' : 'Activar Modo Rosa'}
@@ -869,6 +1110,148 @@ const AdminPanel = () => {
         </div>
       </div>
 
+      {/* ── Modo Coach ── */}
+      <Dialog
+        open={!!coachDialogRow}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCoachDialogUserId(null);
+          }
+        }}
+      >
+        <DialogContent
+          className={cn(
+            'max-w-md rounded-2xl border-zinc-200/80 bg-white text-zinc-900 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100',
+            "[html[data-brand='pink']_&]:border-pink-800/40 [html[data-brand='pink']_&]:bg-zinc-900 [html[data-brand='pink']_&]:text-pink-50",
+          )}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Medal className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden />
+              Modo Coach
+            </DialogTitle>
+            <DialogDescription className="text-sm text-zinc-500 dark:text-zinc-400">
+              {coachDialogRow?.email}
+            </DialogDescription>
+          </DialogHeader>
+          {coachDialogRow ? (
+            <div className="mt-2 flex flex-col gap-4">
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-zinc-200/80 bg-zinc-50/80 px-3 py-3 dark:border-white/10 dark:bg-zinc-800/60">
+                <div className="min-w-0 space-y-0.5">
+                  <Label htmlFor="coach-role-switch" className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    Rol Coach
+                  </Label>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Al activar se genera un código único (ej. PANA-X7B9).
+                  </p>
+                </div>
+                <Switch
+                  id="coach-role-switch"
+                  checked={coachDialogRow.is_coach}
+                  disabled={toggling.has(coachDialogRow.user_id)}
+                  onCheckedChange={(on) => {
+                    if (on) void handleEnableCoachRole(coachDialogRow, coachGymDraft, coachModalitiesDraft);
+                    else setCoachRevokeTarget(coachDialogRow);
+                  }}
+                  aria-label="Activar o quitar rol Coach"
+                />
+              </div>
+
+              {coachDialogRow.is_coach && coachDialogRow.coach_code ? (
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    Código de invitación
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      value={coachDialogRow.coach_code}
+                      className="h-11 rounded-xl border-zinc-200/90 bg-white font-mono text-sm font-bold uppercase dark:border-white/10 dark:bg-zinc-950"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-11 w-11 shrink-0 rounded-xl"
+                      title="Copiar código"
+                      onClick={() => void handleCopyCoachCode(coachDialogRow.coach_code!)}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                <Label htmlFor="coach-gym-name" className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Nombre del gimnasio
+                </Label>
+                <Input
+                  id="coach-gym-name"
+                  placeholder="Ej. CrossFit Villegas"
+                  value={coachGymDraft}
+                  onChange={(e) => setCoachGymDraft(e.target.value)}
+                  disabled={toggling.has(coachDialogRow.user_id)}
+                  className="h-11 rounded-xl border-zinc-200/90 bg-white dark:border-white/10 dark:bg-zinc-950"
+                />
+                <div className="space-y-2 pt-1">
+                  <Label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    Modalidades del gimnasio
+                  </Label>
+                  <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-3 dark:border-white/10 dark:bg-zinc-800/50">
+                    <div className="flex flex-col gap-3">
+                      {WORKOUT_MODALITY_OPTIONS.map((opt) => (
+                        <label
+                          key={opt.id}
+                          className={cn(
+                            'flex cursor-pointer items-center gap-3 text-sm font-medium text-zinc-800 dark:text-zinc-100',
+                            toggling.has(coachDialogRow.user_id) && 'pointer-events-none opacity-60',
+                          )}
+                        >
+                          <Checkbox
+                            checked={coachModalitiesDraft.includes(opt.label)}
+                            onCheckedChange={(c) => {
+                              const on = c === true;
+                              setCoachModalitiesDraft((prev) =>
+                                on
+                                  ? prev.includes(opt.label)
+                                    ? prev
+                                    : [...prev, opt.label]
+                                  : prev.filter((x) => x !== opt.label),
+                              );
+                            }}
+                            disabled={toggling.has(coachDialogRow.user_id)}
+                            aria-label={opt.label}
+                          />
+                          <span>{opt.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Visible para los alumnos en la vista «Gimnasio» del entreno.
+                  </p>
+                </div>
+                {!coachDialogRow.is_coach ? (
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Podés escribir el nombre antes de activar el interruptor; también podés editarlo después.
+                  </p>
+                ) : (
+                  <Button
+                    type="button"
+                    className="h-11 w-full rounded-xl font-semibold"
+                    disabled={toggling.has(coachDialogRow.user_id)}
+                    onClick={() => void handleSaveCoachGym(coachDialogRow, coachGymDraft, coachModalitiesDraft)}
+                  >
+                    Guardar gimnasio
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
       {/* ── Theme confirmation dialog ── */}
       <Dialog open={!!themeTarget} onOpenChange={(open) => { if (!open) setThemeTarget(null); }}>
         <DialogContent className={cn(
@@ -899,6 +1282,46 @@ const AdminPanel = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!coachRevokeTarget}
+        onOpenChange={(open) => {
+          if (!open) setCoachRevokeTarget(null);
+        }}
+      >
+        <AlertDialogContent
+          className={cn(
+            'rounded-2xl border-zinc-200/80 bg-white dark:border-white/10 dark:bg-zinc-900',
+            "[html[data-brand='pink']_&]:border-pink-800/40 [html[data-brand='pink']_&]:bg-zinc-900",
+          )}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-900 dark:text-zinc-50">Quitar rol Coach</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-zinc-600 dark:text-zinc-400">
+              Se borrará el código de invitación, el nombre del gimnasio y el vínculo de alumnos que tengan asignado a
+              este perfil como coach.
+              {coachRevokeTarget?.email ? (
+                <span className="mt-3 block rounded-lg bg-zinc-100 px-3 py-2 text-xs font-normal text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                  {coachRevokeTarget.email}
+                </span>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-500"
+              disabled={coachRevokeTarget ? toggling.has(coachRevokeTarget.user_id) : false}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmCoachRevoke();
+              }}
+            >
+              Quitar Coach
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={!!deleteAccountTarget}
