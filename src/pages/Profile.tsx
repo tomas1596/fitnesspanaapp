@@ -7,6 +7,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import {
   LogOut, User, Activity, Flame, Beef, Droplets, Save, Camera, Lock,
@@ -200,6 +209,8 @@ const Profile = () => {
   const [todayMacroTotals, setTodayMacroTotals] = useState({ calories: 0, protein: 0, glasses: 0 });
   /** Tema de marca leído de profiles.theme ('default' | 'pink') */
   const [brandTheme, setBrandTheme] = useState<string>('default');
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [logoutWorking, setLogoutWorking] = useState(false);
 
   /** Recorte de avatar: preview local + archivo original conservado para futura subida HR. */
   const [avatarCropOpen, setAvatarCropOpen] = useState(false);
@@ -478,6 +489,17 @@ const Profile = () => {
     toast({ title: 'Contraseña actualizada' });
     setNewPassword(''); setPasswordDialog(false);
   };
+
+  const handleConfirmLogout = useCallback(async () => {
+    setLogoutWorking(true);
+    try {
+      await signOut();
+      setLogoutDialogOpen(false);
+      navigate('/auth', { replace: true });
+    } finally {
+      setLogoutWorking(false);
+    }
+  }, [signOut, navigate]);
 
   const w = parseFloat(weight);
   const h = parseFloat(height);
@@ -862,7 +884,7 @@ const Profile = () => {
             </button>
             <button
               type="button"
-              onClick={signOut}
+              onClick={() => setLogoutDialogOpen(true)}
               className={cn(settingsListRowCn, 'text-red-600 hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40 dark:active:bg-red-950/60')}
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500/10">
@@ -1183,6 +1205,61 @@ const Profile = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={logoutDialogOpen}
+        onOpenChange={(open) => {
+          setLogoutDialogOpen(open);
+          if (!open) setLogoutWorking(false);
+        }}
+      >
+        <AlertDialogContent
+          className={cn(
+            'gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-white/10 dark:bg-zinc-950 dark:text-zinc-100 sm:max-w-md',
+            'duration-300',
+          )}
+        >
+          <AlertDialogHeader className="space-y-3 sm:text-left">
+            <AlertDialogTitle className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+              ¿Cerrar sesión?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+              ¿Estás seguro de que quieres salir de tu cuenta?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end sm:space-x-0 sm:gap-2">
+            <AlertDialogCancel
+              type="button"
+              disabled={logoutWorking}
+              className={cn(
+                'mt-0 h-11 rounded-xl border-zinc-300 bg-zinc-50 font-semibold text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800',
+              )}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              disabled={logoutWorking}
+              variant={brandTheme === 'pink' ? 'default' : 'destructive'}
+              className={cn(
+                'h-11 rounded-xl border-0 px-5 text-sm font-bold shadow-md sm:min-w-[8.75rem]',
+                brandTheme === 'pink' &&
+                  'shadow-[0_8px_22px_var(--brand-glow-sm)] hover:bg-[color:var(--brand-hover)] hover:shadow-[0_10px_26px_var(--brand-glow)] dark:text-black',
+              )}
+              onClick={() => void handleConfirmLogout()}
+            >
+              {logoutWorking ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                  Saliendo…
+                </>
+              ) : (
+                'Sí, salir'
+              )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

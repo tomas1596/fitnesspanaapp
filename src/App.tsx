@@ -21,6 +21,7 @@ import VerifiedAccount from "./pages/VerifiedAccount";
 import Terminos from "./pages/Terminos";
 import NotFound from "./pages/NotFound";
 import { applyBrandTheme } from "@/lib/brandTheme";
+import { ProfileLastActivePing } from "@/components/ProfileLastActivePing";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,12 @@ const queryClient = new QueryClient();
  * las CSS custom properties de marca en el elemento raíz del documento.
  * Sin sesión o tema `default` → verde neón; `profiles.theme === 'pink'` → rosa VIP.
  */
+/** Heartbeat última actividad (solo sesión iniciada). */
+const LastActiveHeartbeat = () => {
+  const { user } = useAuth();
+  return <ProfileLastActivePing userId={user?.id} />;
+};
+
 const BrandThemeApplier = () => {
   const { user } = useAuth();
 
@@ -144,6 +151,7 @@ const App = () => (
         <AuthProvider>
           <SubscriptionProvider>
             <BrowserRouter>
+              <LastActiveHeartbeat />
               <BrandThemeApplier />
               <ServiceWorkerCardioBridge />
               <AppRoutes />

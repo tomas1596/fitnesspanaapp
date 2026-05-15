@@ -21,6 +21,7 @@ export type Database = {
           name: string
           muscle_group: string
           created_at: string
+          modalities: string[]
         }
         Insert: {
           id?: string
@@ -28,6 +29,7 @@ export type Database = {
           name: string
           muscle_group: string
           created_at?: string
+          modalities?: string[]
         }
         Update: {
           id?: string
@@ -35,6 +37,7 @@ export type Database = {
           name?: string
           muscle_group?: string
           created_at?: string
+          modalities?: string[]
         }
         Relationships: []
       }
@@ -172,7 +175,9 @@ export type Database = {
           id: string
           reps: number
           rir: number | null
+          rounds: number | null
           set_number: number
+          time_seconds: number | null
           to_failure: boolean | null
           user_id: string
           weight: number
@@ -183,7 +188,9 @@ export type Database = {
           id?: string
           reps?: number
           rir?: number | null
+          rounds?: number | null
           set_number?: number
+          time_seconds?: number | null
           to_failure?: boolean | null
           user_id: string
           weight?: number
@@ -194,7 +201,9 @@ export type Database = {
           id?: string
           reps?: number
           rir?: number | null
+          rounds?: number | null
           set_number?: number
+          time_seconds?: number | null
           to_failure?: boolean | null
           user_id?: string
           weight?: number
@@ -211,34 +220,43 @@ export type Database = {
       }
       exercises: {
         Row: {
+          conditioning_block_id: string | null
           created_at: string
           id: string
+          modality: string
           muscle_group: string
           name: string
           position: number
           updated_at: string
           user_id: string
           workout_date: string
+          workout_log_id: string | null
         }
         Insert: {
+          conditioning_block_id?: string | null
           created_at?: string
           id?: string
+          modality?: string
           muscle_group: string
           name: string
           position?: number
           updated_at?: string
           user_id: string
           workout_date?: string
+          workout_log_id?: string | null
         }
         Update: {
+          conditioning_block_id?: string | null
           created_at?: string
           id?: string
+          modality?: string
           muscle_group?: string
           name?: string
           position?: number
           updated_at?: string
           user_id?: string
           workout_date?: string
+          workout_log_id?: string | null
         }
         Relationships: []
       }
@@ -347,6 +365,30 @@ export type Database = {
         }
         Relationships: []
       }
+      personal_records: {
+        Row: {
+          date: string
+          exercise_name: string
+          id: string
+          user_id: string
+          weight: number
+        }
+        Insert: {
+          date?: string
+          exercise_name: string
+          id?: string
+          user_id: string
+          weight: number
+        }
+        Update: {
+          date?: string
+          exercise_name?: string
+          id?: string
+          user_id?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           activity_level: string | null
@@ -360,6 +402,7 @@ export type Database = {
           height: number | null
           id: string
           is_admin: boolean
+          last_active_at: string | null
           last_name: string | null
           step_goal: number
           target_weight: number | null
@@ -379,6 +422,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_admin?: boolean
+          last_active_at?: string | null
           last_name?: string | null
           step_goal?: number
           target_weight?: number | null
@@ -398,6 +442,7 @@ export type Database = {
           height?: number | null
           id?: string
           is_admin?: boolean
+          last_active_at?: string | null
           last_name?: string | null
           step_goal?: number
           target_weight?: number | null
@@ -520,6 +565,66 @@ export type Database = {
           },
         ]
       }
+      workout_logs: {
+        Row: {
+          id: string
+          user_id: string
+          workout_date: string
+          modality: string
+          total_time: string | null
+          target_time: string | null
+          wod_title: string | null
+          movements: Json
+          block_sections: Json
+          split_times: Json
+          round_count: number | null
+          circuit_name: string | null
+          work_rest_note: string | null
+          crossfit_details: Json
+          functional_details: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          workout_date: string
+          modality: string
+          total_time?: string | null
+          target_time?: string | null
+          wod_title?: string | null
+          movements?: Json
+          block_sections?: Json
+          split_times?: Json
+          round_count?: number | null
+          circuit_name?: string | null
+          work_rest_note?: string | null
+          crossfit_details?: Json
+          functional_details?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          workout_date?: string
+          modality?: string
+          total_time?: string | null
+          target_time?: string | null
+          wod_title?: string | null
+          movements?: Json
+          block_sections?: Json
+          split_times?: Json
+          round_count?: number | null
+          circuit_name?: string | null
+          work_rest_note?: string | null
+          crossfit_details?: Json
+          functional_details?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       workout_templates: {
         Row: {
           created_at: string
@@ -558,6 +663,14 @@ export type Database = {
           last_name: string | null
           avatar_url: string | null
           registered_at: string
+          subscription_role: string | null
+          subscription_expires_at: string | null
+          premium_until: string | null
+          is_admin: boolean
+          notified_tester: boolean
+          notified_premium: boolean
+          theme: string
+          last_active_at: string | null
         }[]
       }
     }

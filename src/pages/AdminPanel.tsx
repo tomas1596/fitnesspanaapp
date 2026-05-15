@@ -27,6 +27,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { applyBrandTheme } from '@/lib/brandTheme';
 import {
+  ArrowDownUp,
   ArrowLeft,
   Check,
   ChevronDown,
@@ -40,6 +41,13 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
+import {
+  ADMIN_ONLINE_WINDOW_MS,
+  compareLastActive,
+  formatLastActiveLabel,
+  isActivityWithinAge,
+  lastActiveDotTone,
+} from '@/lib/lastActivityLabel';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -50,6 +58,7 @@ type DirectoryRow = {
   last_name: string | null;
   avatar_url: string | null;
   registered_at: string;
+  last_active_at: string | null;
   premium_until: string | null;
   theme: string;
   // subscription fields (supplemented after RPC)
@@ -180,6 +189,53 @@ const registeredYmdLocal = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+function LastActivityCell({ iso, refreshTick }: { iso: string | null; refreshTick: number }) {
+  void refreshTick;
+  const now = new Date();
+
+  const isOnlineNow = isActivityWithinAge(iso, ADMIN_ONLINE_WINDOW_MS, now);
+
+  const tone = lastActiveDotTone(iso);
+  const dotClass =
+    tone === 'live'
+      ? 'bg-emerald-500 shadow-[0_0_7px_rgba(34,197,94,0.45)]'
+      : tone === 'stale'
+        ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.35)]'
+        : tone === 'idle'
+          ? 'bg-zinc-400 dark:bg-zinc-500'
+          : 'bg-zinc-400/45 dark:bg-zinc-600';
+
+  const title = isOnlineNow
+    ? 'Usando la app en los últimos 3 minutos'
+    : tone === 'live'
+      ? 'Activo en las últimas 24 h'
+      : tone === 'stale'
+        ? 'Sin usar la app 7 días o más'
+        : tone === 'idle'
+          ? 'Activo entre hace 1 y 7 días'
+          : 'Sin marca de última actividad';
+
+  return (
+    <div className="flex min-w-0 items-start gap-2">
+      {isOnlineNow ? (
+        <span
+          className="min-w-0 select-none tabular-nums tracking-tight break-words font-semibold text-xs leading-snug text-lime-500 drop-shadow-[0_0_10px_rgba(163,230,53,0.75)] dark:text-lime-200 dark:drop-shadow-[0_0_12px_rgba(190,242,100,0.55)]"
+          title={title}
+        >
+          ● En Línea
+        </span>
+      ) : (
+        <>
+          <span className={cn('mt-1 h-2 w-2 shrink-0 rounded-full', dotClass)} title={title} aria-hidden />
+          <span className="min-w-0 break-words text-xs leading-snug text-zinc-600 dark:text-zinc-400">
+            {formatLastActiveLabel(iso)}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────
 
 const AdminPanel = () => {
@@ -197,6 +253,9 @@ const AdminPanel = () => {
     row: DirectoryRow;
     newRole: SubRole;
   } | null>(null);
+  const [activitySort, setActivitySort] = useState<'default' | 'recent' | 'oldest'>('default');
+  /** Sin refetch RPC: re-render cada 1 min y al abrir para recalcular relativo / «En Línea». */
+  const [activityRefreshTick, setActivityRefreshTick] = useState(0);
 
   // ── Data ───────────────────────────────────────────────────────────────
 
@@ -228,13 +287,14 @@ const AdminPanel = () => {
       (r.user_id as string) || (r.id as string) || '';
 
     const merged: DirectoryRow[] = rawRows.map((r) => ({
-      user_id:               extractId(r),
-      email:                 (r.email               as string)  ?? '',
-      first_name:            (r.first_name           as string)  ?? null,
-      last_name:             (r.last_name            as string)  ?? null,
-      avatar_url:            (r.avatar_url           as string)  ?? null,
-      registered_at:         (r.registered_at        as string)  ?? '',
-      premium_until:         (r.premium_until        as string)  ?? null,
+      user_id: extractId(r),
+      email: (r.email as string) ?? '',
+      first_name: (r.first_name as string) ?? null,
+      last_name: (r.last_name as string) ?? null,
+      avatar_url: (r.avatar_url as string) ?? null,
+      registered_at: (r.registered_at as string) ?? '',
+      last_active_at: (typeof r.last_active_at === 'string' ? r.last_active_at : null) ?? null,
+      premium_until: (r.premium_until as string) ?? null,
       theme:                 (r.theme                as string)  ?? 'default',
       // Subscription fields — present when admin_user_directory includes them
       subscription_role:     ((r.subscription_role   as string)  ?? null) as DirectoryRow['subscription_role'],
@@ -256,7 +316,9 @@ const AdminPanel = () => {
       const userIds = merged.map((r) => r.user_id).filter(Boolean);
       const { data: subData, error: subError } = await supabase
         .from('profiles')
-        .select('user_id, subscription_role, subscription_expires_at, is_admin, notified_tester, notified_premium')
+        .select(
+          'user_id, subscription_role, subscription_expires_at, is_admin, notified_tester, notified_premium, last_active_at',
+        )
         .in('user_id', userIds);
 
       if (subError) {
@@ -274,13 +336,15 @@ const AdminPanel = () => {
           is_admin: boolean | null;
           notified_tester: boolean | null;
           notified_premium: boolean | null;
+          last_active_at: string | null;
         };
         subMap[r.user_id] = {
-          subscription_role:      (r.subscription_role as DirectoryRow['subscription_role']) ?? null,
+          subscription_role: (r.subscription_role as DirectoryRow['subscription_role']) ?? null,
           subscription_expires_at: r.subscription_expires_at ?? null,
-          is_admin:               r.is_admin === true,
-          notified_tester:        r.notified_tester === true,
-          notified_premium:       r.notified_premium === true,
+          is_admin: r.is_admin === true,
+          notified_tester: r.notified_tester === true,
+          notified_premium: r.notified_premium === true,
+          last_active_at: r.last_active_at ?? null,
         };
       }
 
@@ -298,6 +362,13 @@ const AdminPanel = () => {
   }, []);
 
   useEffect(() => { void loadDirectory(); }, [loadDirectory]);
+
+  useEffect(() => {
+    const pulse = () => setActivityRefreshTick((n) => n + 1);
+    pulse();
+    const id = window.setInterval(pulse, 60 * 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // ── Role change ────────────────────────────────────────────────────────
 
@@ -446,6 +517,12 @@ const AdminPanel = () => {
     });
   }, [rows, query]);
 
+  const sortedMembers = useMemo(() => {
+    if (activitySort === 'default') return filtered;
+    const dir = activitySort === 'recent' ? ('recent' as const) : ('oldest' as const);
+    return [...filtered].sort((a, b) => compareLastActive(a.last_active_at, b.last_active_at, dir));
+  }, [filtered, activitySort]);
+
   const todayYmd = todayLocalYmd();
   const totalUsers = rows.length;
   const registeredToday = useMemo(
@@ -547,11 +624,35 @@ const AdminPanel = () => {
 
         {/* Directorio — filas tipo tarjeta */}
         <div>
-          <p className="mb-2 hidden text-[10px] font-bold uppercase tracking-wider text-zinc-500 sm:grid sm:grid-cols-[3.5rem_1fr_1fr_7rem_auto] sm:gap-4 sm:px-4 dark:text-zinc-400">
+          <p className="mb-2 hidden text-[10px] font-bold uppercase tracking-wider text-zinc-500 sm:grid sm:grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1fr)_6.75rem_minmax(0,12.5rem)_auto] sm:gap-3 sm:px-4 dark:text-zinc-400">
             <span />
             <span>Usuario</span>
-            <span className="hidden sm:inline">Email</span>
+            <span className="min-w-0 truncate">Email</span>
             <span>Alta</span>
+            <span className="min-w-0">
+              <button
+                type="button"
+                onClick={() =>
+                  setActivitySort((prev) =>
+                    prev === 'default' ? 'recent' : prev === 'recent' ? 'oldest' : 'default',
+                  )
+                }
+                className="inline-flex w-full items-center gap-1 rounded-lg px-0.5 py-0.5 text-left uppercase text-primary transition hover:bg-primary/10"
+                aria-label={`Ordenar por última actividad${activitySort === 'recent' ? ' (recientes primero)' : activitySort === 'oldest' ? ' (más tiempo sin usar primero)' : ''}`}
+              >
+                Actividad
+                <ArrowDownUp className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+              </button>
+              {activitySort !== 'default' ? (
+                <span className="mt-1 block text-[9px] font-normal normal-case tracking-normal text-zinc-400">
+                  {activitySort === 'recent' ? 'Primero últimos activos' : 'Primero llevan más sin entrar'}
+                </span>
+              ) : (
+                <span className="mt-1 block text-[9px] font-normal normal-case tracking-normal text-zinc-400">
+                  Tap para ordenar
+                </span>
+              )}
+            </span>
             <span className="text-right">Acciones</span>
           </p>
           <div className="space-y-2.5 rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-2 dark:border-white/10 dark:bg-zinc-900/40">
@@ -561,12 +662,12 @@ const AdminPanel = () => {
                   <Skeleton key={i} className="h-24 w-full rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
                 ))}
               </div>
-            ) : filtered.length === 0 ? (
+            ) : sortedMembers.length === 0 ? (
               <div className="py-14 text-center text-sm text-zinc-500 dark:text-zinc-400">
                 {rows.length === 0 ? 'No hay usuarios.' : 'Sin resultados para tu búsqueda.'}
               </div>
             ) : (
-              filtered.map((r) => {
+              sortedMembers.map((r) => {
                 const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || '—';
                 const dateLabel = r.registered_at
                   ? new Date(r.registered_at).toLocaleDateString('es-AR', {
@@ -596,6 +697,9 @@ const AdminPanel = () => {
                           <div className="font-semibold text-zinc-900 dark:text-zinc-100">{name}</div>
                           <div className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">{r.email || '—'}</div>
                           <div className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">Alta {dateLabel}</div>
+                          <div className="mt-3 sm:hidden">
+                            <LastActivityCell iso={r.last_active_at} refreshTick={activityRefreshTick} />
+                          </div>
                         </div>
                       </div>
 
@@ -607,6 +711,9 @@ const AdminPanel = () => {
                       </div>
                       <div className="hidden whitespace-nowrap text-xs text-zinc-500 dark:text-zinc-400 sm:block">
                         {dateLabel}
+                      </div>
+                      <div className="hidden min-w-0 sm:block lg:max-w-[230px]">
+                        <LastActivityCell iso={r.last_active_at} refreshTick={activityRefreshTick} />
                       </div>
 
                       <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-auto sm:flex-nowrap">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, RotateCcw, Settings, Plus, Trash2, X, Volume2 } from 'lucide-react';
+import { Play, Pause, RotateCcw, Settings, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,12 +21,9 @@ type Preset = {
 
 type Phase = 'idle' | 'prep' | 'work' | 'rest' | 'done';
 
-export type SoundOption = 'bip' | 'boxing-bell' | 'whistle';
-
 // ── Storage helpers ──────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'pana_arena_presets_v1';
-const SOUND_KEY   = 'pana_timer_sound_v1';
 
 const DEFAULT_PRESET: Preset = {
   id: 'default',
@@ -52,17 +49,9 @@ const savePresets = (p: Preset[]) => {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)); } catch { /* ignore */ }
 };
 
-const loadSound = (): SoundOption => {
-  try {
-    const raw = localStorage.getItem(SOUND_KEY);
-    if (raw === 'boxing-bell' || raw === 'whistle') return raw;
-  } catch { /* ignore */ }
-  return 'bip';
-};
-
-const saveSound = (s: SoundOption) => {
-  try { localStorage.setItem(SOUND_KEY, s); } catch { /* ignore */ }
-};
+/** Campana entre fases (`public/sounds/Boxeo.mp3`). Precargada en memoria. */
+const mp3Bell = new Audio('/sounds/Boxeo.mp3');
+mp3Bell.preload = 'auto';
 
 // ── Audio engine (shared AudioContext to avoid browser instance limits) ──────
 //
@@ -94,65 +83,40 @@ function playBip(ctx: AudioContext, freq: number, duration: number) {
   osc.stop(ctx.currentTime + duration);
 }
 
-function playBoxingBell(ctx: AudioContext) {
-  // Multiple sine partials with rapid decay → metallic bell timbre
-  const partials: [number, number, number][] = [
-    [880,  0.3, 0.9],
-    [1320, 0.15, 0.6],
-    [1760, 0.08, 0.4],
-    [2350, 0.04, 0.25],
-  ];
-  for (const [freq, vol, decay] of partials) {
-    const osc  = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.frequency.value = freq;
-    osc.type = 'sine';
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    gain.gain.setValueAtTime(vol, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + decay);
-    osc.start();
-    osc.stop(ctx.currentTime + decay);
-  }
-}
-
-function playWhistle(ctx: AudioContext) {
-  const osc    = ctx.createOscillator();
-  const gain   = ctx.createGain();
-  const lfo    = ctx.createOscillator();
-  const lfoGain = ctx.createGain();
-  osc.frequency.value  = 2500;
-  osc.type             = 'triangle';
-  lfo.frequency.value  = 7;   // 7 Hz vibrato
-  lfoGain.gain.value   = 35;  // ±35 Hz pitch wobble
-  lfo.connect(lfoGain);
-  lfoGain.connect(osc.frequency);
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  gain.gain.setValueAtTime(0.3, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-  lfo.start();
-  osc.start();
-  osc.stop(ctx.currentTime + 0.45);
-  lfo.stop(ctx.currentTime + 0.45);
-}
-
-/** Short "tick" beep for the last 3 seconds of a phase. */
-function playCountdownBeep(sound: SoundOption) {
+/** Últimos 3 · 2 · 1 s: siempre bip sintético corto. */
+function playCountdownBeep() {
   const ctx = getAudioCtx();
   if (!ctx) return;
-  if (sound === 'bip')          playBip(ctx, 880, 0.12);
-  else if (sound === 'boxing-bell') playBoxingBell(ctx);
-  else if (sound === 'whistle') playWhistle(ctx);
+  playBip(ctx, 880, 0.12);
 }
 
-/** Longer "phase-transition" sound. */
-function playTransitionSound(sound: SoundOption) {
+/** Cambio de fase al llegar a 0: campana MP3. */
+function playTransitionSound() {
+  mp3Bell.currentTime = 0;
+  void mp3Bell.play().catch(() => {});
+}
+
+/**
+ * Primer gesto del usuario (Play / Iniciar): desbloquea AudioContext y el elemento
+ * audio para iOS/Safari (reproduce en silencio y corta de inmediato).
+ */
+function primeTimerAudio() {
   const ctx = getAudioCtx();
-  if (!ctx) return;
-  if (sound === 'bip')          playBip(ctx, 660, 0.6);
-  else if (sound === 'boxing-bell') playBoxingBell(ctx);
-  else if (sound === 'whistle') playWhistle(ctx);
+  void ctx?.resume();
+
+  const prevVol = mp3Bell.volume;
+  mp3Bell.volume = 0;
+  mp3Bell.currentTime = 0;
+  void mp3Bell
+    .play()
+    .then(() => {
+      mp3Bell.pause();
+      mp3Bell.currentTime = 0;
+      mp3Bell.volume = prevVol;
+    })
+    .catch(() => {
+      mp3Bell.volume = prevVol;
+    });
 }
 
 // ── Text-to-Speech helper ────────────────────────────────────────────────────
@@ -171,14 +135,6 @@ function speak(text: string) {
   u.volume = 1;
   window.speechSynthesis.speak(u);
 }
-
-// ── Sound option metadata ────────────────────────────────────────────────────
-
-const SOUND_OPTIONS: { id: SoundOption; label: string; emoji: string }[] = [
-  { id: 'bip',          label: 'Bip Clásico',      emoji: '🔔' },
-  { id: 'boxing-bell',  label: 'Campana de Boxeo',  emoji: '🥊' },
-  { id: 'whistle',      label: 'Silbato',           emoji: '📯' },
-];
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -202,16 +158,7 @@ const Timer = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editing,      setEditing]      = useState<Preset | null>(null);
 
-  // Sound preference
-  const [selectedSound, setSelectedSound] = useState<SoundOption>(loadSound);
-  // Ref so interval closures always read the latest sound without being re-created
-  const soundRef = useRef<SoundOption>(selectedSound);
-  useEffect(() => { soundRef.current = selectedSound; }, [selectedSound]);
-
   const intervalRef = useRef<number | null>(null);
-
-  // Warm up AudioContext on mount (avoids silent-first-play on some browsers)
-  useEffect(() => { getAudioCtx(); }, []);
 
   // Reset displayed time when preset changes while idle
   useEffect(() => {
@@ -223,7 +170,7 @@ const Timer = () => {
 
   const advancePhase = () => {
     if (!active) return;
-    playTransitionSound(soundRef.current);
+    playTransitionSound();
     if (navigator.vibrate) navigator.vibrate(400);
 
     setPhase(prev => {
@@ -262,7 +209,7 @@ const Timer = () => {
       setRemaining(prev => {
         const next = prev - 1;
         if (next <= 3 && next > 0) {
-          playCountdownBeep(soundRef.current);
+          playCountdownBeep();
           if (navigator.vibrate) navigator.vibrate(80);
         }
         if (next <= 0) {
@@ -278,6 +225,7 @@ const Timer = () => {
 
   const start = () => {
     if (!active) return;
+    primeTimerAudio();
     if (phase === 'idle' || phase === 'done') {
       setRound(1);
       setRemaining(active.prep);
@@ -349,13 +297,6 @@ const Timer = () => {
       if (activePresetId === id) setActivePresetId(safe[0].id);
       return safe;
     });
-  };
-
-  const handleSoundChange = (s: SoundOption) => {
-    setSelectedSound(s);
-    saveSound(s);
-    // Play a preview of the selected sound immediately
-    playCountdownBeep(s);
   };
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -464,39 +405,6 @@ const Timer = () => {
               Temporizadores
             </DialogTitle>
           </DialogHeader>
-
-          {/* Sound selector */}
-          <div className="rounded-2xl border border-zinc-200/80 bg-zinc-100/90 p-3 dark:border-white/10 dark:bg-zinc-800/60">
-            <div className="mb-2 flex items-center gap-2">
-              <Volume2 className="h-4 w-4 text-primary" />
-              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Sonido de alerta</p>
-            </div>
-            <div className="flex gap-2">
-              {SOUND_OPTIONS.map(({ id, label, emoji }) => {
-                const sel = selectedSound === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => handleSoundChange(id)}
-                    className={cn(
-                      'flex flex-1 flex-col items-center gap-1 rounded-xl border border-transparent bg-white/90 py-2.5 text-xs font-semibold transition-all duration-300 active:scale-95',
-                      'dark:bg-zinc-900/80',
-                      sel &&
-                        (resolved === 'dark'
-                          ? 'border-2 border-primary bg-primary/15 text-zinc-100 shadow-[0_0_22px_var(--brand-glow)] dark:text-white'
-                          : 'border-2 border-primary bg-primary/10 text-zinc-900 shadow-sm'),
-                      !sel &&
-                        'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800/80',
-                    )}
-                  >
-                    <span className="text-lg leading-none">{emoji}</span>
-                    <span className="leading-tight">{label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
 
           {/* Timer list */}
           <div className="space-y-2">

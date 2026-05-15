@@ -9,6 +9,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import SwipeToDelete from '@/components/SwipeToDelete';
+import {
+  libraryMatchesModality,
+  type WorkoutModalityId,
+} from '@/lib/workoutModality';
 
 const MUSCLE_GROUPS = ['Pecho', 'Espalda', 'Piernas', 'Brazos', 'Hombros', 'Core'];
 
@@ -29,16 +33,29 @@ interface LibraryExercise {
   id: string;
   name: string;
   muscle_group: string;
+  modalities: string[];
 }
+
+type LibraryExerciseHist =
+  | { kind: 'strength'; weight: number; reps: number }
+  | { kind: 'conditioning'; time_seconds: number; rounds: number; reps: number };
 
 interface TemplatesSheetProps {
   open: boolean;
   onClose: () => void;
+  /** Modalidad activa en Entrenamiento: filtra la biblioteca por defecto. */
+  libraryModalityFilter: WorkoutModalityId;
   onApplyTemplate: (exercises: TemplateExercise[]) => Promise<void>;
   onAddExercise: (name: string, muscleGroup: string) => void;
 }
 
-const TemplatesSheet = ({ open, onClose, onApplyTemplate, onAddExercise }: TemplatesSheetProps) => {
+const TemplatesSheet = ({
+  open,
+  onClose,
+  libraryModalityFilter,
+  onApplyTemplate,
+  onAddExercise,
+}: TemplatesSheetProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -57,10 +74,11 @@ const TemplatesSheet = ({ open, onClose, onApplyTemplate, onAddExercise }: Templ
 
   // ── Library tab state ──────────────────────────────────────────────────────
   const [libraryExercises, setLibraryExercises] = useState<LibraryExercise[]>([]);
-  const [libraryHistory, setLibraryHistory] = useState<Record<string, { weight: number; reps: number }>>({});
+  const [libraryHistory, setLibraryHistory] = useState<Record<string, LibraryExerciseHist>>({});
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
+  const [showAllLibraryModalities, setShowAllLibraryModalities] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // ── Load routines ──────────────────────────────────────────────────────────
@@ -80,10 +98,13 @@ const TemplatesSheet = ({ open, onClose, onApplyTemplate, onAddExercise }: Templ
     setLibraryLoading(true);
     const { data } = await supabase
       .from('exercises_library')
-      .select('id, name, muscle_group')
+      .select('id, name, muscle_group, modalities')
       .eq('user_id', user.id)
       .order('name');
-    const items = data || [];
+    const items = (data || []).map((row) => ({
+      ...row,
+      modalities: row.modalities ?? [],
+    }));
     setLibraryExercises(items);
 
     if (items.length > 0) {
@@ -95,11 +116,11 @@ const TemplatesSheet = ({ open, onClose, onApplyTemplate, onAddExercise }: Templ
 
   const fetchLibraryHistory = async (
     names: string[],
-  ): Promise<Record<string, { weight: number; reps: number }>> => {
+  ): Promise<Record<string, LibraryExerciseHist>> => {
     if (!user || names.length === 0) return {};
     const { data: exData } = await supabase
       .from('exercises')
-      .select('id, name, workout_date')
+      .select('id, name, workout_date, modality')
       .eq('user_id', user.id)
       .in('name', names)
       .order('workout_date', { ascending: false });
@@ -107,22 +128,29 @@ const TemplatesSheet = ({ open, onClose, onApplyTemplate, onAddExercise }: Templ
     if (!exData?.length) return {};
 
     const latestIdByName = new Map<string, string>();
+    const latestModalityByName = new Map<string, WorkoutModalityId>();
     for (const ex of exData) {
-      if (!latestIdByName.has(ex.name)) latestIdByName.set(ex.name, ex.id);
+      if (!latestIdByName.has(ex.name)) {
+        latestIdByName.set(ex.name, ex.id);
+        latestModalityByName.set(ex.name, (ex.modality as WorkoutModalityId) || 'musculacion');
+      }
     }
 
     const ids = [...latestIdByName.values()];
     const { data: setsData } = await supabase
       .from('exercise_sets')
-      .select('exercise_id, weight, reps')
+      .select('exercise_id, weight, reps, time_seconds, rounds')
       .in('exercise_id', ids)
       .order('set_number', { ascending: false });
 
-    const result: Record<string, { weight: number; reps: number }> = {};
+    const result: Record<string, LibraryExerciseHist> = {};
     for (const [name, exId] of latestIdByName.entries()) {
       const lastSet = setsData?.find((s) => s.exercise_id === exId);
-      if (lastSet && (lastSet.weight > 0 || lastSet.reps > 0)) {
-        result[name] = { weight: Number(lastSet.weight), reps: lastSet.reps };
+      if (!lastSet) continue;
+      const mod = latestModalityByName.get(name) || 'musculacion';
+      if (mod !== 'musculacion') continue;
+      if (lastSet && (Number(lastSet.weight) > 0 || lastSet.reps > 0)) {
+        result[name] = { kind: 'strength', weight: Number(lastSet.weight), reps: lastSet.reps };
       }
     }
     return result;
@@ -141,6 +169,7 @@ const TemplatesSheet = ({ open, onClose, onApplyTemplate, onAddExercise }: Templ
       setExGroup('');
       setSearchQuery('');
       setActiveFilter('');
+      setShowAllLibraryModalities(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, user]);
@@ -254,7 +283,9 @@ const TemplatesSheet = ({ open, onClose, onApplyTemplate, onAddExercise }: Templ
   const filteredLibrary = libraryExercises.filter((ex) => {
     const matchSearch = ex.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchFilter = activeFilter === '' || ex.muscle_group === activeFilter;
-    return matchSearch && matchFilter;
+    const matchModality =
+      showAllLibraryModalities || libraryMatchesModality(ex.modalities, libraryModalityFilter);
+    return matchSearch && matchFilter && matchModality;
   });
 
   const handleAddFromLibrary = (ex: LibraryExercise) => {
@@ -520,6 +551,31 @@ const TemplatesSheet = ({ open, onClose, onApplyTemplate, onAddExercise }: Templ
               />
             </div>
 
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAllLibraryModalities(false)}
+                className={cn(
+                  'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+                  !showAllLibraryModalities ? 'text-black' : 'bg-card text-muted-foreground',
+                )}
+                style={!showAllLibraryModalities ? { backgroundColor: 'var(--brand-color)' } : {}}
+              >
+                Solo esta modalidad
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAllLibraryModalities(true)}
+                className={cn(
+                  'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+                  showAllLibraryModalities ? 'text-black' : 'bg-card text-muted-foreground',
+                )}
+                style={showAllLibraryModalities ? { backgroundColor: 'var(--brand-color)' } : {}}
+              >
+                Todas las modalidades
+              </button>
+            </div>
+
             {/* Muscle group filter chips */}
             <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
               {['', ...MUSCLE_GROUPS].map((group) => {
@@ -548,7 +604,9 @@ const TemplatesSheet = ({ open, onClose, onApplyTemplate, onAddExercise }: Templ
                 <p className="text-sm text-muted-foreground">
                   {libraryExercises.length === 0
                     ? 'Tu biblioteca está vacía.\nAgrega ejercicios marcando "Guardar en mi biblioteca" al crear uno.'
-                    : 'Sin resultados para tu búsqueda.'}
+                    : showAllLibraryModalities
+                      ? 'Sin resultados para tu búsqueda.'
+                      : 'Nada coincide con esta modalidad. Prueba "Todas las modalidades" o ajusta la búsqueda.'}
                 </p>
               </div>
             ) : (
@@ -564,14 +622,15 @@ const TemplatesSheet = ({ open, onClose, onApplyTemplate, onAddExercise }: Templ
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-foreground">{ex.name}</p>
                           <p className="text-xs text-muted-foreground">{ex.muscle_group}</p>
-                          {hist && (
-                            <p
-                              className="mt-0.5 text-xs font-medium"
-                              style={{ color: 'var(--brand-color)' }}
-                            >
-                              Último: {hist.weight}kg × {hist.reps}
-                            </p>
-                          )}
+                          {hist &&
+                            hist.kind === 'strength' && (
+                              <p
+                                className="mt-0.5 text-xs font-medium"
+                                style={{ color: 'var(--brand-color)' }}
+                              >
+                                Último: {hist.weight}kg × {hist.reps}
+                              </p>
+                            )}
                         </div>
                         <div
                           className="ml-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-full"

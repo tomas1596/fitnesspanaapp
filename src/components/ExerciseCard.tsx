@@ -9,33 +9,59 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  isStrengthModality,
+  type LastPerfHint,
+  type WorkoutModalityId,
+} from '@/lib/workoutModality';
+import { cn } from '@/lib/utils';
 
-interface ExerciseSet {
+export interface ExerciseSetRow {
   id: string;
   set_number: number;
   reps: number;
   weight: number;
   rir: number;
   to_failure: boolean;
+  time_seconds: number;
+  rounds: number;
 }
 
 interface ExerciseCardProps {
   id: string;
   name: string;
   muscleGroup: string;
-  sets: ExerciseSet[];
-  lastPerformance?: { weight: number; reps: number };
+  modality: WorkoutModalityId;
+  sets: ExerciseSetRow[];
+  /** Sobrescribe estilos del contenedor (p. ej. tarjetas dentro de un bloque CF/FUNC). */
+  className?: string;
+  lastPerformance?: LastPerfHint;
   autoFocusWeight?: boolean;
   onAddSet: (exerciseId: string) => void;
-  onUpdateSet: (setId: string, field: 'reps' | 'weight' | 'rir' | 'to_failure', value: number | boolean) => void;
+  onUpdateSet: (
+    setId: string,
+    field: 'reps' | 'weight' | 'rir' | 'to_failure' | 'time_seconds' | 'rounds',
+    value: number | boolean,
+  ) => void;
   onDeleteSet: (setId: string) => void;
   onDeleteExercise: () => void;
   onRenameExercise: (newName: string) => void;
+  /** Bloques WOD / circuito (solo CF / FUNC) */
+  conditioningBlockOptions?: { id: string; label: string }[];
+  conditioningBlockId?: string | null;
+  onConditioningBlockChange?: (blockId: string | null) => void;
 }
 
 const muscleGroupColors: Record<string, string> = {
@@ -51,7 +77,9 @@ const ExerciseCard = ({
   id,
   name,
   muscleGroup,
+  modality,
   sets,
+  className,
   lastPerformance,
   autoFocusWeight,
   onAddSet,
@@ -59,24 +87,26 @@ const ExerciseCard = ({
   onDeleteSet,
   onDeleteExercise,
   onRenameExercise,
+  conditioningBlockOptions,
+  conditioningBlockId,
+  onConditioningBlockChange,
 }: ExerciseCardProps) => {
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState(name);
 
-  // Refs for weight inputs (indexed by set position)
   const weightRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Auto-focus last weight input when a new set is added and autoFocusWeight is true
+  const isStrength = isStrengthModality(modality);
+
   useEffect(() => {
-    if (autoFocusWeight && sets.length > 0) {
-      const lastIdx = sets.length - 1;
-      const timer = setTimeout(() => {
-        weightRefs.current[lastIdx]?.focus();
-        weightRefs.current[lastIdx]?.select();
-      }, 120);
-      return () => clearTimeout(timer);
-    }
-  }, [sets.length, autoFocusWeight]);
+    if (!isStrength || !autoFocusWeight || sets.length === 0) return;
+    const lastIdx = sets.length - 1;
+    const timer = setTimeout(() => {
+      weightRefs.current[lastIdx]?.focus();
+      weightRefs.current[lastIdx]?.select();
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [sets.length, autoFocusWeight, isStrength]);
 
   const handleSaveName = () => {
     const trimmed = editName.trim();
@@ -84,19 +114,35 @@ const ExerciseCard = ({
     setEditOpen(false);
   };
 
+  const renderLastPerf = () => {
+    if (!lastPerformance || lastPerformance.mode !== 'strength') return null;
+    const text = `${lastPerformance.weight}kg × ${lastPerformance.reps}`;
+    return (
+      <p className="mb-3 text-xs font-semibold" style={{ color: 'var(--brand-color)', opacity: 0.85 }}>
+        Último: {text}
+      </p>
+    );
+  };
+
   return (
-    <div className="rounded-2xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
-      {/* Header */}
+    <div className={cn('rounded-2xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm', className)}>
       <div className="mb-1 flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-base font-bold tracking-tight text-foreground">{name}</h3>
-          <span
-            className={`mt-1.5 inline-block rounded-md px-2 py-0.5 text-[11px] font-semibold tracking-wide ${
-              muscleGroupColors[muscleGroup] || 'bg-muted text-muted-foreground'
-            }`}
-          >
-            {muscleGroup}
-          </span>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            <span
+              className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-semibold tracking-wide ${
+                muscleGroupColors[muscleGroup] || 'bg-muted text-muted-foreground'
+              }`}
+            >
+              {muscleGroup}
+            </span>
+            {!isStrength && (
+              <span className="inline-block rounded-md bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {modality === 'crossfit' ? 'CrossFit' : 'Funcional'}
+              </span>
+            )}
+          </div>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -110,7 +156,10 @@ const ExerciseCard = ({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="border-border bg-card">
             <DropdownMenuItem
-              onClick={() => { setEditName(name); setEditOpen(true); }}
+              onClick={() => {
+                setEditName(name);
+                setEditOpen(true);
+              }}
               className="cursor-pointer text-foreground focus:bg-accent"
             >
               <Pencil className="mr-2 h-4 w-4" /> Editar nombre
@@ -125,17 +174,44 @@ const ExerciseCard = ({
         </DropdownMenu>
       </div>
 
-      {/* Last performance hint */}
-      {lastPerformance && (
-        <p
-          className="mb-3 text-xs font-semibold"
-          style={{ color: 'var(--brand-color)', opacity: 0.85 }}
-        >
-          Último: {lastPerformance.weight}kg × {lastPerformance.reps}
+      {renderLastPerf()}
+
+      {!isStrength && conditioningBlockOptions && conditioningBlockOptions.length > 0 && (
+        <div className="mb-3 space-y-1.5">
+          <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Bloque del WOD / circuito
+          </label>
+          <Select
+            value={conditioningBlockId ?? '__none'}
+            onValueChange={(v) => onConditioningBlockChange?.(v === '__none' ? null : v)}
+          >
+            <SelectTrigger className="h-10 rounded-xl border-border/60 bg-accent/60 text-foreground">
+              <SelectValue placeholder="Elegir bloque" />
+            </SelectTrigger>
+            <SelectContent className="border-border bg-card text-foreground">
+              <SelectItem value="__none" className="text-foreground focus:bg-accent">
+                Sin asignar
+              </SelectItem>
+              {conditioningBlockOptions.map((o) => (
+                <SelectItem key={o.id} value={o.id} className="text-foreground focus:bg-accent">
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] leading-snug text-muted-foreground">
+            Tiempos objetivo y resultado global en el panel de registro.
+          </p>
+        </div>
+      )}
+
+      {!isStrength && (!conditioningBlockOptions || conditioningBlockOptions.length === 0) && (
+        <p className="mb-3 text-[11px] leading-snug text-muted-foreground">
+          Añade al menos un bloque en el panel superior para asignar este movimiento.
         </p>
       )}
 
-      {sets.length > 0 && (
+      {sets.length > 0 && isStrength && (
         <div className="mb-3 space-y-2">
           <div className="grid grid-cols-[32px_minmax(0,1fr)_minmax(0,1fr)_48px_44px_44px] items-end gap-2 px-0.5">
             <span className="text-center text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">#</span>
@@ -157,11 +233,13 @@ const ExerciseCard = ({
                 type="number"
                 inputMode="numeric"
                 value={set.reps || ''}
-                onChange={(e) => onUpdateSet(set.id, 'reps', parseInt(e.target.value) || 0)}
+                onChange={(e) => onUpdateSet(set.id, 'reps', parseInt(e.target.value, 10) || 0)}
                 className="h-12 min-h-[48px] rounded-xl border-none bg-secondary text-center text-xl font-bold tabular-nums text-foreground"
               />
               <Input
-                ref={(el) => { weightRefs.current[index] = el; }}
+                ref={(el) => {
+                  weightRefs.current[index] = el;
+                }}
                 type="number"
                 inputMode="decimal"
                 value={set.weight || ''}
@@ -174,10 +252,10 @@ const ExerciseCard = ({
                 inputMode="numeric"
                 min={0}
                 max={5}
-                value={set.to_failure ? '' : (set.rir || '')}
+                value={set.to_failure ? '' : set.rir || ''}
                 disabled={set.to_failure}
                 onChange={(e) => {
-                  const v = Math.min(5, Math.max(0, parseInt(e.target.value) || 0));
+                  const v = Math.min(5, Math.max(0, parseInt(e.target.value, 10) || 0));
                   onUpdateSet(set.id, 'rir', v);
                 }}
                 className="h-12 min-h-[48px] rounded-xl border-none bg-secondary text-center text-lg font-bold tabular-nums text-foreground disabled:opacity-40"
@@ -214,6 +292,7 @@ const ExerciseCard = ({
         </div>
       )}
 
+      {isStrength && (
       <Button
         type="button"
         variant="ghost"
@@ -222,6 +301,7 @@ const ExerciseCard = ({
       >
         <Plus className="mr-2 h-4 w-4" strokeWidth={2} /> Agregar serie
       </Button>
+      )}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="border-none bg-card text-foreground sm:max-w-sm">

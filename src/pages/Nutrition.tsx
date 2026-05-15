@@ -23,6 +23,7 @@ import { NutritionBarcodeScanner, NutritionBarcodeScanLoadingOverlay } from '@/c
 import { fetchOpenFoodFactsProduct, mapOpenFoodFactsToNutritionFields, type MacrosPer100g, type OpenFoodFactsPackageTotal } from '@/lib/openFoodFacts';
 import { calculateAge } from '@/lib/age';
 import { todayLocalYMD, localDayBoundsISO } from '@/lib/nutritionDay';
+import { cn } from '@/lib/utils';
 
 type MealType = 'desayuno' | 'almuerzo' | 'cena' | 'merienda';
 
@@ -773,7 +774,15 @@ const Nutrition = () => {
               </div>
               <div className="mt-3 flex gap-1">
                 {Array.from({ length: goals.hydrationGlasses }).map((_, i) => (
-                  <div key={i} className={`h-1.5 flex-1 rounded-full ${i < glasses ? 'bg-primary' : 'bg-secondary'}`} />
+                  <div
+                    key={i}
+                    className={cn(
+                      'h-1.5 flex-1 rounded-full',
+                      i < glasses
+                        ? "bg-green-600 dark:bg-primary [html[data-brand='pink']_&]:bg-pink-600"
+                        : 'bg-secondary',
+                    )}
+                  />
                 ))}
               </div>
             </div>

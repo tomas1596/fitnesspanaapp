@@ -43,7 +43,7 @@ const StepsRing = ({ steps, goal = 10000, size = 96 }: Props) => {
           cy={c}
           r={radius}
           fill="transparent"
-          className="stroke-primary dark:drop-shadow-[0_0_10px_var(--brand-glow-sm)]"
+          className="stroke-green-600 dark:stroke-primary dark:drop-shadow-[0_0_10px_var(--brand-glow-sm)] [html[data-brand='pink']_&]:stroke-pink-600"
           strokeWidth="7"
           strokeLinecap="round"
           strokeDasharray={circ}
