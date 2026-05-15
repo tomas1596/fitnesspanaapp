@@ -1,1 +1,5 @@
 project_id = "hcsloxyjjxwlejynzsvs"
+
+# JWT del llamante verificado antes de ejecutar la función (comprobamos además profiles.is_admin en código).
+[functions.admin-delete-user]
+verify_jwt = true

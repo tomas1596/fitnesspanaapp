@@ -37,6 +37,7 @@ import {
   Shield,
   Sparkles,
   Star,
+  Trash2,
   User,
   UserPlus,
   Users,
@@ -253,6 +254,8 @@ const AdminPanel = () => {
     row: DirectoryRow;
     newRole: SubRole;
   } | null>(null);
+  const [deleteAccountTarget, setDeleteAccountTarget] = useState<DirectoryRow | null>(null);
+  const [deleteAccountDoing, setDeleteAccountDoing] = useState(false);
   const [activitySort, setActivitySort] = useState<'default' | 'recent' | 'oldest'>('default');
   /** Sin refetch RPC: re-render cada 1 min y al abrir para recalcular relativo / «En Línea». */
   const [activityRefreshTick, setActivityRefreshTick] = useState(0);
@@ -467,6 +470,55 @@ const AdminPanel = () => {
 
   // ── Theme toggle ───────────────────────────────────────────────────────
 
+  const handleConfirmDeleteAccount = useCallback(async () => {
+    const row = deleteAccountTarget;
+    if (!row?.user_id || !currentUser) return;
+    setDeleteAccountDoing(true);
+    try {
+      const { data, error: fnErr } = await supabase.functions.invoke<{
+        ok?: boolean;
+        error?: string;
+      }>('admin-delete-user', { body: { target_user_id: row.user_id } });
+
+      if (fnErr) {
+        let msg = fnErr.message;
+        const ctx = (fnErr as { context?: Response }).context;
+        if (ctx) {
+          try {
+            const j = (await ctx.clone().json()) as { error?: string };
+            if (typeof j?.error === 'string') msg = j.error;
+          } catch {
+            /* keep Supabase message */
+          }
+        }
+        throw new Error(msg);
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+      if (!data?.ok) {
+        throw new Error('La eliminación no se completó. Revisa que la función esté desplegada.');
+      }
+
+      setRows((prev) => prev.filter((r) => r.user_id !== row.user_id));
+      setDeleteAccountTarget(null);
+      toast({
+        title: 'Cuenta eliminada',
+        description: row.email ?? row.user_id,
+      });
+      void loadDirectory();
+    } catch (err) {
+      const msg =
+        err != null && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'No se pudo eliminar la cuenta';
+      toast({ title: 'Error al eliminar', description: msg, variant: 'destructive' });
+    } finally {
+      setDeleteAccountDoing(false);
+    }
+  }, [deleteAccountTarget, currentUser, toast, loadDirectory]);
+
   const handleToggleTheme = useCallback(
     async (row: DirectoryRow) => {
       setThemeTarget(null);
@@ -548,7 +600,13 @@ const AdminPanel = () => {
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-white px-4 pb-8 pt-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
+    <div
+      className={cn(
+        'min-h-screen bg-white px-4 pb-8 pt-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50',
+        "[html[data-brand='pink']_&]:bg-gradient-to-b [html[data-brand='pink']_&]:from-zinc-950 [html[data-brand='pink']_&]:to-zinc-900",
+        "dark:[html[data-brand='pink']_&]:from-zinc-950 dark:[html[data-brand='pink']_&]:to-zinc-900",
+      )}
+    >
       <div className="mx-auto max-w-4xl space-y-6">
 
         {/* Header */}
@@ -678,6 +736,10 @@ const AdminPanel = () => {
                   : '—';
                 const isBusy = toggling.has(r.user_id);
                 const currentRole = (r.subscription_role || 'free') as SubRole;
+                const canOfferAccountDelete =
+                  Boolean(r.user_id) &&
+                  r.user_id !== currentUser?.id &&
+                  !r.is_admin;
 
                 return (
                   <div
@@ -746,6 +808,21 @@ const AdminPanel = () => {
                                 className={`h-4 w-4 ${r.theme === 'pink' ? 'text-primary' : 'text-zinc-400'}`}
                               />
                             </button>
+                            {canOfferAccountDelete ? (
+                              <button
+                                type="button"
+                                title="Eliminar cuenta permanentemente"
+                                disabled={isBusy || deleteAccountDoing}
+                                onClick={() => setDeleteAccountTarget(r)}
+                                className={cn(
+                                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-white text-red-500 shadow-sm transition hover:border-red-500/40 hover:bg-red-500/[0.07] disabled:opacity-50 dark:border-red-500/30 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-500/15',
+                                  "[html[data-brand='pink']_&]:border-rose-500/35 [html[data-brand='pink']_&]:text-rose-400 [html[data-brand='pink']_&]:hover:bg-rose-500/10 dark:[html[data-brand='pink']_&]:text-rose-300",
+                                )}
+                                aria-label="Eliminar cuenta de usuario"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            ) : null}
                           </>
                         ) : (
                           <>
@@ -765,6 +842,21 @@ const AdminPanel = () => {
                                 className={`h-4 w-4 ${r.theme === 'pink' ? 'text-primary' : 'text-zinc-400'}`}
                               />
                             </button>
+                            {canOfferAccountDelete ? (
+                              <button
+                                type="button"
+                                title="Eliminar cuenta permanentemente"
+                                disabled={isBusy || deleteAccountDoing}
+                                onClick={() => setDeleteAccountTarget(r)}
+                                className={cn(
+                                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-white text-red-500 shadow-sm transition hover:border-red-500/40 hover:bg-red-500/[0.07] disabled:opacity-50 dark:border-red-500/30 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-500/15',
+                                  "[html[data-brand='pink']_&]:border-rose-500/35 [html[data-brand='pink']_&]:text-rose-400 [html[data-brand='pink']_&]:hover:bg-rose-500/10 dark:[html[data-brand='pink']_&]:text-rose-300",
+                                )}
+                                aria-label="Eliminar cuenta de usuario"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            ) : null}
                           </>
                         )}
                       </div>
@@ -779,7 +871,10 @@ const AdminPanel = () => {
 
       {/* ── Theme confirmation dialog ── */}
       <Dialog open={!!themeTarget} onOpenChange={(open) => { if (!open) setThemeTarget(null); }}>
-        <DialogContent className="rounded-2xl border-zinc-200/80 bg-white text-zinc-900 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100">
+        <DialogContent className={cn(
+          'rounded-2xl border-zinc-200/80 bg-white text-zinc-900 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100',
+          "[html[data-brand='pink']_&]:border-pink-800/40 [html[data-brand='pink']_&]:bg-zinc-900 [html[data-brand='pink']_&]:text-pink-50",
+        )}>
           <DialogHeader>
             <DialogTitle>
               {themeTarget?.theme === 'pink' ? 'Quitar Modo Rosa VIP' : 'Activar Modo Rosa VIP 🌸'}
@@ -804,6 +899,60 @@ const AdminPanel = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!deleteAccountTarget}
+        onOpenChange={(open) => {
+          if (!open && !deleteAccountDoing) setDeleteAccountTarget(null);
+        }}
+      >
+        <AlertDialogContent
+          className={cn(
+            'rounded-2xl border-zinc-200/80 bg-white dark:border-white/10 dark:bg-zinc-900',
+            "[html[data-brand='pink']_&]:border-pink-800/40 [html[data-brand='pink']_&]:bg-zinc-900",
+          )}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="sr-only">Eliminar cuenta</AlertDialogTitle>
+            <AlertDialogDescription className={cn(
+              'text-sm font-medium leading-relaxed text-zinc-700 dark:text-zinc-200',
+              "[html[data-brand='pink']_&]:text-pink-50/95",
+            )}>
+              ¿Eliminar cuenta permanentemente? Esta acción no se puede deshacer y borrará todos los entrenamientos,
+              registros y acceso del usuario.
+              {deleteAccountTarget?.email ? (
+                <span className="mt-3 block rounded-lg bg-zinc-100 px-3 py-2 text-xs font-normal text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:[html[data-brand='pink']_&]:bg-zinc-800/90 dark:[html[data-brand='pink']_&]:text-pink-100">
+                  {deleteAccountTarget.email}
+                </span>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className={cn(
+                'rounded-xl border-zinc-200 dark:border-white/15',
+                "[html[data-brand='pink']_&]:border-pink-800/35 [html[data-brand='pink']_&]:text-pink-100",
+              )}
+              disabled={deleteAccountDoing}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteAccountDoing}
+              className={cn(
+                'rounded-xl bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-500',
+                "[html[data-brand='pink']_&]:bg-rose-600 [html[data-brand='pink']_&]:hover:bg-rose-500",
+              )}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmDeleteAccount();
+              }}
+            >
+              {deleteAccountDoing ? 'Eliminando…' : 'Eliminar definitivamente'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={!!pendingSelfAdminRole}
