@@ -30,6 +30,7 @@ import {
   YAxis,
 } from 'recharts';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/hooks/useTheme';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 import { useBrandColorHex } from '@/hooks/useBrandColorHex';
@@ -96,7 +97,8 @@ const DetailRow = ({ label, value }: { label: string; value: string }) => (
 
 export default function ActivityDetail() {
   const brandHex = useBrandColorHex();
-  const { id } = useParams<{ id: string }>();
+  const { id: legacyParamId, activityId } = useParams<{ id?: string; activityId?: string }>();
+  const id = activityId ?? legacyParamId;
   const navigate = useNavigate();
   const { user } = useAuth();
   const { resolved } = useTheme();
@@ -105,15 +107,29 @@ export default function ActivityDetail() {
 
   const [row, setRow] = useState<ActivityRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState('');
   const [panel, setPanel] = useState<null | 'route' | 'more' | 'share'>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const load = useCallback(async () => {
-    if (!id || !user) return;
+    if (!id) {
+      setRow(null);
+      setFetchError(null);
+      setLoading(false);
+      return;
+    }
+    if (!user) return;
     setLoading(true);
+    setFetchError(null);
     const { data, error } = await supabase.from('activities').select('*').eq('id', id).maybeSingle();
-    if (error || !data) {
+    if (error) {
+      setFetchError(error.message);
+      setRow(null);
+      setLoading(false);
+      return;
+    }
+    if (!data) {
       setRow(null);
       setLoading(false);
       return;
@@ -216,15 +232,16 @@ export default function ActivityDetail() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
-        Cargando…
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
+        <p className="text-sm font-medium text-muted-foreground">Cargando actividad…</p>
       </div>
     );
   }
 
-  if (!row || !started || !ended) {
+  if (fetchError) {
     return (
-      <div className="min-h-screen bg-background px-4 pt-6">
+      <div className="min-h-screen bg-background px-4 pt-8 pb-10">
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -233,7 +250,54 @@ export default function ActivityDetail() {
           <ArrowLeft className="h-4 w-4" />
           Volver
         </button>
-        <p className="mt-8 text-center text-muted-foreground">Actividad no encontrada.</p>
+        <div className="mx-auto mt-10 max-w-sm text-center">
+          <p className="text-base font-semibold text-foreground">No se pudo cargar la actividad</p>
+          <p className="mt-2 text-sm text-muted-foreground">{fetchError}</p>
+          <div className="mt-6 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground"
+            >
+              Reintentar
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/cardio')}
+              className="rounded-xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground"
+            >
+              Ir a Cardio
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!row || !started || !ended) {
+    return (
+      <div className="min-h-screen bg-background px-4 pt-8 pb-10">
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 text-sm font-medium text-muted-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver
+        </button>
+        <div className="mx-auto mt-10 max-w-sm text-center">
+          <p className="text-base font-semibold text-foreground">Actividad no encontrada</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            No existe esta actividad o no tenés permiso para verla.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/cardio')}
+            className="mt-6 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground"
+          >
+            Volver a Cardio
+          </button>
+        </div>
       </div>
     );
   }

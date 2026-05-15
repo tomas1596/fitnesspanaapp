@@ -126,6 +126,7 @@ const AppRoutes = () => {
         <Route path="/onboarding" element={<Navigate to="/" replace />} />
         <Route path="/" element={<AppRoute><Workout /></AppRoute>} />
         <Route path="/timer" element={<AppRoute><Timer /></AppRoute>} />
+        <Route path="/cardio/:activityId" element={<AppRoute><ActivityDetail /></AppRoute>} />
         <Route path="/cardio" element={<AppRoute><Cardio /></AppRoute>} />
         <Route path="/actividad/:id" element={<AppRoute><ActivityDetail /></AppRoute>} />
         <Route path="/nutrition" element={<AppRoute><Nutrition /></AppRoute>} />

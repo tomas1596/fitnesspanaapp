@@ -926,7 +926,7 @@ const RunCard = ({ run }: { run: RunRow }) => {
 
   return (
     <Link
-      to={`/actividad/${run.id}`}
+      to={`/cardio/${run.id}`}
       className="block overflow-hidden rounded-2xl border border-border/40 bg-card/80 backdrop-blur-sm ring-offset-background transition-all duration-300 hover:border-primary/40 hover:ring-2 hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.98]"
     >
       <div className="h-32 w-full bg-secondary">
