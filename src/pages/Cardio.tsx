@@ -853,25 +853,27 @@ const Cardio = () => {
             )}
           >
             <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">Km del mes</div>
-            <div className="mt-1 flex items-baseline justify-center gap-1.5">
-              <span
-                className={cn(
-                  'text-5xl font-extrabold tabular-nums tracking-tight sm:text-6xl',
-                  resolved === 'dark'
-                    ? 'text-primary [text-shadow:0_0_22px_var(--brand-glow)]'
-                    : 'text-primary',
-                )}
-              >
-                {monthStats.km.toFixed(2).replace('.', ',')}
-              </span>
-              <span
-                className={cn(
-                  'text-lg font-bold uppercase tracking-wider sm:text-xl',
-                  resolved === 'dark' ? 'text-primary/80' : 'text-primary/90',
-                )}
-              >
-                km
-              </span>
+            <div
+              className={cn(
+                'mt-1 flex items-baseline justify-center gap-1 text-primary',
+                resolved === 'dark' && '[text-shadow:0_0_22px_var(--brand-glow)]',
+              )}
+            >
+              {(() => {
+                const formatted = monthStats.km.toFixed(2).replace('.', ',');
+                const commaIdx = formatted.indexOf(',');
+                const intPart = commaIdx >= 0 ? formatted.slice(0, commaIdx) : formatted;
+                const fracPart = commaIdx >= 0 ? formatted.slice(commaIdx) : '';
+                return (
+                  <>
+                    <span className="text-5xl font-extrabold tabular-nums tracking-tight sm:text-6xl">{intPart}</span>
+                    {fracPart !== '' && (
+                      <span className="text-2xl font-extrabold tabular-nums tracking-tight sm:text-3xl">{fracPart}</span>
+                    )}
+                    <span className="text-lg font-bold uppercase tracking-wider sm:text-xl">km</span>
+                  </>
+                );
+              })()}
             </div>
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2">

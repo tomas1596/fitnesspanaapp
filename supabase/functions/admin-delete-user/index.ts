@@ -26,6 +26,7 @@ const TABLES_DELETE_BY_USER_ORDER: readonly string[] = [
   'nutrition_logs',
   'exercises_library',
   'personal_records',
+  'weight_logs',
   'body_measurements',
   'step_logs',
   'hydration_logs',

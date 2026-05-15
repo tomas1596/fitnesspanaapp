@@ -530,6 +530,30 @@ export type Database = {
         }
         Relationships: []
       }
+      weight_logs: {
+        Row: {
+          created_at: string
+          id: string
+          log_date: string
+          user_id: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          log_date: string
+          user_id: string
+          weight: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          log_date?: string
+          user_id?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       template_exercises: {
         Row: {
           created_at: string

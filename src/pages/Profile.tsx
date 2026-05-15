@@ -22,6 +22,7 @@ import {
   Target, Plus, TrendingUp, Settings2, Pencil, LayoutDashboard, HelpCircle,
   FileText, Heart, Sparkles, AlertTriangle, Loader2, Trash2, X, ZoomIn, ChevronRight,
   Eye, EyeOff,
+  Scale,
 } from 'lucide-react';
 import StepsRing from '@/components/StepsRing';
 import { AvatarCropModal } from '@/components/AvatarCropModal';
@@ -35,6 +36,8 @@ import { todayLocalYMD, localDayBoundsISO } from '@/lib/nutritionDay';
 import { cn } from '@/lib/utils';
 import { passwordMeetsPolicy } from '@/lib/passwordPolicy';
 import { PasswordRequirementsList } from '@/components/PasswordRequirementsList';
+import { WeightEvolutionSheet } from '@/components/WeightEvolutionSheet';
+import { syncProfileWeightFromLogs } from '@/lib/weightProfileSync';
 
 const ADMIN_EMAIL = 'thomzonlyskills@gmail.com';
 
@@ -211,6 +214,7 @@ const Profile = () => {
   const [brandTheme, setBrandTheme] = useState<string>('default');
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [logoutWorking, setLogoutWorking] = useState(false);
+  const [weightEvolutionOpen, setWeightEvolutionOpen] = useState(false);
 
   /** Recorte de avatar: preview local + archivo original conservado para futura subida HR. */
   const [avatarCropOpen, setAvatarCropOpen] = useState(false);
@@ -372,23 +376,73 @@ const Profile = () => {
       .select('height, weight, target_weight, activity_level, fitness_goal, avatar_url')
       .maybeSingle();
 
-    setSaving(false);
     if (error) {
+      setSaving(false);
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
       return;
     }
 
+    const today = todayStr();
+    if (weightNum !== null) {
+      const { data: existingToday } = await supabase
+        .from('weight_logs')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('log_date', today)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingToday?.id) {
+        const { error: logErr } = await supabase
+          .from('weight_logs')
+          .update({ weight: weightNum })
+          .eq('id', existingToday.id)
+          .eq('user_id', user.id);
+        if (logErr) {
+          toast({
+            title: 'Datos guardados',
+            description: `No se pudo actualizar el pesaje de hoy en el historial: ${logErr.message}`,
+            variant: 'destructive',
+          });
+        }
+      } else {
+        const { error: logErr } = await supabase.from('weight_logs').insert({
+          user_id: user.id,
+          weight: weightNum,
+          log_date: today,
+        });
+        if (logErr) {
+          toast({
+            title: 'Datos guardados',
+            description: `No se pudo añadir el pesaje al historial: ${logErr.message}`,
+            variant: 'destructive',
+          });
+        }
+      }
+    }
+
+    await syncProfileWeightFromLogs(user.id);
+    const { data: weightRow } = await supabase.from('profiles').select('weight').eq('user_id', user.id).maybeSingle();
+
+    setSaving(false);
+
     const row = data;
+    const syncedWeightStr =
+      weightRow?.weight != null && Number.isFinite(Number(weightRow.weight))
+        ? String(weightRow.weight)
+        : '';
+
     if (row) {
       setHeight(row.height != null ? String(row.height) : '');
-      setWeight(row.weight != null ? String(row.weight) : '');
+      setWeight(syncedWeightStr || (row.weight != null ? String(row.weight) : ''));
       setTargetWeight(row.target_weight != null ? String(row.target_weight) : '');
       setActivityLevel(row.activity_level ?? '');
       setFitnessGoal(row.fitness_goal ?? '');
       setAvatarUrl(row.avatar_url ?? null);
     } else {
       setHeight(heightNum != null ? String(heightNum) : '');
-      setWeight(weightNum != null ? String(weightNum) : '');
+      setWeight(syncedWeightStr || (weightNum != null ? String(weightNum) : ''));
       setTargetWeight(targetWeightNum != null ? String(targetWeightNum) : '');
       setActivityLevel(activityLevel);
       setFitnessGoal(fitnessGoal);
@@ -744,6 +798,25 @@ const Profile = () => {
           </div>
         )}
 
+        <div className={cn(settingsListCardCn)}>
+          <button
+            type="button"
+            onClick={() => setWeightEvolutionOpen(true)}
+            className={cn(settingsListRowCn)}
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/12">
+              <Scale className="h-[18px] w-[18px] text-primary dark:text-primary" aria-hidden />
+            </span>
+            <span className="min-w-0 flex-1 text-left">
+              <span className="block font-medium leading-snug">Evolución de peso</span>
+              <span className="mt-0.5 block text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                Gráfico e historial de pesajes
+              </span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
+          </button>
+        </div>
+
         <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none sm:px-5">
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
             Datos & objetivos
@@ -898,6 +971,15 @@ const Profile = () => {
       </div>
 
       <FAQBottomSheet open={faqOpen} onOpenChange={setFaqOpen} />
+
+      <WeightEvolutionSheet
+        open={weightEvolutionOpen}
+        onOpenChange={setWeightEvolutionOpen}
+        userId={user?.id}
+        onSynced={() => {
+          void loadProfile();
+        }}
+      />
 
       <AvatarCropModal
         imageSrc={avatarCropSrc}
@@ -1442,7 +1524,8 @@ function AvatarLightbox({ src, onClose }: { src: string; onClose: () => void }) 
     if (e.changedTouches.length !== 1) return;
     const now = Date.now();
     if (now - lastTapRef.current < 280) {
-      scaleRef.current <= 1.05 ? applyScale(2.5) : applyScale(1);
+      if (scaleRef.current <= 1.05) applyScale(2.5);
+      else applyScale(1);
     }
     lastTapRef.current = now;
   };
