@@ -565,7 +565,7 @@ const Profile = () => {
     try {
       await signOut();
       setLogoutDialogOpen(false);
-      navigate('/auth', { replace: true });
+      navigate('/', { replace: true });
     } finally {
       setLogoutWorking(false);
     }

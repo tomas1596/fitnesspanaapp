@@ -90,7 +90,7 @@ const ServiceWorkerCardioBridge = () => {
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) return <Navigate to="/" replace />;
   return <>{children}</>;
 };
 
@@ -99,7 +99,7 @@ const ADMIN_EMAIL = 'thomzonlyskills@gmail.com';
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading, isAdmin, isAdminLoading } = useAuth();
   if (loading || isAdminLoading) return null;
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) return <Navigate to="/" replace />;
   if (!isAdmin || user.email !== ADMIN_EMAIL) return <Navigate to="/" replace />;
   return <>{children}</>;
 };
@@ -134,7 +134,7 @@ const CoachRoute = ({ children }: { children: React.ReactNode }) => {
   }, [user]);
 
   if (loading || gateLoading) return null;
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) return <Navigate to="/" replace />;
   if (!isCoach) return <Navigate to="/profile" replace />;
   return <>{children}</>;
 };
@@ -154,22 +154,31 @@ const AppRoute = ({ children }: { children: React.ReactNode }) => (
   </ProtectedRoute>
 );
 
+/** Raíz (/): pantalla Auth sin cambiar pathname; si hay sesión, Entreno protegido. */
+const RootHomeGate = () => {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Auth />;
+  return (
+    <AppRoute>
+      <Workout />
+    </AppRoute>
+  );
+};
+
 const AppRoutes = () => {
   const { user, loading } = useAuth();
   const location = useLocation();
 
   if (loading) return null;
 
-  const isAuth = location.pathname === "/auth";
-  if (!user && !isAuth) return <Navigate to="/auth" replace />;
-
   return (
     <>
       <Routes>
-        <Route path="/auth" element={<Auth />} />
+        <Route path="/auth" element={<Navigate to="/" replace />} />
         <Route path="/onboarding" element={<Navigate to="/" replace />} />
         <Route element={<Outlet />}>
-          <Route path="/" element={<AppRoute><Workout /></AppRoute>} />
+          <Route path="/" element={<RootHomeGate />} />
           <Route path="/timer" element={<AppRoute><Timer /></AppRoute>} />
           <Route path="/cardio" element={<AppRoute><Cardio /></AppRoute>} />
           <Route path="/nutrition" element={<AppRoute><Nutrition /></AppRoute>} />
