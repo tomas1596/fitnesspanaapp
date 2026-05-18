@@ -3,6 +3,9 @@
  * - `default`: verde neón (usuarios estándar).
  * - `pink`: rosa VIP (`profiles.theme === 'pink'`).
  *
+ * Al elegir `pink`, se añade la clase CSS `pink-mode` en `<html>` (estilos encapsulados en
+ * `index.css`). También queda `data-brand="pink"` por compatibilidad con selectores Tailwind existentes.
+ *
  * El valor de `BRAND_COLOR` en `runFormat.ts` es `var(--brand-color)` y sigue
  * automáticamente al tema activo.
  */
@@ -50,6 +53,11 @@ const BRAND_THEME_EVENT = 'brand-theme-change';
 export function applyBrandTheme(name: BrandThemeName) {
   const root = document.documentElement;
   root.dataset.brand = name;
+  if (name === 'pink') {
+    root.classList.add('pink-mode');
+  } else {
+    root.classList.remove('pink-mode');
+  }
   const vars = BRAND_THEMES[name];
   for (const [k, v] of Object.entries(vars)) {
     root.style.setProperty(k, v);

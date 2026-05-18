@@ -5,7 +5,6 @@ import { useSubscriptionContext } from '@/hooks/useSubscriptionStatus';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -35,7 +34,6 @@ import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { ThemeSegmentedControl } from '@/components/ThemeSegmentedControl';
 import { FAQBottomSheet } from '@/components/FAQBottomSheet';
 import { useTheme } from '@/hooks/useTheme';
-import { ACTIVITY_LEVEL_OPTIONS, FITNESS_GOAL_OPTIONS } from '@/lib/profileOptions';
 import { calculateAge } from '@/lib/age';
 import { todayLocalYMD, localDayBoundsISO } from '@/lib/nutritionDay';
 import { cn } from '@/lib/utils';
@@ -45,21 +43,6 @@ import { WeightEvolutionSheet } from '@/components/WeightEvolutionSheet';
 import { syncProfileWeightFromLogs } from '@/lib/weightProfileSync';
 
 const ADMIN_EMAIL = 'thomzonlyskills@gmail.com';
-
-/** Valor estable para `<Select controlled>` antes de elegir opción — evita `undefined` → warning uncontrolled/controlado. */
-const PROFILE_SELECT_UNSET = '__unset__';
-
-function profileActivitySelectValue(activityLevel: string): string {
-  const t = activityLevel.trim();
-  if (!t) return PROFILE_SELECT_UNSET;
-  return ACTIVITY_LEVEL_OPTIONS.some((o) => o.value === t) ? t : PROFILE_SELECT_UNSET;
-}
-
-function profileFitnessSelectValue(fitnessGoal: string): string {
-  const t = fitnessGoal.trim();
-  if (!t) return PROFILE_SELECT_UNSET;
-  return FITNESS_GOAL_OPTIONS.some((o) => o.value === t) ? t : PROFILE_SELECT_UNSET;
-}
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -78,24 +61,13 @@ const parseProfileNumber = (raw: string): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** Inputs / selects en «Datos & objetivos»: contraste y focus neón. */
+/** Inputs en «Datos & objetivos»: contraste y focus neón. */
 const profileFormInputClass =
   'min-h-[2.875rem] w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-base shadow-none outline-none ring-0 ring-offset-0 md:text-sm ' +
   'text-zinc-900 placeholder:text-zinc-400 transition-[border-color,box-shadow] duration-200 ' +
   'focus-visible:!border-primary focus-visible:!outline-none focus-visible:!ring-1 focus-visible:!ring-primary focus-visible:!ring-offset-0 ' +
   'dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder:text-zinc-500 ' +
   'dark:focus-visible:!border-primary dark:focus-visible:!ring-primary disabled:opacity-60';
-
-/** SelectTrigger: foco compacto tipo iOS sin doble ring gris por defecto. */
-const profileFormSelectTriggerClass =
-  'min-h-[2.875rem] h-auto w-full justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-base md:text-sm ' +
-  'text-zinc-900 shadow-none outline-none ring-0 ring-offset-0 transition-[border-color,box-shadow] duration-200 ' +
-  'focus:!border-primary focus:!outline-none focus:!ring-1 focus:!ring-primary focus:!ring-offset-0 ' +
-  'focus-visible:!border-primary focus-visible:!ring-1 focus-visible:!ring-primary focus-visible:!ring-offset-0 ' +
-  'data-[state=open]:!border-primary data-[state=open]:!ring-1 data-[state=open]:!ring-primary data-[state=open]:!ring-offset-0 ' +
-  'dark:border-zinc-700 dark:bg-zinc-900 dark:text-white ' +
-  'dark:focus:!border-primary dark:focus:!ring-primary dark:data-[state=open]:!border-primary dark:data-[state=open]:!ring-primary ' +
-  'disabled:opacity-60 data-[placeholder]:text-zinc-400 dark:data-[placeholder]:text-zinc-500';
 
 const settingsListCardCn =
   'overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none';
@@ -187,8 +159,6 @@ const Profile = () => {
   const [weight, setWeight] = useState('');
   const [gender, setGender] = useState('');
   const [targetWeight, setTargetWeight] = useState('');
-  const [activityLevel, setActivityLevel] = useState('');
-  const [fitnessGoal, setFitnessGoal] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -196,7 +166,9 @@ const Profile = () => {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [passwordDialog, setPasswordDialog] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
 
   const [editProfileOpen, setEditProfileOpen] = useState(false);
@@ -261,7 +233,7 @@ const Profile = () => {
     const today = todayStr();
     const meta = (user.user_metadata ?? {}) as Record<string, string | undefined>;
     const { data, error } = await supabase.from('profiles').select(
-      'first_name, last_name, date_of_birth, height, weight, gender, target_weight, avatar_url, step_goal, activity_level, fitness_goal, theme, is_coach, coach_code, coach_id, gym_name',
+      'first_name, last_name, date_of_birth, height, weight, gender, target_weight, avatar_url, step_goal, theme, is_coach, coach_code, coach_id, gym_name',
     ).eq('user_id', user.id).maybeSingle();
     const pick = (db: string | null | undefined, metaKey: string) =>
       (db != null && String(db).trim() !== '' ? String(db).trim() : '') || (meta[metaKey]?.trim() ?? '');
@@ -273,8 +245,6 @@ const Profile = () => {
       setWeight(data.weight?.toString() || '');
       setGender(pick(data.gender, 'gender'));
       setTargetWeight(data.target_weight?.toString() || '');
-      setActivityLevel(data.activity_level || '');
-      setFitnessGoal(data.fitness_goal || '');
       setAvatarUrl(data.avatar_url || null);
       setStepGoal(data.step_goal || 10000);
       setDraftGoal((data.step_goal || 10000).toString());
@@ -401,8 +371,6 @@ const Profile = () => {
     const heightNum = parseProfileNumber(height);
     const weightNum = parseProfileNumber(weight);
     const targetWeightNum = parseProfileNumber(targetWeight);
-    const activity = activityLevel.trim() || null;
-    const fitness = fitnessGoal.trim() || null;
     const avatar = avatarUrl?.trim() || null;
 
     const { data, error } = await supabase
@@ -411,12 +379,10 @@ const Profile = () => {
         height: heightNum,
         weight: weightNum,
         target_weight: targetWeightNum,
-        activity_level: activity,
-        fitness_goal: fitness,
         avatar_url: avatar,
       })
       .eq('user_id', user.id)
-      .select('height, weight, target_weight, activity_level, fitness_goal, avatar_url')
+      .select('height, weight, target_weight, avatar_url')
       .maybeSingle();
 
     if (error) {
@@ -480,15 +446,11 @@ const Profile = () => {
       setHeight(row.height != null ? String(row.height) : '');
       setWeight(syncedWeightStr || (row.weight != null ? String(row.weight) : ''));
       setTargetWeight(row.target_weight != null ? String(row.target_weight) : '');
-      setActivityLevel(row.activity_level ?? '');
-      setFitnessGoal(row.fitness_goal ?? '');
       setAvatarUrl(row.avatar_url ?? null);
     } else {
       setHeight(heightNum != null ? String(heightNum) : '');
       setWeight(syncedWeightStr || (weightNum != null ? String(weightNum) : ''));
       setTargetWeight(targetWeightNum != null ? String(targetWeightNum) : '');
-      setActivityLevel(activityLevel);
-      setFitnessGoal(fitnessGoal);
       setAvatarUrl(avatarUrl);
     }
 
@@ -570,6 +532,8 @@ const Profile = () => {
 
   const newPasswordOk = passwordMeetsPolicy(newPassword);
 
+  const passwordsMatch = newPassword === confirmPassword;
+
   const changePassword = async () => {
     if (!newPasswordOk) {
       toast({
@@ -579,12 +543,21 @@ const Profile = () => {
       });
       return;
     }
+    if (!passwordsMatch) {
+      toast({
+        title: 'Las contraseñas no coinciden',
+        variant: 'destructive',
+      });
+      return;
+    }
     setChangingPassword(true);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setChangingPassword(false);
     if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
     toast({ title: 'Contraseña actualizada' });
-    setNewPassword(''); setPasswordDialog(false);
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordDialog(false);
   };
 
   const handleConfirmLogout = useCallback(async () => {
@@ -1057,50 +1030,8 @@ const Profile = () => {
                 )}
               >
                 <Scale className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-                Ver gráfico e historial
+                Ver historial
               </Button>
-            </div>
-            <div className="col-span-2 space-y-1.5">
-              <label htmlFor="profile-activity-level" className="block text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                Nivel de actividad
-              </label>
-              <Select
-                value={profileActivitySelectValue(activityLevel)}
-                onValueChange={(v) => setActivityLevel(v === PROFILE_SELECT_UNSET ? '' : v)}
-              >
-                <SelectTrigger id="profile-activity-level" className={cn(profileFormSelectTriggerClass)}>
-                  <SelectValue placeholder="Elegir nivel" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={PROFILE_SELECT_UNSET} className="text-muted-foreground">
-                    Elegir nivel
-                  </SelectItem>
-                  {ACTIVITY_LEVEL_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="col-span-2 space-y-1.5">
-              <label htmlFor="profile-fitness-goal" className="block text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                Objetivo fitness
-              </label>
-              <Select
-                value={profileFitnessSelectValue(fitnessGoal)}
-                onValueChange={(v) => setFitnessGoal(v === PROFILE_SELECT_UNSET ? '' : v)}
-              >
-                <SelectTrigger id="profile-fitness-goal" className={cn(profileFormSelectTriggerClass)}>
-                  <SelectValue placeholder="Elegir objetivo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={PROFILE_SELECT_UNSET} className="text-muted-foreground">
-                    Elegir objetivo
-                  </SelectItem>
-                  {FITNESS_GOAL_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </div>
           {weightDiff !== null && (
@@ -1536,7 +1467,12 @@ const Profile = () => {
         open={passwordDialog}
         onOpenChange={(open) => {
           setPasswordDialog(open);
-          if (!open) setShowNewPassword(false);
+          if (!open) {
+            setShowNewPassword(false);
+            setShowConfirmPassword(false);
+            setNewPassword('');
+            setConfirmPassword('');
+          }
         }}
       >
         <DialogContent className={cn(modalSurfaceClass)}>
@@ -1563,10 +1499,29 @@ const Profile = () => {
                 {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+            <div className="relative">
+              <Input
+                type={showConfirmPassword ? 'text' : 'password'}
+                placeholder="Confirmar nueva contraseña"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={cn(editModalInputClass, 'pr-12')}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-zinc-200/80 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                aria-label={showConfirmPassword ? 'Ocultar confirmación de contraseña' : 'Mostrar confirmación de contraseña'}
+              >
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             <PasswordRequirementsList password={newPassword} />
             <Button
               onClick={() => void changePassword()}
-              disabled={changingPassword || !newPasswordOk}
+              disabled={changingPassword || !newPasswordOk || !passwordsMatch}
               className={cn('h-12', profileNeonButtonClass)}
             >
               {changingPassword ? 'Guardando...' : 'Actualizar contraseña'}

@@ -166,7 +166,7 @@ html:not(.dark):not([data-brand="pink"]) .text-primary {
 }
 
 html:not(.dark)[data-brand="pink"] .text-primary {
-  color: #db2777;
+  color: #ff007f;
 }
 
 /* Texto sobre botones bg-primary (neón sobre botón) — zinc-900 */
@@ -179,7 +179,7 @@ html:not(.dark):not([data-brand="pink"]) .border-primary {
 }
 
 html:not(.dark)[data-brand="pink"] .border-primary {
-  border-color: #db2777;
+  border-color: #ff007f;
 }
 
 html:not(.dark):not([data-brand="pink"]) .ring-primary {
@@ -188,6 +188,153 @@ html:not(.dark):not([data-brand="pink"]) .ring-primary {
 }
 
 html:not(.dark)[data-brand="pink"] .ring-primary {
-  --tw-ring-color: #db2777;
-  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(var(--tw-ring-width) + var(--tw-ring-offset-width)) #db2777;
+  --tw-ring-color: #ff007f;
+  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(var(--tw-ring-width) + var(--tw-ring-offset-width)) #ff007f;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────────
+ * Pestaña Gimnasio — Modo Rosa (`html[data-brand='pink']`):
+ * En Modo Día solo acentos #ff007f (sin fondos oscuros ni resplandores).
+ * ─────────────────────────────────────────────────────────────────────────────── */
+html[data-brand='pink'] {
+  --gym-fuchsia: #ff007f;
+}
+
+/* Switch Personal / Gimnasio: plano; Modo Día sin overrides de fondo */
+html[data-brand='pink'] .workout-gym-scope-tablist {
+  box-shadow: none !important;
+}
+
+html[data-brand='pink'] .workout-gym-scope-tablist > button[aria-selected='false'] {
+  color: hsl(var(--muted-foreground));
+}
+
+html[data-brand='pink'] .workout-gym-scope-tablist > button[aria-selected='true'] {
+  background-color: var(--gym-fuchsia) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+html[data-brand='pink'] .workout-gym-scope-tablist > button[aria-selected='true']:hover {
+  background-color: #e60072 !important;
+  filter: none !important;
+}
+
+html[data-brand='pink'] .workout-gym-scope-tablist > button {
+  box-shadow: none !important;
+}
+
+/* Pestañas Musculación / CrossFit / Funcional — plano en rosa */
+html[data-brand='pink'] .workout-modality-tabs {
+  box-shadow: none !important;
+}
+
+html[data-brand='pink'] .workout-modality-tabs > button {
+  box-shadow: none !important;
+}
+
+/* ── Grilla días 1–6 (Modo Día: sin glow; acento en borde / texto) ───────────── */
+html[data-brand='pink']:not(.dark) .workout-gym-day-cell:not(:disabled) {
+  border-color: rgba(255, 0, 127, 0.35) !important;
+  box-shadow: none !important;
+}
+
+html[data-brand='pink']:not(.dark) .workout-gym-day-cell--filled:not(:disabled) {
+  border-color: rgba(255, 0, 127, 0.45) !important;
+  box-shadow: none !important;
+}
+
+html[data-brand='pink'].dark .workout-gym-day-cell:not(:disabled) {
+  border-color: var(--gym-fuchsia) !important;
+  box-shadow: none !important;
+}
+
+/* Tarjeta seleccionada (visor / registro abierto): solo borde 2px en Modo Día */
+html[data-brand='pink']:not(.dark) .workout-gym-day-cell.workout-gym-day-cell--viewing:not(:disabled) {
+  border: 2px solid var(--gym-fuchsia) !important;
+  box-shadow: none !important;
+}
+
+html[data-brand='pink'].dark .workout-gym-day-cell.workout-gym-day-cell--viewing:not(:disabled) {
+  border: 2px solid var(--gym-fuchsia) !important;
+  box-shadow: none !important;
+}
+html[data-brand='pink'] .workout-gym-day-cell .text-primary {
+  color: var(--gym-fuchsia) !important;
+}
+
+html[data-brand='pink'] .workout-gym-day-cell--filled .workout-gym-day-status,
+html[data-brand='pink'] .workout-gym-day-status.text-emerald-700,
+html[data-brand='pink'].dark .workout-gym-day-cell--filled .workout-gym-day-status {
+  color: var(--gym-fuchsia) !important;
+}
+
+html[data-brand='pink'] .workout-gym-day-status.text-emerald-400 {
+  color: var(--gym-fuchsia) !important;
+}
+
+/* Botón principal del sheet — Registrar mi resultado */
+html[data-brand='pink'] button.workout-gym-register-cta {
+  background-color: var(--gym-fuchsia) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+}
+
+html[data-brand='pink'] button.workout-gym-register-cta:hover {
+  background-color: #ff1a8c !important;
+  color: #ffffff !important;
+}
+
+/* ── Ranking: fila «Vos» (plano) ─────────────────────────────────────────────── */
+html[data-brand='pink'] .workout-gym-lb-own {
+  border-color: rgba(255, 0, 127, 0.45) !important;
+  border-width: 1px;
+  box-shadow: none !important;
+}
+
+html[data-brand='pink'] .workout-gym-lb-own .workout-gym-lb-avatar {
+  border: 2px solid var(--gym-fuchsia);
+  box-shadow: none !important;
+}
+
+html[data-brand='pink'] .workout-gym-lb-own .text-primary {
+  color: var(--gym-fuchsia) !important;
+}
+
+/* ── Pizarra: badges AMRAP / EMOM / fases (fondo fucsia, texto blanco) ───────── */
+html[data-brand='pink'] .gym-routine-block-badge {
+  background-color: var(--gym-fuchsia) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.28) !important;
+}
+
+html[data-brand='pink'] .gym-routine-block-badge * {
+  color: #ffffff !important;
+}
+
+/* ── Instrucciones del coach: borde fucsia sutil; fondo hereda del componente ── */
+html[data-brand='pink']:not(.dark) .workout-coach-notes-panel {
+  border-color: rgba(255, 0, 127, 0.28) !important;
+  box-shadow: none !important;
+}
+
+html[data-brand='pink'].dark .workout-coach-notes-panel {
+  border-color: rgba(255, 0, 127, 0.42) !important;
+  box-shadow: none !important;
+}
+
+html[data-brand='pink']:not(.dark) .workout-coach-notes-panel > p:first-of-type {
+  color: var(--gym-fuchsia) !important;
+}
+
+html[data-brand='pink'].dark .workout-coach-notes-panel > p:first-of-type {
+  color: #ffc8e8 !important;
+}
+
+html[data-brand='pink'] .workout-coach-notes-panel > p.whitespace-pre-wrap {
+  color: hsl(var(--foreground)) !important;
 }

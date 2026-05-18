@@ -89,6 +89,7 @@ export async function upsertConditioningWorkoutLogFromDrafts(
       user_id: userId,
       workout_date: dateStr,
       modality,
+      gym_routine_id: null,
       total_time: deriveCrossfitTotalTimeColumn(d),
       target_time: null,
       wod_title: crossfitWodTitle(d) || null,
@@ -106,6 +107,7 @@ export async function upsertConditioningWorkoutLogFromDrafts(
       user_id: userId,
       workout_date: dateStr,
       modality,
+      gym_routine_id: null,
       total_time: draft.total_session_time.trim() || null,
       target_time: null,
       wod_title: null,
@@ -125,7 +127,7 @@ export async function upsertConditioningWorkoutLogFromDrafts(
 
   const { data, error } = await client
     .from('workout_logs')
-    .upsert(row, { onConflict: 'user_id,workout_date,modality' })
+    .upsert(row, { onConflict: 'user_id,workout_date,modality,gym_routine_id' })
     .select()
     .single();
 
@@ -250,7 +252,7 @@ export async function persistGymConditioningQuickResult(
 
   const { error } = await client
     .from('workout_logs')
-    .upsert(row, { onConflict: 'user_id,workout_date,modality' })
+    .upsert(row, { onConflict: 'user_id,workout_date,modality,gym_routine_id' })
     .select()
     .single();
 
@@ -289,7 +291,7 @@ export async function persistMusculacionGymRegistration(
 
   const { data: logRow, error: upsertErr } = await client
     .from('workout_logs')
-    .upsert(insertRow, { onConflict: 'user_id,workout_date,modality' })
+    .upsert(insertRow, { onConflict: 'user_id,workout_date,modality,gym_routine_id' })
     .select('id')
     .single();
 

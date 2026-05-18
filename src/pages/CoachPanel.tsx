@@ -252,11 +252,7 @@ const CoachPanel = () => {
 
   return (
     <div
-      className={cn(
-        'min-h-screen bg-white px-4 pb-8 pt-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50',
-        "[html[data-brand='pink']_&]:bg-gradient-to-b [html[data-brand='pink']_&]:from-zinc-950 [html[data-brand='pink']_&]:to-zinc-900",
-        "dark:[html[data-brand='pink']_&]:from-zinc-950 dark:[html[data-brand='pink']_&]:to-zinc-900",
-      )}
+      className="min-h-screen bg-white px-4 pb-8 pt-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50"
     >
       <div className="mx-auto max-w-lg space-y-6">
         <div className="flex items-center gap-3">
@@ -461,7 +457,7 @@ const CoachPanel = () => {
         <AlertDialogContent
           className={cn(
             'rounded-2xl border-zinc-200/80 bg-white dark:border-white/10 dark:bg-zinc-900',
-            "[html[data-brand='pink']_&]:border-pink-800/40 [html[data-brand='pink']_&]:bg-zinc-900",
+            "[html[data-brand='pink']_&]:border-[#ff007f]/35",
           )}
         >
           <AlertDialogHeader>

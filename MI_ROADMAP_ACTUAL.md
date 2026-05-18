@@ -1,207 +1,316 @@
 # MI_ROADMAP_ACTUAL — Inventario técnico (estado del repo)
 
-Documento de **control personal**: describe lo que el código ya implementa hoy (no es una lista de deseos). Rutas y archivos clave se citan para orientar futuras extensiones.
+Documento de **control personal**: radiografía del código **implementado hoy**, no backlog de producto. Las rutas bajo `src/` y migraciones Supabase se citan para orientar soporte y evolución.
 
 ---
 
-## 1. Módulos de Entrenamiento (lo que ya funciona)
+## 1. Entrenamiento: `Workout.tsx` y convivencia **Modo Personal** / **Modo Gimnasio**
 
-### 1.1 Pestañas de modalidad (`Musculación` · `CrossFit` · `Funcional`)
+### 1.1 Persistencia base y filtro por fecha (`workout_date`)
 
-- **Persistencia**: la modalidad activa se guarda en `localStorage` (`fitnesspana.workout.activeModalidad`) y se restaura al abrir la pantalla (`src/pages/Workout.tsx`, `src/lib/workoutModality.ts`).
-- **UI**: tres botones en `src/components/WorkoutModalityTabs.tsx` con IDs `musculacion` | `crossfit` | `funcional`.
-- **Comportamiento general**:
-  - **Musculación**: flujo “clásico” por día — calendario, **un `workout_log` por fecha**, ejercicios en `exercises` + series en `exercise_sets`, tarjetas `ExerciseCard`, formulario inline para añadir ejercicio (grupo muscular, nombre).
-  - **CrossFit**: panel único `CrossfitWodLogPanel` + bloques de movimientos adicionales debajo; persistencia en `workout_logs` con `details`/bloques derivados del borrador.
-  - **Funcional**: panel `FunctionalSessionLogPanel` con fases editables; mismo esquema de guardado condicionado vía `workout_logs`.
+- Todas las consultas principalistas usan fecha calendario **local** `YYYY-MM-DD` construido con año/mes/día del dispositivo (no `toISOString()` UTC) para evitar desfasajes: ver `formatLocalDateISO` en **`src/pages/Workout.tsx`**.
+- Ejercicios de musculación: tabla **`exercises`** filtrada por **`workout_date === dateStr`** y `user_id`.
+- Bloques Conditioning (CrossFit / Funcional): contenido proyectado desde **`workout_logs`** para el mismo día, según alcance Personal vs Gimnasio (ver más abajo).
+- Persistencia tipo upsert desde utilidades **`src/lib/persistWorkoutLogs.ts`** y flujos de guardado locales en `Workout.tsx`, siempre declarando **`onConflict: 'user_id,workout_date,modality,gym_routine_id'`** donde aplica una sola fila canónica.
 
-### 1.2 CrossFit — “tipos de timer / formato de WOD”
+### 1.2 Unicidad flexible: más de un resultado por día (gimnasio)
 
-Definido en `src/lib/crossfitWodDraft.ts` y seleccionable en `src/components/CrossfitWodLogPanel.tsx`.
+Migración **`supabase/migrations/20260517180000_workout_logs_unique_include_gym_routine.sql`**:
 
-Subtipos de WOD (`CrossfitWodSubtype`):
+| Antes | Ahora |
+|--------|--------|
+| Unicidad sólo sobre `(user_id, workout_date, modality)` | `UNIQUE NULLS NOT DISTINCT (user_id, workout_date, modality, gym_routine_id)` |
 
-| Subtipo | Rol |
-|--------|-----|
-| `amrap` | AMRAP por bloque con duración; puede existir tiempo global AMRAP y vueltas completadas. |
-| `emom` | Cada minuto en el minuto — tiempo EMOM total. |
-| `for_time` | A tiempo — `time_cap`, tiempo final, vueltas a completar. |
-| `classic_benchmark_tabata` | Clásico / benchmark / Tabata — tiempos objetivo vs tiempo real. |
+Interpretación práctica según código:
 
-Aparte: sección de **calentamiento / skill** (`warmup_skill`) fuera del subtipo principal del WOD. Los metadatos se proyectan a `block_sections` y el tiempo total del log se consolida en `deriveCrossfitTotalTimeColumn` (columna `total_time` del `workout_log` cuando aplica).
+- **`gym_routine_id IS NULL`**: máximo **un** log “personal” por usuario, día calendario y modalidad (`musculacion` \| `crossfit` \| `funcional`).
+- **`gym_routine_id` definido**: el mismo día puede tener **uno por rutina**, es decir un alumno registra resultado **aislado** por la combinación día + modalidad + id de rutina (`exercises`/detalles Conditioning enlazados a ese log donde corresponda).
 
-### 1.3 Funcional — estructura por fases
+Índices auxiliares y FK: ver **`supabase/migrations/20260528120000_gym_mode_polish.sql`** (columna **`gym_routine_id`** + índice parcial sobre rutina/fecha).
 
-Modelo en `src/lib/functionalSessionDraft.ts` y UI en `src/components/FunctionalSessionLogPanel.tsx`.
+### 1.3 Detección de contexto Coach / Alumno y visibilidad del switch
 
-- **Sesión**: nombre, tiempo total opcional, lista ordenada de **fases**.
-- **Tipo de fase** (`FunctionalPhaseType`): `warmup` · `main` · `core` · `cooldown`.
-- **Método de ejecución** (`FunctionalExecutionMethod`):
-  - `free` — nota / libre.
-  - `rounds_circuit` — cantidad de rondas.
-  - `time_intervals` — trabajo / descanso / rondas.
-  - `tabata` — nota Tabata (ej. intervalos 20″/10″).
+Implementado en el `useEffect` inicial de **`src/pages/Workout.tsx`** leyendo **`profiles`**:
 
-Las fases se serializan a `block_sections` con subtítulos legibles (`deriveFunctionalBlockSections`, p. ej. detalle Tabata para coach).
+| Campo / condición | Efecto |
+|-------------------|--------|
+| **`is_coach === true`** y `profiles.id` | El mismo usuario usa sus **`gym_modalities`** definidos en perfil como coach (`gymSourceCoachProfileId = myProfileId`). |
+| **`coach_id`** (alumno vinculado) | Obtiene etiquetas desde RPC **`get_linked_coach_gym`** y fuerza modalities permitidas mediante **`modalityIdsAllowedByGymLabels`**. |
 
-### 1.4 Biblioteca de ejercicios — guardado automático (upsert selectivo)
+Sólo si `coachCtxReady` y existe alumno-coach **o** el usuario es coach: **`showGymSwitch`** enseña pestañas **Personal** / **Gimnasio** y persiste alcance en `localStorage` (`fitnesspana.workout.scope`).
 
-Archivo central: `src/lib/exerciseLibrarySync.ts`.
+Si el alumno/coach pierde ese contexto, el estado fuerza **`workoutScope = 'personal'`**.
 
-- **`insertMissingExerciseLibraryEntries`**: lee nombres ya existentes en `exercises_library` para el usuario e **inserta solo los que faltan** (comparación case-insensitive). Asigna categoría y etiquetas de modalidad vía `modalityTagsForLibraryCategory` / `exerciseLibraryNaming.ts`.
-- **Cuándo corre** (no es un demonio en background):
-  - Tras **guardar** un bloque CrossFit o Funcional desde `Workout.tsx` (`saveConditioningWithAutoLibrary`): primero persiste el entrenamiento, luego recolecta nombres “manuales” del borrador y llama al insert faltante con grupo `'Otros'` y categoría según modalidad.
-  - Tras **confirmar** un ejercicio nuevo en musculación: insert en biblioteca con el **grupo muscular** elegido.
+### 1.4 Carga de rutinas públicas (`gym_routines`)
 
-### 1.5 Autocompletado que lee la base (`ExerciseNameSuggestInput`)
+En modo Gimnasio, `Workout.tsx` fetchea **`gym_routines`** con:
 
-`src/components/ExerciseNameSuggestInput.tsx`:
+- **`coach_id = gymSourceCoachProfileId`** (`profiles.id` del coach dueño).
+- **`modality`** igual a la pestaña Musculación / CrossFit / Funcional activa.
+- Orden **`day_number`**.
 
-- Debounce **~180 ms**.
-- Requiere usuario logueado y texto no vacío.
-- **Dos consultas** en paralelo a `exercises_library`: primero la categoría alineada con la modalidad actual (`modalityToLibraryCategory`), luego el resto; `ilike` sobre `name`, `limit` 8+8, fusión priorizando categoría (**solo lectura**, no escribe al elegir una sugerencia).
+Contrato BD (creación inicial): **`supabase/migrations/20260527120000_gym_routines.sql`**; pulido día 6 máx: **`supabase/migrations/20260528120000_gym_mode_polish.sql`** (rutina **por coach + modalidad + día 1–6**, columna **`workout_data` JSON**, **`coach_notes`** visible alumno).
 
-### 1.6 Timer independiente (no confundir con CrossFit)
+### 1.5 Grilla semanal (UX)
 
-La ruta **`/timer`** (`src/pages/Timer.tsx`) es un **interval timer** tipo Tabata/rounds (fases prep / trabajo / descanso) con **presets en `localStorage`**, audio (`public/sounds/Boxeo.mp3`) y beeps — **no** persiste el WOD en `workout_logs` desde este archivo.
+- Celas **“Día 1 … Día 6”**: clases **`workout-gym-day-cell`**, **`workout-gym-day-cell--filled`**, **`workout-gym-day-cell--viewing`** en `Workout.tsx` + estilos **Pink Mode** en **`src/index.css`** (bloque `html[data-brand='pink']` · grilla gym).
+- `gymRoutineLogById`: mapa **`gym_routine_id` → último log** cargado ese día desde `workout_logs` ya filtrados por alcance Gym.
+- Sheets: visor rutina (**`GymRoutineBlockViewer`**, **`Sheet`**), ranking (**`GymRoutineLeaderboard`**), alta/edición rápida (**`GymRoutineRegisterSheet`**).
+- Al cambiar **fecha seleccionada** (`dateStr`) se cierran viewer/registro/reportes para evitar datos cruzados con otro día.
 
----
+### 1.6 Alcance Personal: filtro en memoria
 
-## 2. Módulo Cardio & Salud
+Tras cargar **`workout_logs`** del día desde Supabase (`select *` mismo `user_id` + `workout_date`), el código **parte** entre:
 
-### 2.1 Cardio — registro en carrera
+```text
+personal  → sólo logs con gym_routine_id == null  
+gimnasio  → sólo logs con gym_routine_id != null
+```
 
-`src/pages/Cardio.tsx`:
+Los paneles Conditioning y drafts (`crossfitDraft` / `functionalSessionDraft`) se hidratan a partir del subconjunto activo — ver bucle **`fetchExercises`** en **`Workout.tsx`**.
 
-- Geolocalización en vivo, fases `idle` | `active` | `paused`, cuenta atrás, distancia, ritmo, posible **FC vía Bluetooth** (Web Bluetooth, Chrome/Edge).
-- Al finalizar: insert en **`activities`** con ruta GPS (`route_data`), parciales (`splits`), calorías/steps estimados, desnivel si hay altitud en puntos, `avg_heart_rate` opcional.
-- Historial: lista con mini-mapa; enlace al detalle **`/cardio/:activityId`** (legacy: **`/actividad/:id`**).
+### 1.7 Pestañas de modalidad (además del switch Personal/Gimnasio)
 
-### 2.2 Detalle de actividad cardio
+- Persistencia **`fitnesspana.workout.activeModalidad`** como ya documentado (**`src/lib/workoutModality.ts`**, componente **`src/components/WorkoutModalityTabs.tsx`**).
+- En modo Gym, si la modalidad activa ya no está en las permitidas por el gym, **`useEffect`** reasigna a la primera modality permitida.
 
-`src/pages/ActivityDetail.tsx`:
+### 1.8 CrossFit y Funcional — subtipos y persistencia general
 
-- Carga **`activities`** por id; verifica `user_id`.
-- **Mapa** con polilínea, heat de ritmo, hitos por km; **gráfico de rendimiento** (ritmo + elevación si hay datos); **parciales por km**; calorías/steps (DB o estimados); **compartir** (`ShareSticker`); edición de **título**; **borrado** y vuelta a `/cardio`.
-- Estados: carga (spinner), error de red/Supabase, “actividad no encontrada”.
+Igual alcance técnico descrito antes en esta code-base:
 
-### 2.3 Nutrición
+- **`src/lib/crossfitWodDraft.ts`**, **`src/components/CrossfitWodLogPanel.tsx`** (`CrossfitWodSubtype`: AMRAP, EMOM, for_time, classic_benchmark_tabata; warm-up separado).
+- **`src/lib/functionalSessionDraft.ts`**, **`src/components/FunctionalSessionLogPanel.tsx`** (fases, métodos rounds_circuit · time_intervals · tabata, etc.).
+- **`src/lib/exerciseLibrarySync.ts`**: escritura diferida tras guardar Conditioning o confirmar alta musculación.
+- **`src/components/ExerciseNameSuggestInput.tsx`**: sugerencias en dos consultas paralelas a **`exercises_library`**.
 
-`src/pages/Nutrition.tsx` + utilidades `src/lib/nutritionDay.ts`, `src/lib/calories.ts`, `src/lib/openFoodFacts.ts`:
-
-- Objetivos a partir de **perfil** (peso, altura, edad, sexo): BMR/TDEE aproximado, proteína, macros, meta de vasos de agua.
-- Pestañas típicas: **diario del día** (anillas / totales) y **alimentos personalizados** (`custom_foods`).
-- **`nutrition_logs`**: consumos del día local (rango `consumed_at`).
-- **`hydration_logs`**: fila por **día calendario** (`log_date`) — actualizar vasos o insertar.
-- **`recovery_logs`**: calidad de sueño / energía del día.
-- **API externa**: búsqueda nutricional vía **Open Food Facts** y flujo de **código de barras** (`src/components/NutritionBarcodeScanner.tsx`).
-
-### 2.4 Registros diarios (agua, pasos, peso, “fotos”)
-
-| Dato | Dónde en la app | Persistencia |
-|------|-----------------|--------------|
-| **Agua (vasos)** | Nutrición + Perfil (resumen del día) + `DailyReportSheet` | `hydration_logs` |
-| **Pasos** | Perfil (meta `profiles.step_goal`, log del día) | `step_logs` + `profiles.step_goal` |
-| **Peso / objetivo** | Perfil, formulario “Datos & objetivos” | Campos en **`profiles`** (`weight`, `target_weight`) — **no** hay historial diario de peso dedicado en UI |
-| **Avatar / foto de perfil** | Perfil — recorte con `AvatarCropModal`, subida a storage | Bucket **`avatars`**, URL en **`profiles.avatar_url`** |
-
-`src/components/DailyReportSheet.tsx` consolida por fecha: `profiles`, `food_entries`, `nutrition_logs`, `hydration_logs`, `recovery_logs`, `step_logs`.
-
-**Nota de esquema**: en `src/integrations/supabase/types.ts` existen tablas como **`body_measurements`** y **`progress_photos`**, pero **no** hay pantallas en `src/` que las usen (el borrado admin sí las limpia — ver §3.2).
+*(La numeración técnica de subtipos y columnas consolidadas como `deriveCrossfitTotalTimeColumn` siguen válidas desde el mismo código mencionado en versiones previas de este archivo.)*
 
 ---
 
-## 3. Infraestructura y Seguridad
+## 2. Panel Coach (`/coach`), rutinas BD y Biblioteca de plantillas
 
-### 3.1 Auth (Supabase) y niveles de acceso
+### 2.1 Ruta y acceso
 
-- **Cliente**: `src/integrations/supabase/client.ts` + **`src/hooks/useAuth.tsx`**.
-- **Sesión**: `onAuthStateChange` + `getSession()` inicial; estado `user` / `loading`.
-- **Alta**: `signUp` con metadatos básicos y `emailRedirectTo` hacia **`/verificado`**; comentarios indican que el **perfil** lo crea trigger en BD (`handle_new_user`), no un insert directo desde el cliente.
-- **Admin a nivel app** (`isAdmin`): lectura de **`profiles.is_admin`** por usuario (`refreshIsAdmin`).
+- **`src/App.tsx`**: **`Route path="/coach"`** dentro de **`CoachRoute`**.
+- **`CoachRoute`**: consulta **`profiles.is_coach`**; si es falso → redirección a **`/`**; mientras tanto `null`.
+- **`src/components/BottomNav.tsx`** **no muestra** la barra en **`/coach`** (igual que admin y detalle cardio).
 
-**Ruta `/admin`** (`src/App.tsx` — `AdminRoute`):
+Archivo pantalla principal: **`src/pages/CoachPanel.tsx`**.
 
-- Exige usuario autenticado, **`is_admin === true`** en perfil **y** email fijo **`ADMIN_EMAIL`** (allowlist en código). Es decir: **doble condición** para abrir el panel en el SPA.
+### 2.2 Dashboard coach (alumnos + “pizarra semanal”)
 
-**Funciones sensibles** (p. ej. borrado de cuenta vía Edge Function): validan **`profiles.is_admin`** del actor con el JWT, **sin** el filtro de email del front.
+- Lista alumnos: RPC **`get_coach_students`**; columnas de actividad reutilizan utilidades **`src/lib/lastActivityLabel.ts`** (puntos estado / “● En línea” en últimos ~3 min vía **`ADMIN_ONLINE_WINDOW_MS`**).
+- **Nombre de gimnasio** y modalities: campos **`gym_name`**, **`gym_modalities`** en **`profiles`**.
+- Rutinas cargadas igual que lado alumno: **`gym_routines`** donde **`coach_id === profiles.id`** del coach auth.
+- Alta/edición día: **`GymRoutineCoachDialog`** (**`src/components/GymRoutineCoachDialog.tsx`**): upsert a **`gym_routines`** (incl. **`coach_notes`**, **`workout_data`** JSON con payload tipado **`GymRoutineWorkoutPayload`** en **`src/lib/gymRoutineWorkoutData.ts`**).
 
-### 3.2 Edge Function `admin-delete-user` — limpieza manual ordenada
+### 2.3 Biblioteca de plantillas del coach (`workout_templates`)
 
-Archivo: **`supabase/functions/admin-delete-user/index.ts`**.
+Pantalla integra **`CoachTemplatePickerSheet`** (**`src/components/CoachTemplatePickerSheet.tsx`**):
 
-- Valida método POST, JWT en `Authorization`, UUID de `target_user_id`.
-- Con cliente **anon** + JWT del llamador: comprueba que el actor tenga **`is_admin`**.
-- Impide borrar **uno mismo** o un usuario con **`is_admin`** en destino.
-- Con **service role**: elimina filas **tabla por tabla** en orden fijo (FKs), luego **`auth.admin.deleteUser`**.
+| Columna / concepto | Uso |
+|--------------------|-----|
+| **`routine_category`** | Valores válidos **`musculacion` \| `crossfit` \| `funcional`** (constraint en migración **`20260515103000_workout_templates_conditioning.sql`**). |
+| **`structured_payload`** | JSON (snapshot del WOD/session o rutina gym serializada para rehidratar el editor). |
+| **`coach_notes`** | Migración **`20260531120000_workout_templates_coach_notes.sql`**; visible al elegir plantilla y al copiar a rutina (`CoachTemplatePickerSheet` + dialogs). |
 
-Orden aproximado de tablas:  
-`exercise_sets` → `exercises` → `workout_logs` → `nutrition_logs` → `exercises_library` → `personal_records` → `body_measurements` → `step_logs` → `hydration_logs` → `recovery_logs` → `food_entries` → `custom_foods` → `template_exercises` → `workout_templates` → `activities` → `progress_photos` → **`profiles`**.
+Inserción programática cuando el coach guarda rutina gym como plantilla reusable: **`src/lib/coachWorkoutTemplates.ts`** → **`insertCoachGymSnapshotTemplate`** (`user_id` = auth.uid del coach, categoría inferida desde modalidad).
 
-Errores por tabla se loguean con `console.warn` y la función **continúa** (borrado “best effort” por tabla).
+*(Las plantillas de usuario “Mis rutinas” del flujo alumno siguen pasando también por **`TemplatesSheet.tsx`** usando las mismas columnas.)*
 
-### 3.3 Temas: Día / Noche / VIP Rosa
+### 2.4 Desvincular alumno
 
-Son **dos capas** que conviven:
-
-1. **Modo claro/oscuro (UI global)** — `src/hooks/useTheme.tsx` + `ThemeProvider` en `App.tsx`:
-   - Valores: `light` | `dark` | `system` (persistido en `localStorage` `pana_theme`).
-   - Aplica clase `dark` en `document.documentElement` y `colorScheme`.
-
-2. **Marca neón / VIP Rosa** — `src/lib/brandTheme.ts` + **`BrandThemeApplier`** en `App.tsx`:
-   - Lee **`profiles.theme`** (`default` vs `pink`) y setea `data-brand` + variables CSS (`--brand-color`, etc.).
-   - El admin puede forzar tema en otros usuarios vía RPC `set_user_theme` (ver §4).
-
-La app combina **dark/light** con **default/pink** (muchos componentes usan selectores del estilo `[html[data-brand='pink']_&]`).
-
-### 3.4 Suscripción y paywall
-
-- **`SubscriptionGuard`** en `src/App.tsx`: mientras `useSubscriptionStatus` está en `loading`, no renderiza hijos; si `expired`, redirige a **`/paywall`**.
-- **`useSubscriptionStatus.tsx`**: los **admins** saltan el paywall (estado premium simulado); resto: trial (~7 días desde registro), premium con expiración, testers, o expirado.
+- Confirmación **`AlertDialog`**; RPC **`coach_remove_student`** (`CoachPanel.tsx`).
 
 ---
 
-## 4. Panel de Administración (`/admin`)
+## 3. Ranking (leaderboard) aislado por “gym” del coach
 
-Archivo principal: **`src/pages/AdminPanel.tsx`** (acceso vía `AdminRoute`).
+### 3.1 Componente frontal
 
-Herramientas actuales:
+**`src/components/GymRoutineLeaderboard.tsx`**:
 
-| Función | Descripción técnica |
-|--------|----------------------|
-| **Directorio de usuarios** | RPC **`admin_user_directory`**; si faltan campos de suscripción, hay **fallback** con lectura directa a `profiles` (código advierte con `console.warn` si el RPC no devuelve todo). |
-| **Estadísticas (cards)** | **Totales** (filas), **Hoy** (registros cuyo día local de alta = hoy), **Activos** (admins siempre; testers; premium con `subscription_expires_at` o legacy `premium_until` vigente). |
-| **Búsqueda** | Filtro local por **nombre** o **email**. |
-| **Orden por actividad** | Ciclo: default → última actividad reciente → más tiempo sin entrar (`last_active_at`, con utilidades `src/lib/lastActivityLabel.ts`). |
-| **“En línea”** | Punto/etiqueta según `last_active_at` dentro de **`ADMIN_ONLINE_WINDOW_MS` (3 minutos)**. |
-| **Roles de suscripción** | Dropdown **Free / Premium / Tester** → RPC **`set_user_subscription_role`**. |
-| **Tema VIP** | Botón que alterna **`pink` / `default`** en otro usuario → RPC **`set_user_theme`**; si el objetivo sos vos, llama **`applyBrandTheme`** al momento. |
-| **Borrado de cuenta** | Confirmación → **`supabase.functions.invoke('admin-delete-user')`**; no disponible para **tu** usuario ni para filas **admin**. |
-| **Heartbeat** | Los usuarios actualizan **`profiles.last_active_at`** periódicamente vía `ProfileLastActivePing` (aprox. cada 2 min con sesión). |
+- Visible sólo modalidad **`crossfit`** o **`funcional`** (Musculación no lista ranking desde este widget).
+- RPC **`get_gym_routine_leaderboard`** pasando **`p_gym_routine_id`** y **`p_workout_date`** (misma fecha local soberbia que usa `Workout.tsx`).
+- Orden/visualización tras **`sortGymLeaderboardRows`** y deduplicación “mejor fila por usuario”: **`src/lib/gymRoutineQuickResult.ts`**.
+- Copy UX: ranking del día entre quienes comparten rutina/coach (**texto literal en UI**).
 
----
+### 3.2 Aislamiento en base de datos (`SECURITY DEFINER`)
 
-## 5. Detalles de pulido (UI/UX)
+Implementación oficial: función en **`supabase/migrations/20260528120000_gym_mode_polish.sql`**:
 
-- **BottomNav** (`src/components/BottomNav.tsx`): fija abajo en la mayoría de rutas; **oculta** en **`/actividad/*`**, **`/cardio/*`** (detalle bajo `/cardio/<id>`), y **`/admin`**. También la barra principal del `App` no muestra nav en **`/paywall`**, **`/verificado`**, **`/terminos`**.
-- **Carga global**: mientras `useAuth().loading`, **`AppRoutes` devuelve `null`** (pantalla vacía hasta hidratar sesión).
-- **Carga suscripción**: `SubscriptionGuard` con `status === 'loading'` → `null`.
-- **Rutas protegidas**: `ProtectedRoute` con `loading` → `null`.
-- **Cardio guardando carrera**: overlay fullscreen “Guardando tu actividad…”.
-- **Perfil / Nutrición**: combinación de skeletons, toasts (`use-toast`) y hojas modales (`DailyReportSheet`, PRs, plantillas).
-- **Accesibilidad menor**: aria-labels en nav admin, botones de tema, etc.
+1. Obtiene **`v_coach = gym_routines.coach_id`** de la rutina solicitada.
+2. Comprueba que **`auth.uid()`** corresponda a perfil alumno (**`profiles.coach_id = v_coach`**) **o** al propio coach (**`profiles.id = v_coach`**); si no → excepción **forbidden**.
+3. **`RETURN QUERY`** filtra **`workout_logs`** con **`gym_routine_id`** y fecha exactos, modalidad Conditioning, y **`profiles`** pegado donde **`coach_id`** del participante coincide con **`v_coach`** **o** el participante es el coach (`profiles.id = v_coach`).
+
+Resultado: la competencia queda **acotada al “grupo coach” derivado del `coach_id`** de esa rutina, sin mezcla de otros gyms.
 
 ---
 
-## 6. Pendientes técnicos (detectados en código)
+## 4. **Timer.tsx** (`/timer`) — UI modernizada (lógica Tabata preservada)
 
-1. **Notificaciones persistentes de carrera (Service Worker)** en `Cardio.tsx`: imports y efectos **comentados** con nota *“re-enable before App Store launch”* — hoy no hay tick/stop al SW.
-2. **Tablas `body_measurements` / `progress_photos`**: existen en tipos y en la Edge Function de borrado, **sin** flujo de usuario en `src/` (posible deuda de producto o migración futura).
-3. **Coherencia Admin SPA vs API**: el panel solo abre con **email permitido + `is_admin`**, pero otras rutas podrían usar solo `is_admin`; la Edge Function usa solo **DB**. Documentar quién puede invocar qué.
-4. **`admin_user_directory`**: el cliente asume distintas formas de columnas (`user_id` vs `id`) y puede **loguear advertencias** en consola — conviene alinear el contrato del RPC en Supabase y limpiar logs de depuración (`console.log` con emoji en cargas).
-5. **Duplicación de caminos de nutrición**: `nutrition_logs` vs **`food_entries`** en Perfil/DailyReport — Perfil agrega ambos para “hoy”; Nutrición se centra en `nutrition_logs` + custom foods. Revisión futura de unificación.
-6. **Peso corporal**: un solo valor en `profiles`, no serie temporal en UI (aunque la BD podría soportar más modelo).
+**`src/pages/Timer.tsx`** (independiente de `workout_logs`; presets en **`localStorage`** `pana_arena_presets_v1`):
+
+| Aspecto | Comportamiento en código actual |
+|---------|---------------------------------|
+| Fases temporales | `prep` · `work` · `rest` · `idle` · `done` con interval `setInterval` 1 Hz (no alterado conceptualmente por la UI). |
+| Colores de fondo pantalla completa | Pausado → **`#DC2626`**; Prep → **`#FACC15`**; Work → **`var(--brand-color)`**; Rest → **`#38BDF8`**; Idle/done → `hsl(var(--background))`. |
+| Estado principal (titular grande, mayúsculas) | Prep / Work / Rest con copys **PREPARATE** / **¡A ENTRENAR!** / **DESCANSÁ**; si **`paused`** en fase activa → siempre **`EN PAUSA`** (**`text-white`**) sustituye cualquier otro mensaje. |
+| Digitos tiempo | **`font-black`**, **`tabular-nums`**, escala **`clamp`** grande; tinte dígitos coherentes por fase (incluido modo pausa sobre rojo). |
+| Badge | **RONDA n / total** tipo pill tras el reloj; estado final **COMPLETADO**. |
+| Controles Play/Pausa | Botón disco **blanco**, iconos **`text-[color:var(--brand-color)]`** (variable de marca aplicada desde **`applyBrandTheme`**), halo **`shadow-white/20`** + **`shadow-lg`**; **`Reiniciar`** secundario tipo pill textual. |
+| Audio | Sintético cuenta atrás (`AudioContext` compartido) + **`public/sounds/Boxeo.mp3`** entre fases; priming táctil en primer play. |
 
 ---
 
-*Generado a partir del código en el workspace; actualizá este archivo cuando cambie el comportamiento real de la app.*
+## 5. Perfil — cambio de contraseña (`src/pages/Profile.tsx`)
+
+Modal **“Cambiar contraseña”** (componentes **`Dialog`**, **`Input`**) exige:
+
+- Campo **nueva contraseña** (`newPassword`).
+- Segundo campo **confirmar** (`confirmPassword`) sincronizado.
+- Estado **`passwordsMatch = newPassword === confirmPassword`**; si falsas → **`toast`** con título tipo *Las contraseñas no coinciden* sin llamar Supabase.
+- Políticas de complejidad: **`passwordMeetsPolicy`** (**`src/lib/passwordPolicy.ts`**) renderizadas como **`PasswordRequirementsList`** en el mismo diálogo.
+- **`disabled`** en el botón **Actualizar contraseña** si `!passwordsMatch` ó `!newPasswordOk` ó `changingPassword`.
+- Spinner **`Loader2 animate-spin`** durante **`supabase.auth.updateUser({ password })`**.
+
+Esta UX es una **capa cliente** sobre Supabase Auth; no reemplaza la política de contraseña del proveedor configurada en el proyecto.
+
+---
+
+## 6. Identidad **Pink Mode** (`data-brand=pink`)
+
+### 6.1 Aplicación de variables desde React
+
+**`src/lib/brandTheme.ts`**: función **`applyBrandTheme`** al hidratar perfil (**`BrandThemeApplier`** en **`src/App.tsx`**) establece:
+
+- `document.documentElement.dataset.brand === 'pink' | implícito default`
+- clase **`pink-mode`** sólo cuando el tema VIP es rosado.
+- Overrides de **`--brand-color`**, **`--primary`**, glows (`--brand-glow*`).
+
+### 6.2 CSS puro y convivencia con Light / Dark
+
+**`src/index.css`**:
+
+| Mecánica | Descripción |
+|----------|-------------|
+| **Modo día** acentos legibles sobre blanco | Reglas **`html:not(.dark):not([data-brand="pink"]) .text-primary`** (verde `green-700`) vs **`html:not(.dark)[data-brand="pink"] .text-primary`** (rosa `#ff007f`). Rings/borders paralelos sin tocar **`--card`/`--background`**. |
+| **Bloque gym rosa VIP** | Bajo **`html[data-brand='pink']`** (usando comillas aptas también en algunos tokens Tailwind dentro de JSX como `[html[data-brand='pink']_&]`), estiliza **solo** overlays de marca: **`workout-gym-scope-tablist`**, **`workout-modality-tabs`**, celdas **`workout-gym-day-*`**, CTA registrar, ranking **`workout-gym-lb-own`**, badges pizarra **`.gym-routine-block-badge`**, **`workout-coach-notes-panel`**. |
+
+Resultado práctico: **Light/Dark** siguen aplicados desde **`ThemeProvider`** (clase `dark` global); Pink **solo reemplaza tintes de marca** donde el equipo colocó selectores conscientes (`[data-brand]` + clases nominadas tipo `workout-gym-*`) — **los fondos sistema (`--background`, `--card`) no se aplastan por el VIP rosa.**
+
+---
+
+## 7. Cardio y salud (resumen)
+
+| Área | Archivos / tabla |
+|------|-------------------|
+| Corrida en vivo + guardado GPX | **`src/pages/Cardio.tsx`** · **`activities`** |
+| Detalle trayecto compartibles | **`src/pages/ActivityDetail.tsx`** |
+| Nutrición y diario consumo hidratación recuperación pasos consolidado DailyReportSheet | **`src/pages/Nutrition.tsx`**, utilidades **`src/lib/nutritionDay.ts`**, **`src/components/DailyReportSheet.tsx`**, **`food_entries`** / **`nutrition_logs`** / **`hydration_logs`** / **`recovery_logs`** / **`step_logs`** |
+
+**Cardio overlay guardado**: bloque JSX con texto *“Guardando tu actividad…”* + **spinner Tailwind** (`animate-spin` + bordes `border-primary`).
+
+---
+
+## 8. Infraestructura, Auth, Admin, suscripción
+
+### 8.1 Auth y guardas
+
+- Cliente Supabase **`src/integrations/supabase/client.ts`**, hook **`src/hooks/useAuth.tsx`**.
+- Rutas protegidas **`ProtectedRoute`**, paywall **`SubscriptionGuard`**, trial/premium en **`src/hooks/useSubscriptionStatus.tsx`** (admins simulan premium).
+- Panel admin **`AdminRoute`**: doble condición email allowlist + **`is_admin`** (`App.tsx`).
+
+### 8.2 Edge Function borrado usuario
+
+**`supabase/functions/admin-delete-user/index.ts`**: borrado **best-effort** secuencial sobre tablas con columna **`user_id`** (orden fijo en código: `exercise_sets` → `exercises` → `workout_logs` → `nutrition_logs` → `exercises_library` → `personal_records` → `weight_logs` → `body_measurements` → `step_logs` → `hydration_logs` → `recovery_logs` → `food_entries` → `custom_foods` → `template_exercises` → **`workout_templates`** → `activities` → `progress_photos` → **`profiles`**) y luego **`auth.admin.deleteUser`**. **`gym_routines`** no aparece en ese array (vínculo principal al coach vía **`profiles.id`** / políticas RLS); revisar impacto si el coach se da de baja desde producto.
+
+### 8.3 Temas y BottomNav (ocultación rutas)
+
+- **`src/hooks/useTheme.tsx`**: `light` \| `dark` \| `system` · `localStorage` `pana_theme`.
+- **`BottomNav`**: oculta en `/actividad/*`, `/cardio/<id>`, `/admin`, **`/coach`**, y el layout raíz evita nav en paywall/verificado/términos (ver `App.tsx`).
+
+---
+
+## 9. Panel Admin (`/admin`)
+
+**`src/pages/AdminPanel.tsx`**: sin cambio funcional de la versión previa inventariada aquí salvo evoluciones puntuales de UI — siguen vigentes **RPC directory**, **heartbeat** `profiles.last_active_at`, **themes** **`set_user_theme`**, **`set_user_subscription_role`**, invocaciones Edge **`admin-delete-user`** (detalle tabular similar al documento anterior; actualizar sólo cuando exista diff real en ese archivo).
+
+---
+
+## 10. Inventario de **UI**, **UX** y **Animaciones**
+
+Este apartado existe para mantener coherentes futuros rediseños: la app usa **principalmente Tailwind + Radix primitives envueltos en shadcn**, sin motor de navegación animado tipo Framer a nivel rutas.
+
+### 10.1 Estándar tecnológico
+
+| Pieza | Origen código |
+|-------|---------------|
+| Primitivas accesibles (focus trap, escape, portals) | **Radix** (`@radix-ui/react-dialog`, etc.) como en **`src/components/ui/dialog.tsx`** y **`src/components/ui/sheet.tsx`** (el Sheet está implementado sobre **Radix Dialog** también). |
+| Estilización | **Tailwind** + **`tailwind-merge`/`cn`** en casi todas las vistas. |
+| Variantes declarativas (botón, navegación) | **class-variance-authority (`cva`)** en algunos primitives (`sheet.tsx`). |
+| Plugins animación entrada/salida | Utilidades **`data-[state=open]:animate-in`**, **`slide-in-from-*`**, **`fade-in`** provistas habitualmente por el preset **tailwindcss-animate** (dependencia estándar del stack shadcn). |
+
+### 10.2 Hojas modales y diálogos
+
+| Patrón | Archivo | Comportamiento observado |
+|--------|---------|--------------------------|
+| **Dialog centrado** | `ui/dialog.tsx` | Overlay `bg-black/80` con **fade**; contenido **zoom + slide** leve (`zoom-in-95`, `slide-in-from-left-1/2`, `slide-in-from-top-[48%]`, `duration-200`). |
+| **Sheet lateral / bottom** | `ui/sheet.tsx` | Variantes `side`: **right** (default), **left**, **top**, **bottom** con slides `slide-in-from-*` / `slide-out-to-*`, **duration** 300 ms cierre / 500 ms apertura; overlay idéntico al Dialog. |
+| Uso en producto | Varios | Ej.: **`DailyReportSheet`**, **`GymRoutineRegisterSheet`**, **`CoachTemplatePickerSheet`**, modales configuración **`Timer.tsx`**. |
+
+Las animaciones están **del lado del contenido montado**, no hay transiciones de página SPA entre vistas hermanas.
+
+### 10.3 Navegación inferior (`BottomNav`)
+
+**`src/components/BottomNav.tsx`**:
+
+- **No** existe transición declarada sobre `Routes`/`Outlet` (`react-router-dom` muestra nueva vista instantánea).
+- Micro-interacciones en cada tab: **`transition-all duration-300`**.
+- Ítem activo: **`scale-110`**, fondo **`bg-primary/10`**, icono tamaño aumentado **`h-6 w-6`** vs `h-5 w-5` inactivo, **stroke más grueso** activo (**`strokeWidth`** 2.5 vs 1.8), color **`text-primary`**, halo inline **`style={{ boxShadow: '0 0 12px var(--brand-glow-sm)' }}`** sólo cuando activo.
+- Pulso físico táctil: **`active:scale-90`** en el `<button>` contenedor tab.
+
+Patrón reutilizable también en otros botones grandes: combinación **`active:scale-95`** / **`active:scale-[0.96]`**, **`transition-all duration-300`**.
+
+### 10.4 Micro-interacciones frecuentes (Tailwind)
+
+Clases vistas de forma repetida en la app fitness:
+
+```text
+transition-all duration-200|300
+hover:brightness-[1.0x]
+hover:bg-accent hover:text-accent-foreground
+active:scale-90 active:scale-95 active:scale-[0.96]
+active:opacity-90 / active:brightness
+drop-shadow aplicado a elementos neón donde se busca halo controlado
+```
+
+Muchas tarjetas del feed entrenamiento usan también **bordes semitransparentes** y **shadow-sm** coherente con tokens `bg-card` / `border-border`.
+
+### 10.5 Estados de carga
+
+| Tipo | Dónde |
+|------|-------|
+| **Skeleton** genérico | **`src/components/ui/skeleton.tsx`** — `animate-pulse` implícito de la clase base. Usos: **`AdminPanel.tsx`**, **`CoachPanel.tsx`**, **`WeightEvolutionSheet.tsx`**, menú sidebar (`sidebar.tsx`). |
+| **Spinner Lucide** | **`Loader2` + `animate-spin`** en **`Profile.tsx`**, **`AvatarCropModal.tsx`**, **`NutritionBarcodeScanner.tsx`**, etc. |
+| **Pantalla vacía global** | `AppRoutes` retorna `null` mientras `useAuth().loading` o suscripción `loading` (sin skeleton explícito — negro “flash” mínimo). |
+| **Cardio post-carrera** | Overlay circular border spinner (ver §7). |
+| **Leaderboard gym** | Texto *“Cargando…”* simple (no skeleton) en **`GymRoutineLeaderboard.tsx`**. |
+
+### 10.6 Toasts y feedback no animado
+
+**`use-toast`** / componente **`Toaster`** (`src/components/ui/toaster.tsx`) para confirmaciones y errores de formularios (perfil, coach, guardados).
+
+---
+
+## 11. Pendientes técnicos (observados en código)
+
+1. **Service Worker notificaciones carrera** en `Cardio.tsx`: lógica comentada con nota de re-habilitar antes de release app store.
+2. **Tablas `body_measurements` / `progress_photos`**: presentes en tipos y limpieza admin; **sin** flujo usuario dedicado en `src/pages` (posible deuda).
+3. **Coherencia Admin SPA vs Edge**: panel admin exige email + flag; otras APIs podrían asumir sólo `is_admin` — documentar invocaciones sensibles al extender permisos.
+4. **RPC `admin_user_directory`**: resiliente a formas de columnas; si el contrato estabiliza, limpiar `console.warn` residual.
+5. **Nutrición duplicando fuentes día** (`nutrition_logs` vs `food_entries`): consolidaciones en Perfil siguen coexistiendo — eventual unificación modelo producto.
+
+---
+
+*Actualizado desde el contenido efectivo del repositorio a **mayo de 2026**. Modificar esta sección únicamente cuando el comportamiento en código cambie de forma observable.*

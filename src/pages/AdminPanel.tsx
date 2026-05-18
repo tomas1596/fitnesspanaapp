@@ -803,11 +803,7 @@ const AdminPanel = () => {
 
   return (
     <div
-      className={cn(
-        'min-h-screen bg-white px-4 pb-8 pt-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50',
-        "[html[data-brand='pink']_&]:bg-gradient-to-b [html[data-brand='pink']_&]:from-zinc-950 [html[data-brand='pink']_&]:to-zinc-900",
-        "dark:[html[data-brand='pink']_&]:from-zinc-950 dark:[html[data-brand='pink']_&]:to-zinc-900",
-      )}
+      className="min-h-screen bg-white px-4 pb-8 pt-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50"
     >
       <div className="mx-auto max-w-4xl space-y-6">
 
@@ -1122,7 +1118,7 @@ const AdminPanel = () => {
         <DialogContent
           className={cn(
             'max-w-md rounded-2xl border-zinc-200/80 bg-white text-zinc-900 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100',
-            "[html[data-brand='pink']_&]:border-pink-800/40 [html[data-brand='pink']_&]:bg-zinc-900 [html[data-brand='pink']_&]:text-pink-50",
+            "[html[data-brand='pink']_&]:border-[#ff007f]/35",
           )}
         >
           <DialogHeader>
@@ -1256,7 +1252,7 @@ const AdminPanel = () => {
       <Dialog open={!!themeTarget} onOpenChange={(open) => { if (!open) setThemeTarget(null); }}>
         <DialogContent className={cn(
           'rounded-2xl border-zinc-200/80 bg-white text-zinc-900 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100',
-          "[html[data-brand='pink']_&]:border-pink-800/40 [html[data-brand='pink']_&]:bg-zinc-900 [html[data-brand='pink']_&]:text-pink-50",
+          "[html[data-brand='pink']_&]:border-[#ff007f]/35",
         )}>
           <DialogHeader>
             <DialogTitle>
@@ -1292,7 +1288,7 @@ const AdminPanel = () => {
         <AlertDialogContent
           className={cn(
             'rounded-2xl border-zinc-200/80 bg-white dark:border-white/10 dark:bg-zinc-900',
-            "[html[data-brand='pink']_&]:border-pink-800/40 [html[data-brand='pink']_&]:bg-zinc-900",
+            "[html[data-brand='pink']_&]:border-[#ff007f]/35",
           )}
         >
           <AlertDialogHeader>
@@ -1332,19 +1328,18 @@ const AdminPanel = () => {
         <AlertDialogContent
           className={cn(
             'rounded-2xl border-zinc-200/80 bg-white dark:border-white/10 dark:bg-zinc-900',
-            "[html[data-brand='pink']_&]:border-pink-800/40 [html[data-brand='pink']_&]:bg-zinc-900",
+            "[html[data-brand='pink']_&]:border-[#ff007f]/35",
           )}
         >
           <AlertDialogHeader>
             <AlertDialogTitle className="sr-only">Eliminar cuenta</AlertDialogTitle>
             <AlertDialogDescription className={cn(
               'text-sm font-medium leading-relaxed text-zinc-700 dark:text-zinc-200',
-              "[html[data-brand='pink']_&]:text-pink-50/95",
             )}>
               ¿Eliminar cuenta permanentemente? Esta acción no se puede deshacer y borrará todos los entrenamientos,
               registros y acceso del usuario.
               {deleteAccountTarget?.email ? (
-                <span className="mt-3 block rounded-lg bg-zinc-100 px-3 py-2 text-xs font-normal text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:[html[data-brand='pink']_&]:bg-zinc-800/90 dark:[html[data-brand='pink']_&]:text-pink-100">
+                <span className="mt-3 block rounded-lg bg-zinc-100 px-3 py-2 text-xs font-normal text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
                   {deleteAccountTarget.email}
                 </span>
               ) : null}
@@ -1354,7 +1349,6 @@ const AdminPanel = () => {
             <AlertDialogCancel
               className={cn(
                 'rounded-xl border-zinc-200 dark:border-white/15',
-                "[html[data-brand='pink']_&]:border-pink-800/35 [html[data-brand='pink']_&]:text-pink-100",
               )}
               disabled={deleteAccountDoing}
             >

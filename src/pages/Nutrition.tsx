@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Plus, Minus, Droplets, Trash2, Sun, Sunset, Cookie, Moon, BookOpen, Search, Pencil, Apple, Barcode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { NutritionBarcodeScanner, NutritionBarcodeScanLoadingOverlay } from '@/components/NutritionBarcodeScanner';
+import { CountUpSpan } from '@/components/CountUpSpan';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { fetchOpenFoodFactsProduct, mapOpenFoodFactsToNutritionFields, type MacrosPer100g, type OpenFoodFactsPackageTotal } from '@/lib/openFoodFacts';
 import { calculateAge } from '@/lib/age';
 import { todayLocalYMD, localDayBoundsISO } from '@/lib/nutritionDay';
@@ -70,7 +72,70 @@ const NUTRITION_FORM_INPUT_CLASS =
 
 const roundMacro = (n: number) => Math.round(n * 100) / 100;
 
-/** Valores derivados mostrados en inputs (evita colas de decimales al multiplicar por cantidad). */
+type MacroConsumedFieldKey = keyof MacrosPer100g;
+type MacroConsumedDraft = Record<MacroConsumedFieldKey, string>;
+
+/** Inputs del modal muestran totales escalados por cant.; vacío ⇒ 0 al guardar. */
+const MACRO_CONSUMED_DRAFT_EMPTY: MacroConsumedDraft = {
+  calories: '',
+  protein: '',
+  carbs: '',
+  fat: '',
+};
+
+/** Solo dígitos y separador decimal (, o .); máximo un separador tras normalizar coma → punto en la cadena. */
+function sanitizeFreeDecimalTyping(raw: string): string {
+  const s = raw.replace(/[^\d.,]/g, '').replace(/,/g, '.');
+  if (!s) return '';
+  const i = s.indexOf('.');
+  if (i === -1) return s;
+  return s.slice(0, i + 1) + s.slice(i + 1).replace(/\./g, '');
+}
+
+/** Escala tipada desde el texto del campo: vacío ⇒ 0; '.' / ',' incompleto ⇒ sin valor (mantener ref previa en vivo). */
+function parseScaledConsumptionDraft(s: string): number | null {
+  const t = sanitizeFreeDecimalTyping(s);
+  if (t === '') return 0;
+  const n = parseFloat(t);
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
+
+function scaledTotalToInputDraft(n: number, kind: 'kcal' | 'g'): string {
+  if (!Number.isFinite(n) || Math.abs(n) < 1e-10) return '';
+  if (kind === 'kcal') {
+    const v = Math.round(n * 10) / 10;
+    return Number.isInteger(v) ? String(v) : v.toFixed(1);
+  }
+  const v = roundMacro(n);
+  if (Number.isInteger(v)) return String(v);
+  let s = v.toFixed(2);
+  s = s.replace(/0+$/, '');
+  return s.endsWith('.') ? s.slice(0, -1) : s;
+}
+
+/** Macros por 100 g/ml desde los textos del modal (cant. consumida = factor de escala). */
+function ref100MacrosFromConsumedDraft(
+  draft: MacroConsumedDraft,
+  qtyConsumed: number,
+): MacrosPer100g {
+  const q = Math.max(0.0001, qtyConsumed);
+  const toRef = (raw: string): number => {
+    const cleaned = sanitizeFreeDecimalTyping(raw);
+    if (cleaned === '') return 0;
+    const n = parseFloat(cleaned);
+    if (!Number.isFinite(n)) return 0;
+    return roundMacro(n * (100 / q));
+  };
+  return {
+    calories: toRef(draft.calories),
+    protein: toRef(draft.protein),
+    carbs: toRef(draft.carbs),
+    fat: toRef(draft.fat),
+  };
+}
+
+/** Valores derivados mostrados en otros contextos (no inputs del modal nuevo alimento). */
 const formatMacroDisplayKcal = (n: number) => (Number.isFinite(n) ? n.toFixed(1) : '');
 const formatMacroDisplayGrams = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '');
 const formatConsumedQtyDisplay = (n: number) => (Number.isFinite(n) ? n.toFixed(1) : '');
@@ -121,8 +186,16 @@ const FoodMacroSummary = ({ f, className }: { f: CustomFood; className?: string 
 const Nutrition = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   const [nutritionTab, setNutritionTab] = useState('diario');
+  /** Al pasar por «Diario» se dispara animación count-up principal. */
+  const [diaryAnimEpoch, setDiaryAnimEpoch] = useState(1);
+
+  const onNutritionTabChange = useCallback((v: string) => {
+    setNutritionTab(v);
+    if (v === 'diario') setDiaryAnimEpoch((e) => e + 1);
+  }, []);
   const [goals, setGoals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, hydrationGlasses: 8 });
   const [customFoods, setCustomFoods] = useState<CustomFood[]>([]);
   const [nutritionLogs, setNutritionLogs] = useState<NutritionLogRow[]>([]);
@@ -139,6 +212,9 @@ const Nutrition = () => {
   const [newFoodForm, setNewFoodForm] = useState({ name: '' });
   const [newFoodMacrosRef100g, setNewFoodMacrosRef100g] =
     useState<MacrosPer100g>(INITIAL_MACROS_PER_100G);
+  const [macroConsumedDraft, setMacroConsumedDraft] = useState<MacroConsumedDraft>(
+    () => ({ ...MACRO_CONSUMED_DRAFT_EMPTY }),
+  );
   const [consumedAmountInput, setConsumedAmountInput] = useState('100');
   const [consumedUnit, setConsumedUnit] = useState<'g' | 'ml'>('g');
   const [offPackageTotal, setOffPackageTotal] = useState<OpenFoodFactsPackageTotal | null>(null);
@@ -285,13 +361,53 @@ const Nutrition = () => {
 
   const consumedScaleFactor = consumedAmountEffective / 100;
 
-  const patchMacroDisplayToRef100 = (key: keyof MacrosPer100g, displayRaw: string) => {
-    const displayVal = parseFloat(String(displayRaw).replace(',', '.')) || 0;
-    const qty = Math.max(0.0001, consumedAmountEffective);
+  const newFoodMacrosSnapRef = useRef(newFoodMacrosRef100g);
+  newFoodMacrosSnapRef.current = newFoodMacrosRef100g;
+
+  useEffect(() => {
+    const m = consumedScaleFactor;
+    const refs = newFoodMacrosSnapRef.current;
+    setMacroConsumedDraft({
+      calories: scaledTotalToInputDraft(refs.calories * m, 'kcal'),
+      protein: scaledTotalToInputDraft(refs.protein * m, 'g'),
+      carbs: scaledTotalToInputDraft(refs.carbs * m, 'g'),
+      fat: scaledTotalToInputDraft(refs.fat * m, 'g'),
+    });
+  }, [consumedScaleFactor]);
+
+  const onConsumedMacroDraftChange = (key: MacroConsumedFieldKey, raw: string) => {
+    const cleaned = sanitizeFreeDecimalTyping(raw);
+    setMacroConsumedDraft((prev) => ({ ...prev, [key]: cleaned }));
+    const q = Math.max(0.0001, consumedAmountEffective);
+    const scaled = parseScaledConsumptionDraft(cleaned);
+    if (scaled === null) return;
     setNewFoodMacrosRef100g((prev) => ({
       ...prev,
-      [key]: roundMacro(displayVal * (100 / qty)),
+      [key]: roundMacro(scaled * (100 / q)),
     }));
+  };
+
+  const finalizeConsumedMacroDraftField = (key: MacroConsumedFieldKey, kind: 'kcal' | 'g') => {
+    const cleaned = sanitizeFreeDecimalTyping(macroConsumedDraft[key]);
+    const q = Math.max(0.0001, consumedAmountEffective);
+    let nextDraft = '';
+    let refVal = 0;
+    if (cleaned === '') {
+      nextDraft = '';
+      refVal = 0;
+    } else {
+      const n = parseFloat(cleaned);
+      if (!Number.isFinite(n)) {
+        nextDraft = '';
+        refVal = 0;
+      } else {
+        const scaled = roundMacro(n);
+        refVal = roundMacro(scaled * (100 / q));
+        nextDraft = scaledTotalToInputDraft(scaled, kind);
+      }
+    }
+    setNewFoodMacrosRef100g((r) => ({ ...r, [key]: refVal }));
+    setMacroConsumedDraft((p) => ({ ...p, [key]: nextDraft }));
   };
 
   const scaledFromSelected = useMemo(() => {
@@ -331,6 +447,7 @@ const Nutrition = () => {
   const resetNewFoodNutritionDraft = useCallback(() => {
     setNewFoodForm(emptyFoodForm());
     setNewFoodMacrosRef100g(INITIAL_MACROS_PER_100G);
+    setMacroConsumedDraft({ ...MACRO_CONSUMED_DRAFT_EMPTY });
     setConsumedAmountInput('100');
     setConsumedUnit('g');
     setOffPackageTotal(null);
@@ -388,6 +505,12 @@ const Nutrition = () => {
         setConsumedAmountInput('100');
         setConsumedUnit(mapped.packageTotal?.unit === 'ml' ? 'ml' : 'g');
         setOffPackageTotal(mapped.packageTotal);
+        setMacroConsumedDraft({
+          calories: scaledTotalToInputDraft(mapped.macrosPer100g.calories, 'kcal'),
+          protein: scaledTotalToInputDraft(mapped.macrosPer100g.protein, 'g'),
+          carbs: scaledTotalToInputDraft(mapped.macrosPer100g.carbs, 'g'),
+          fat: scaledTotalToInputDraft(mapped.macrosPer100g.fat, 'g'),
+        });
         toast({
           title: 'Producto cargado',
           description: mapped.name
@@ -440,6 +563,13 @@ const Nutrition = () => {
       carbs: f.base_carbs,
       fat: f.base_fat,
     });
+    const sf = 1;
+    setMacroConsumedDraft({
+      calories: scaledTotalToInputDraft(f.base_calories * sf, 'kcal'),
+      protein: scaledTotalToInputDraft(f.base_protein * sf, 'g'),
+      carbs: scaledTotalToInputDraft(f.base_carbs * sf, 'g'),
+      fat: scaledTotalToInputDraft(f.base_fat * sf, 'g'),
+    });
     setConsumedAmountInput('100');
     setConsumedUnit('g');
     setOffPackageTotal(null);
@@ -464,10 +594,11 @@ const Nutrition = () => {
       toast({ title: 'Falta el nombre', variant: 'destructive' });
       return;
     }
-    const bc = Math.max(0, roundMacro(newFoodMacrosRef100g.calories));
-    const bp = Math.max(0, roundMacro(newFoodMacrosRef100g.protein));
-    const bcar = Math.max(0, roundMacro(newFoodMacrosRef100g.carbs));
-    const bf = Math.max(0, roundMacro(newFoodMacrosRef100g.fat));
+    const refParsed = ref100MacrosFromConsumedDraft(macroConsumedDraft, consumedAmountEffective);
+    const bc = Math.max(0, roundMacro(refParsed.calories));
+    const bp = Math.max(0, roundMacro(refParsed.protein));
+    const bcar = Math.max(0, roundMacro(refParsed.carbs));
+    const bf = Math.max(0, roundMacro(refParsed.fat));
 
     const editId = editingFoodId;
     if (editId) {
@@ -644,14 +775,42 @@ const Nutrition = () => {
   const ringPct = goals.calories ? Math.min(100, (totals.calories / goals.calories) * 100) : 0;
   const R = 52;
   const C = 2 * Math.PI * R;
-  const dashOffset = C * (1 - ringPct / 100);
+  const [ringFillPct, setRingFillPct] = useState(0);
+  const prevDiaryAnimEpochRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setRingFillPct(ringPct);
+      return;
+    }
+
+    const epochBump = prevDiaryAnimEpochRef.current !== diaryAnimEpoch;
+    prevDiaryAnimEpochRef.current = diaryAnimEpoch;
+
+    if (epochBump) {
+      setRingFillPct(0);
+      let innerRaf = 0;
+      const outerRaf = requestAnimationFrame(() => {
+        innerRaf = requestAnimationFrame(() => setRingFillPct(ringPct));
+      });
+      return () => {
+        cancelAnimationFrame(outerRaf);
+        cancelAnimationFrame(innerRaf);
+      };
+    }
+
+    setRingFillPct(ringPct);
+    return undefined;
+  }, [ringPct, diaryAnimEpoch, prefersReducedMotion]);
+
+  const ringDashOffset = C * (1 - ringFillPct / 100);
 
   return (
     <div className="min-h-screen bg-background px-4 pb-24">
       <div className="mx-auto max-w-lg">
         <PageScreenHeader title="Nutrición" />
 
-        <Tabs value={nutritionTab} onValueChange={setNutritionTab} className="w-full">
+        <Tabs value={nutritionTab} onValueChange={onNutritionTabChange} className="w-full">
           <TabsList className="mb-5 grid h-11 w-full grid-cols-2 rounded-xl border border-border/40 bg-card/60 p-1 backdrop-blur-sm">
             <TabsTrigger value="diario" className="rounded-lg text-sm font-bold data-[state=active]:bg-card data-[state=active]:shadow-sm">
               Diario
@@ -666,32 +825,87 @@ const Nutrition = () => {
             <div className="rounded-2xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
               <div className="flex items-center gap-5">
                 <div className="relative h-32 w-32 shrink-0">
-                  <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
-                    <circle cx="60" cy="60" r={R} fill="none" stroke="hsl(var(--secondary))" strokeWidth="10" />
+                  <svg
+                    viewBox="0 0 120 120"
+                    className="h-full w-full -rotate-90"
+                    aria-hidden
+                  >
+                    {/* Pista: gris muy suave */}
                     <circle
-                      cx="60" cy="60" r={R} fill="none"
-                      stroke="hsl(var(--primary))" strokeWidth="10" strokeLinecap="round"
-                      strokeDasharray={C} strokeDashoffset={dashOffset}
-                      style={{ transition: 'stroke-dashoffset 400ms ease' }}
+                      cx="60"
+                      cy="60"
+                      r={R}
+                      fill="none"
+                      className="stroke-border/50 dark:stroke-border/35"
+                      strokeWidth="10"
+                    />
+                    {/* Progreso calorías vs meta */}
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r={R}
+                      fill="none"
+                      className="stroke-primary drop-shadow-[0_0_10px_var(--brand-glow-sm)]"
+                      strokeWidth="10"
+                      strokeLinecap="round"
+                      strokeDasharray={C}
+                      strokeDashoffset={ringDashOffset}
+                      style={{
+                        transition: prefersReducedMotion ? 'none' : 'stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1)',
+                      }}
                     />
                   </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-2xl font-extrabold tabular-nums text-foreground">{goals.calories ? Math.max(0, Math.round(calsLeft)) : Math.round(totals.calories)}</span>
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{goals.calories ? 'kcal restantes' : 'kcal'}</span>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center px-3 py-2 text-center">
+                    <span className="text-5xl font-black tabular-nums leading-none tracking-tight text-foreground">
+                      <CountUpSpan value={Math.round(totals.calories)} playKey={diaryAnimEpoch} durationMs={500} />
+                    </span>
+                    <span className="mt-1.5 px-0.5 text-[10px] font-bold uppercase leading-snug tracking-wider text-muted-foreground">
+                      kcal consumidas
+                    </span>
+                    {goals.calories > 0 && (
+                      <>
+                        <div
+                          className="my-2 h-px w-12 shrink-0 bg-zinc-200 opacity-70 dark:bg-zinc-700 dark:opacity-100"
+                          aria-hidden
+                        />
+                        <div className="flex flex-col gap-0.5 text-xs font-medium tabular-nums text-zinc-500 dark:text-zinc-400">
+                          <span>{Math.max(0, Math.round(calsLeft))} restantes</span>
+                          <span>meta: {Math.round(goals.calories)}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="flex-1 space-y-2.5">
-                  <MacroBar label="Proteínas" value={totals.protein} goal={goals.protein} unit="g" color="hsl(var(--primary))" />
-                  <MacroBar label="Carbos" value={totals.carbs} goal={goals.carbs} unit="g" color="#FF8A00" />
-                  <MacroBar label="Grasas" value={totals.fat} goal={goals.fat} unit="g" color="#FFC700" />
+                  <MacroBar
+                    label="Proteínas"
+                    value={totals.protein}
+                    goal={goals.protein}
+                    unit="g"
+                    color="hsl(var(--primary))"
+                    animEpoch={diaryAnimEpoch}
+                  />
+                  <MacroBar
+                    label="Carbos"
+                    value={totals.carbs}
+                    goal={goals.carbs}
+                    unit="g"
+                    color="#FF8A00"
+                    animEpoch={diaryAnimEpoch}
+                  />
+                  <MacroBar
+                    label="Grasas"
+                    value={totals.fat}
+                    goal={goals.fat}
+                    unit="g"
+                    color="#FFC700"
+                    animEpoch={diaryAnimEpoch}
+                  />
                 </div>
               </div>
               {!goals.calories && (
                 <p className="mt-3 text-center text-xs text-muted-foreground/70">Completa tu perfil para ver tus metas.</p>
               )}
-              <p className="mt-3 text-center text-[11px] text-muted-foreground">
-                Tocá <span className="font-medium text-foreground">+</span> en una comida para elegir de tu biblioteca. Gestioná alimentos en <span className="font-medium text-foreground">Mis alimentos</span>.
-              </p>
             </div>
 
             <div className="space-y-3">
@@ -699,6 +913,8 @@ const Nutrition = () => {
                 const items = nutritionLogs.filter((f) => f.meal_type === m.key);
                 const sumCal = items.reduce((s, f) => s + f.calories, 0);
                 const sumProt = items.reduce((s, f) => s + f.protein, 0);
+                const sumCarb = items.reduce((s, f) => s + f.carbs, 0);
+                const sumFat = items.reduce((s, f) => s + f.fat, 0);
                 const Icon = m.icon;
                 return (
                   <div key={m.key} className="rounded-2xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
@@ -710,7 +926,8 @@ const Nutrition = () => {
                         <div className="min-w-0">
                           <h3 className="text-sm font-semibold text-foreground">{m.label}</h3>
                           <p className="text-[11px] text-muted-foreground">
-                            {Math.round(sumCal)} kcal · {Math.round(sumProt)}g prot
+                            {Math.round(sumCal)} kcal · {Math.round(sumProt)}g prot · {Math.round(sumCarb)}g carb ·{' '}
+                            {Math.round(sumFat)}g gras
                           </p>
                         </div>
                       </div>
@@ -1015,13 +1232,12 @@ const Nutrition = () => {
                       </label>
                       <Input
                         id="new-food-cals"
-                        type="number"
+                        type="text"
                         inputMode="decimal"
-                        min={0}
-                        step="0.1"
-                        placeholder="0"
-                        value={formatMacroDisplayKcal(newFoodMacrosRef100g.calories * consumedScaleFactor)}
-                        onChange={(e) => patchMacroDisplayToRef100('calories', e.target.value)}
+                        autoComplete="off"
+                        value={macroConsumedDraft.calories}
+                        onChange={(e) => onConsumedMacroDraftChange('calories', e.target.value)}
+                        onBlur={() => finalizeConsumedMacroDraftField('calories', 'kcal')}
                         className={NUTRITION_FORM_INPUT_CLASS}
                       />
                     </div>
@@ -1031,13 +1247,12 @@ const Nutrition = () => {
                       </label>
                       <Input
                         id="new-food-prot"
-                        type="number"
+                        type="text"
                         inputMode="decimal"
-                        min={0}
-                        step="0.1"
-                        placeholder="0"
-                        value={formatMacroDisplayGrams(newFoodMacrosRef100g.protein * consumedScaleFactor)}
-                        onChange={(e) => patchMacroDisplayToRef100('protein', e.target.value)}
+                        autoComplete="off"
+                        value={macroConsumedDraft.protein}
+                        onChange={(e) => onConsumedMacroDraftChange('protein', e.target.value)}
+                        onBlur={() => finalizeConsumedMacroDraftField('protein', 'g')}
                         className={NUTRITION_FORM_INPUT_CLASS}
                       />
                     </div>
@@ -1047,13 +1262,12 @@ const Nutrition = () => {
                       </label>
                       <Input
                         id="new-food-carbs"
-                        type="number"
+                        type="text"
                         inputMode="decimal"
-                        min={0}
-                        step="0.1"
-                        placeholder="0"
-                        value={formatMacroDisplayGrams(newFoodMacrosRef100g.carbs * consumedScaleFactor)}
-                        onChange={(e) => patchMacroDisplayToRef100('carbs', e.target.value)}
+                        autoComplete="off"
+                        value={macroConsumedDraft.carbs}
+                        onChange={(e) => onConsumedMacroDraftChange('carbs', e.target.value)}
+                        onBlur={() => finalizeConsumedMacroDraftField('carbs', 'g')}
                         className={NUTRITION_FORM_INPUT_CLASS}
                       />
                     </div>
@@ -1063,13 +1277,12 @@ const Nutrition = () => {
                       </label>
                       <Input
                         id="new-food-fat"
-                        type="number"
+                        type="text"
                         inputMode="decimal"
-                        min={0}
-                        step="0.1"
-                        placeholder="0"
-                        value={formatMacroDisplayGrams(newFoodMacrosRef100g.fat * consumedScaleFactor)}
-                        onChange={(e) => patchMacroDisplayToRef100('fat', e.target.value)}
+                        autoComplete="off"
+                        value={macroConsumedDraft.fat}
+                        onChange={(e) => onConsumedMacroDraftChange('fat', e.target.value)}
+                        onBlur={() => finalizeConsumedMacroDraftField('fat', 'g')}
                         className={NUTRITION_FORM_INPUT_CLASS}
                       />
                     </div>
@@ -1344,8 +1557,8 @@ const WellbeingScale = ({
   const selected = value > 0 ? Math.min(5, Math.max(1, Math.round(value))) : null;
   return (
     <div>
-      <p className="mb-2 text-xs text-muted-foreground">{label}</p>
-      <div className="flex gap-1.5">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div className="flex gap-2">
         {WELLBEING_LEVELS.map((n) => {
           const isOn = selected === n;
           return (
@@ -1353,11 +1566,14 @@ const WellbeingScale = ({
               key={n}
               type="button"
               onClick={() => onChange(n)}
-              className={
+              className={cn(
+                'flex-1 rounded-xl py-2.5 text-sm font-bold tabular-nums outline-none ring-offset-background transition-all duration-200',
+                'active:scale-95 motion-reduce:active:scale-100',
+                'focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2',
                 isOn
-                  ? 'flex-1 rounded-full bg-primary py-2 text-sm font-semibold tabular-nums text-white transition-colors'
-                  : 'flex-1 rounded-full bg-zinc-100 py-2 text-sm font-semibold tabular-nums text-zinc-500 transition-colors dark:bg-zinc-800 dark:text-zinc-500'
-              }
+                  ? 'bg-primary text-primary-foreground shadow-md shadow-[0_6px_20px_var(--brand-glow-sm)] dark:text-zinc-950'
+                  : 'border border-transparent bg-muted/80 text-muted-foreground hover:bg-muted hover:text-foreground dark:bg-zinc-800/90 dark:text-zinc-400 dark:hover:bg-zinc-700/85 dark:hover:text-zinc-200',
+              )}
               aria-pressed={isOn}
               aria-label={`${label}: ${n} de 5`}
             >
@@ -1370,20 +1586,77 @@ const WellbeingScale = ({
   );
 };
 
-const MacroBar = ({ label, value, goal, unit, color }: { label: string; value: number; goal: number; unit: string; color: string }) => {
+const MacroBar = ({
+  label,
+  value,
+  goal,
+  unit,
+  color,
+  animEpoch = 0,
+}: {
+  label: string;
+  value: number;
+  goal: number;
+  unit: string;
+  color: string;
+  animEpoch?: number;
+}) => {
+  const prefersReducedMotion = usePrefersReducedMotion();
   const pct = goal > 0 ? Math.min(100, (value / goal) * 100) : 0;
+  const [barWidth, setBarWidth] = useState(prefersReducedMotion ? pct : 0);
+  const prevAnimEpochRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setBarWidth(pct);
+      return;
+    }
+
+    const epochBump = prevAnimEpochRef.current !== animEpoch;
+    prevAnimEpochRef.current = animEpoch;
+
+    if (epochBump) {
+      setBarWidth(0);
+      let innerRaf = 0;
+      const outerRaf = requestAnimationFrame(() => {
+        innerRaf = requestAnimationFrame(() => setBarWidth(pct));
+      });
+      return () => {
+        cancelAnimationFrame(outerRaf);
+        cancelAnimationFrame(innerRaf);
+      };
+    }
+
+    setBarWidth(pct);
+    return undefined;
+  }, [pct, animEpoch, prefersReducedMotion]);
+
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-[11px]">
         <span className="text-muted-foreground">{label}</span>
         <span className="font-medium text-foreground tabular-nums">
-          {Math.round(value)}{unit}{goal > 0 && <span className="text-muted-foreground"> / {goal}{unit}</span>}
+          {Math.round(value)}
+          {unit}
+          {goal > 0 && (
+            <span className="text-muted-foreground">
+              {' '}
+              / {goal}
+              {unit}
+            </span>
+          )}
         </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-secondary">
+      <div className="h-2.5 overflow-hidden rounded-full bg-muted/50 dark:bg-muted/30">
         <div
-          className="h-full rounded-full transition-all duration-300"
-          style={{ width: `${pct}%`, background: color }}
+          className={cn(
+            'h-full max-w-full rounded-full shadow-sm',
+            !prefersReducedMotion && 'transition-[width] duration-700 ease-out',
+          )}
+          style={{
+            width: `${barWidth}%`,
+            background: color,
+          }}
         />
       </div>
     </div>

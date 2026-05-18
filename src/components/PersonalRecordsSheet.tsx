@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
+import { CountUpSpan } from '@/components/CountUpSpan';
 
 type PersonalRecordRow = Tables<'personal_records'>;
 
@@ -102,6 +103,8 @@ function PersonalRecordsSheet({ open, onClose }: PersonalRecordsSheetProps) {
 
   const [deleteTarget, setDeleteTarget] = useState<PersonalRecordRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  /** Al abrir la hoja contamos desde 0 hacia cada PR máximo. */
+  const [listAnimEpoch, setListAnimEpoch] = useState(0);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -121,7 +124,10 @@ function PersonalRecordsSheet({ open, onClose }: PersonalRecordsSheetProps) {
   }, [user, toast]);
 
   useEffect(() => {
-    if (open) load();
+    if (open) {
+      void load();
+      setListAnimEpoch((e) => e + 1);
+    }
   }, [open, load]);
 
   useEffect(() => {
@@ -371,7 +377,14 @@ function PersonalRecordsSheet({ open, onClose }: PersonalRecordsSheetProps) {
                           <p className="truncate text-sm font-medium text-foreground">{g.displayName}</p>
                           <p className="mt-0.5 text-[11px] text-muted-foreground">
                             Max{' '}
-                            <span className="font-semibold tabular-nums text-primary">{g.maxWeight}</span> kg ·{' '}
+                            <span className="inline font-semibold tabular-nums text-primary">
+                              <CountUpSpan
+                                value={Math.round(Number(g.maxWeight))}
+                                playKey={`${listAnimEpoch}-${g.key}`}
+                                durationMs={500}
+                              />
+                            </span>{' '}
+                            kg ·{' '}
                             {new Date(g.maxAchievedDate + 'T12:00:00').toLocaleDateString('es-ES', {
                               day: 'numeric',
                               month: 'short',

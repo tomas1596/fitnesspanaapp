@@ -57,6 +57,17 @@ import { deriveGymQuickResultFormFromLog } from '@/lib/gymRoutineQuickResult';
 const WORKOUT_MODALITY_LS_KEY = 'fitnesspana.workout.activeModalidad';
 const WORKOUT_SCOPE_LS_KEY = 'fitnesspana.workout.scope';
 
+/** Subtítulo en la grilla modo gimnasio según si hay resultado para la fecha seleccionada. */
+function subtitleForGymRoutineLog(log: Tables<'workout_logs'> | undefined, modality: WorkoutModalityId): string {
+  if (!log) return 'Vacío · tocá para registrar';
+  if (modality === 'musculacion') return 'Registrado';
+  const parts = [
+    log.total_time?.trim(),
+    log.round_count != null ? `${log.round_count} rondas` : null,
+  ].filter(Boolean) as string[];
+  return parts.length > 0 ? parts.join(' · ') : 'Registrado';
+}
+
 function readStoredWorkoutModality(): WorkoutModalityId {
   try {
     const v = localStorage.getItem(WORKOUT_MODALITY_LS_KEY);
@@ -68,7 +79,13 @@ function readStoredWorkoutModality(): WorkoutModalityId {
 }
 
 const MUSCLE_GROUPS = ['Pecho', 'Espalda', 'Piernas', 'Brazos', 'Hombros', 'Core'];
-const formatDateISO = (d: Date) => d.toISOString().split('T')[0];
+/** Fecha calendario local YYYY-MM-DD (evita desfasajes UTC de `toISOString`). */
+function formatLocalDateISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 /** Botones EJERCICIOS / PR: fondos semánticos (día / noche / VIP rosa). */
 const WORKOUT_HEADER_QUICK_BTN_LAYOUT = cn(
@@ -77,9 +94,8 @@ const WORKOUT_HEADER_QUICK_BTN_LAYOUT = cn(
 const WORKOUT_HEADER_QUICK_BTN_THEME = cn(
   'border-border bg-secondary text-secondary-foreground shadow-sm hover:bg-accent hover:text-accent-foreground',
   'dark:border-border dark:bg-secondary dark:text-secondary-foreground dark:hover:bg-accent dark:hover:text-accent-foreground',
-  "[html[data-brand='pink']_&]:border-pink-600/35 [html[data-brand='pink']_&]:bg-zinc-900/92 [html[data-brand='pink']_&]:text-pink-300 [html[data-brand='pink']_&]:shadow-none",
-  "[html[data-brand='pink']_&]:hover:bg-zinc-800 [html[data-brand='pink']_&]:hover:text-pink-200",
-  "dark:[html[data-brand='pink']_&]:border-pink-800/50 dark:[html[data-brand='pink']_&]:bg-zinc-950/80 dark:[html[data-brand='pink']_&]:text-fuchsia-100",
+  "[html[data-brand='pink']_&]:border-[#ff007f]/35 [html[data-brand='pink']_&]:shadow-none",
+  "dark:[html[data-brand='pink']_&]:border-pink-800/50 dark:[html[data-brand='pink']_&]:text-fuchsia-100",
   "dark:[html[data-brand='pink']_&]:hover:bg-pink-950/55 dark:[html[data-brand='pink']_&]:hover:text-pink-100",
   'active:scale-[0.98]',
 );
@@ -91,15 +107,15 @@ const WORKOUT_HEADER_QUICK_LABEL = cn(
 const CONDITIONING_BLOCK_SHELL = cn(
   'space-y-3 rounded-2xl border border-border/50 bg-card p-3 shadow-sm',
   'dark:bg-card/80',
-  "[html[data-brand='pink']_&]:border-pink-700/35 [html[data-brand='pink']_&]:!bg-gradient-to-b [html[data-brand='pink']_&]:from-zinc-950/95 [html[data-brand='pink']_&]:to-zinc-900/96",
-  "dark:[html[data-brand='pink']_&]:border-pink-800/45 dark:[html[data-brand='pink']_&]:from-zinc-950/90 dark:[html[data-brand='pink']_&]:to-card/90",
+  "[html[data-brand='pink']_&]:border-[#ff007f]/25 [html[data-brand='pink']_&]:shadow-none",
+  "dark:[html[data-brand='pink']_&]:border-pink-800/45",
 );
 
 const CONDITIONING_EXERCISE_CARD_CLASS = cn(
   'rounded-xl border border-border/40 bg-muted/20 p-4 shadow-none backdrop-blur-none',
   'dark:bg-muted/10',
-  "[html[data-brand='pink']_&]:border-pink-700/28 [html[data-brand='pink']_&]:bg-zinc-900/50",
-  "dark:[html[data-brand='pink']_&]:border-pink-800/35 dark:[html[data-brand='pink']_&]:bg-zinc-900/45",
+  "[html[data-brand='pink']_&]:border-[#ff007f]/22",
+  "dark:[html[data-brand='pink']_&]:border-pink-800/35",
 );
 
 interface Exercise {
@@ -116,8 +132,8 @@ const Workout = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const dateStr = formatDateISO(selectedDate);
-  const todayStr = formatDateISO(new Date());
+  const dateStr = formatLocalDateISO(selectedDate);
+  const todayStr = formatLocalDateISO(new Date());
   const isToday = dateStr === todayStr;
   const isPast = dateStr < todayStr;
 
@@ -321,6 +337,26 @@ const Workout = () => {
   );
   const [blockSaving, setBlockSaving] = useState<'crossfit' | 'funcional' | null>(null);
 
+  const gymRoutineLogById = useMemo(() => {
+    const m = new Map<string, Tables<'workout_logs'>>();
+    if (workoutScope !== 'gimnasio') return m;
+    for (const log of workoutLogs) {
+      if (log.modality !== activeModalidad || !log.gym_routine_id) continue;
+      m.set(log.gym_routine_id, log);
+    }
+    return m;
+  }, [workoutLogs, workoutScope, activeModalidad]);
+
+  /** Evita ver rankings / formularios de otra fecha si el usuario cambia el día en el selector. */
+  useEffect(() => {
+    setViewerOpen(false);
+    setRegisterOpen(false);
+    setRegisterQuickPrefill(null);
+    setRegisterSheetVariant('register');
+    setViewingRoutine(null);
+    setReportOpen(false);
+  }, [dateStr]);
+
   const formattedDate = selectedDate.toLocaleDateString('es-ES', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
@@ -418,17 +454,23 @@ const Workout = () => {
       });
     }
 
-    const { data: logs } = await supabase
+    const { data: logsRaw } = await supabase
       .from('workout_logs')
       .select('*')
       .eq('user_id', user.id)
       .eq('workout_date', dateStr);
 
-    setWorkoutLogs(logs || []);
+    const logsAll = logsRaw || [];
+    const logs =
+      workoutScope === 'gimnasio'
+        ? logsAll.filter((l) => l.gym_routine_id != null)
+        : logsAll.filter((l) => l.gym_routine_id == null);
+
+    setWorkoutLogs(logs);
 
     let sawCf = false;
     let sawFn = false;
-    for (const log of logs || []) {
+    for (const log of logs) {
       if (log.modality === 'crossfit') {
         sawCf = true;
         setCrossfitDraft(
@@ -466,7 +508,7 @@ const Workout = () => {
     } else {
       setLastPerfMap({});
     }
-  }, [user, dateStr, fetchLastPerformances]);
+  }, [user, dateStr, workoutScope, fetchLastPerformances]);
 
   useEffect(() => { setHydrated(false); fetchExercises(); }, [fetchExercises]);
 
@@ -565,6 +607,7 @@ const Workout = () => {
         .eq('user_id', user.id)
         .eq('workout_date', dateStr)
         .eq('modality', modality)
+        .is('gym_routine_id', null)
         .maybeSingle();
       if (existing?.id) return existing.id;
       const { data: row, error } = await supabase
@@ -575,6 +618,7 @@ const Workout = () => {
                 user_id: user.id,
                 workout_date: dateStr,
                 modality,
+                gym_routine_id: null,
                 split_times: [],
                 crossfit_details: serializeCrossfitDetails(emptyCrossfitDraft('amrap')),
                 block_sections: deriveCrossfitBlockSections(emptyCrossfitDraft('amrap')).map((b, i) => ({
@@ -587,6 +631,7 @@ const Workout = () => {
                 user_id: user.id,
                 workout_date: dateStr,
                 modality,
+                gym_routine_id: null,
                 split_times: [],
                 crossfit_details: {},
                 functional_details: serializeFunctionalDetails(defaultFunctionalSessionDraft()),
@@ -684,6 +729,7 @@ const Workout = () => {
           user_id: user.id,
           workout_date: dateStr,
           modality,
+          gym_routine_id: null,
           total_time: deriveCrossfitTotalTimeColumn(cfDraft),
           target_time: null,
           wod_title: crossfitWodTitle(cfDraft) || null,
@@ -693,6 +739,7 @@ const Workout = () => {
           crossfit_details: serializeCrossfitDetails(cfDraft),
           circuit_name: null,
           work_rest_note: null,
+          functional_details: {},
         };
       } else {
         const draft = fnDraft;
@@ -705,6 +752,7 @@ const Workout = () => {
           user_id: user.id,
           workout_date: dateStr,
           modality,
+          gym_routine_id: null,
           total_time: draft.total_session_time.trim() || null,
           target_time: null,
           wod_title: null,
@@ -724,7 +772,9 @@ const Workout = () => {
           : deriveFunctionalBlockSections(fnDraft);
       const { data, error } = await supabase
         .from('workout_logs')
-        .upsert(row as Tables<'workout_logs'>['Insert'], { onConflict: 'user_id,workout_date,modality' })
+        .upsert(row as Tables<'workout_logs'>['Insert'], {
+          onConflict: 'user_id,workout_date,modality,gym_routine_id',
+        })
         .select()
         .single();
       setBlockSaving(null);
@@ -1244,7 +1294,7 @@ const Workout = () => {
         <div className="grid grid-cols-7 gap-1">
           {days.map((d, i) => {
             if (!d) return <div key={i} />;
-            const ds = formatDateISO(d);
+            const ds = formatLocalDateISO(d);
             const isSel = ds === dateStr;
             const hasData = activeDates.has(ds);
             const isFuture = ds > todayStr;
@@ -1277,6 +1327,11 @@ const Workout = () => {
   const showEmptyPastState =
     hydrated && !hasWorkoutOnDay && isPast && !enableEmptyDay && !addingExercise;
   const showWorkoutUI = !showEmptyPastState;
+
+  const showDailyReportButton =
+    workoutScope === 'gimnasio'
+      ? hydrated && !!user
+      : showWorkoutUI && (exercises.length > 0 || isToday);
 
   const conditioningCardSurface =
     activeModalidad !== 'musculacion' ? CONDITIONING_EXERCISE_CARD_CLASS : undefined;
@@ -1356,8 +1411,8 @@ const Workout = () => {
         <div
           className={cn(
             'mb-5 flex items-center justify-center rounded-2xl border border-border/50 bg-card px-2 py-2 shadow-sm',
-            "[html[data-brand='pink']_&]:border-pink-700/40 [html[data-brand='pink']_&]:!bg-zinc-950/92",
-            "dark:[html[data-brand='pink']_&]:border-pink-800/45 dark:[html[data-brand='pink']_&]:bg-zinc-950/85",
+            "[html[data-brand='pink']_&]:border-[#ff007f]/28 [html[data-brand='pink']_&]:shadow-none",
+            "dark:[html[data-brand='pink']_&]:border-pink-800/45",
           )}
         >
           <Popover
@@ -1390,11 +1445,10 @@ const Workout = () => {
         {coachCtxReady && user && showGymSwitch ? (
           <div
             className={cn(
-              'mb-5 flex gap-1 rounded-2xl border border-border/40 bg-muted/90 p-1 transition-colors duration-200 dark:bg-secondary/90',
-              "[html[data-brand='pink']_&]:border-pink-700/35 [html[data-brand='pink']_&]:bg-zinc-900/95",
-              "dark:[html[data-brand='pink']_&]:border-pink-800/45 dark:[html[data-brand='pink']_&]:bg-zinc-950/90",
+              'workout-gym-scope-tablist mb-5 flex gap-1 rounded-2xl border border-border/40 bg-muted/90 p-1 transition-colors duration-200 dark:bg-secondary/90',
+              "[html[data-brand='pink']_&]:border-[#ff007f]/25",
+              "dark:[html[data-brand='pink']_&]:border-pink-800/45",
             )}
-            style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)' }}
             role="tablist"
             aria-label="Ámbito del entrenamiento"
           >
@@ -1408,10 +1462,9 @@ const Workout = () => {
                 className={cn(
                   'flex-1 rounded-xl px-2 py-2.5 text-center text-xs font-semibold transition-colors duration-200 sm:text-sm',
                   workoutScope === scope
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    ? "bg-primary text-primary-foreground shadow-sm [html[data-brand='pink']_&]:shadow-none"
                     : cn(
                         'bg-transparent text-muted-foreground hover:bg-background/60 hover:text-foreground',
-                        "[html[data-brand='pink']_&]:hover:bg-zinc-800/90 [html[data-brand='pink']_&]:hover:text-pink-100",
                       ),
                 )}
               >
@@ -1440,6 +1493,14 @@ const Workout = () => {
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[1, 2, 3, 4, 5, 6].map((d) => {
                 const row = gymRoutines.find((r) => r.day_number === d);
+                const dayLog = row ? gymRoutineLogById.get(row.id) : undefined;
+                const subtitle = row
+                  ? subtitleForGymRoutineLog(dayLog, activeModalidad)
+                  : '';
+                const filled = Boolean(dayLog);
+                const gymDaySheetOpen =
+                  (viewerOpen && viewingRoutine?.day_number === d) ||
+                  (registerOpen && registerRoutine?.day_number === d);
                 return (
                   <button
                     key={d}
@@ -1451,11 +1512,15 @@ const Workout = () => {
                       setViewerOpen(true);
                     }}
                     className={cn(
-                      'flex min-h-[5rem] flex-col rounded-2xl border px-3 py-3 text-left transition-colors',
+                      'workout-gym-day-cell flex min-h-[5rem] flex-col rounded-2xl border px-3 py-3 text-left transition-colors',
+                      filled && 'workout-gym-day-cell--filled',
+                      gymDaySheetOpen && 'workout-gym-day-cell--viewing',
                       row
                         ? cn(
-                            'border-primary/35 bg-card shadow-sm hover:bg-accent/40',
-                            "[html[data-brand='pink']_&]:border-pink-700/40 [html[data-brand='pink']_&]:bg-zinc-950/85",
+                            filled
+                              ? 'border-emerald-500/45 bg-emerald-500/[0.06] hover:bg-emerald-500/10'
+                              : 'border-primary/35 bg-card shadow-sm hover:bg-accent/40',
+                            "[html[data-brand='pink']_&]:border-[#ff007f]/30",
                           )
                         : 'cursor-default border-dashed border-border/50 bg-muted/25 opacity-80',
                     )}
@@ -1464,6 +1529,16 @@ const Workout = () => {
                     <span className="mt-1 line-clamp-3 text-xs font-semibold text-foreground">
                       {row?.title?.trim() || (row ? 'Ver rutina' : 'Sin rutina')}
                     </span>
+                    {row ? (
+                      <span
+                        className={cn(
+                          'mt-auto pt-2 text-[10px] font-medium leading-snug',
+                          filled ? 'text-emerald-700 dark:text-emerald-400 workout-gym-day-status' : 'text-muted-foreground',
+                        )}
+                      >
+                        {subtitle}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -1492,7 +1567,7 @@ const Workout = () => {
                     className={cn(
                       'h-14 w-full rounded-2xl border border-border/60 bg-secondary text-base font-bold tracking-tight text-foreground shadow-none hover:bg-accent',
                       "[html[data-brand='pink']_&]:border-0 [html[data-brand='pink']_&]:bg-primary [html[data-brand='pink']_&]:text-primary-foreground",
-                      "[html[data-brand='pink']_&]:shadow-sm [html[data-brand='pink']_&]:hover:bg-[color:var(--brand-hover)] [html[data-brand='pink']_&]:hover:text-primary-foreground",
+                      "[html[data-brand='pink']_&]:shadow-none [html[data-brand='pink']_&]:hover:bg-[color:var(--brand-hover)] [html[data-brand='pink']_&]:hover:text-primary-foreground",
                     )}
                   >
                     <Plus
@@ -1709,7 +1784,7 @@ const Workout = () => {
                   className={cn(
                     'h-14 w-full rounded-2xl border border-border/60 bg-secondary text-base font-bold tracking-tight text-foreground shadow-none hover:bg-accent',
                     "[html[data-brand='pink']_&]:border-0 [html[data-brand='pink']_&]:bg-primary [html[data-brand='pink']_&]:text-primary-foreground",
-                    "[html[data-brand='pink']_&]:shadow-sm [html[data-brand='pink']_&]:hover:bg-[color:var(--brand-hover)] [html[data-brand='pink']_&]:hover:text-primary-foreground",
+                    "[html[data-brand='pink']_&]:shadow-none [html[data-brand='pink']_&]:hover:bg-[color:var(--brand-hover)] [html[data-brand='pink']_&]:hover:text-primary-foreground",
                   )}
                 >
                   <Plus
@@ -1726,8 +1801,9 @@ const Workout = () => {
           </div>
         )}
 
-        {workoutScope !== 'gimnasio' && showWorkoutUI && (exercises.length > 0 || isToday) && (
+        {showDailyReportButton ? (
           <button
+            type="button"
             onClick={() => setReportOpen(true)}
             className="mt-5 flex w-full items-center justify-between rounded-2xl border border-border/40 bg-card/70 p-5 backdrop-blur-sm transition-colors hover:bg-accent/70"
           >
@@ -1736,25 +1812,29 @@ const Workout = () => {
                 className={cn(
                   'flex h-11 w-11 items-center justify-center rounded-xl',
                   'bg-green-500/10 dark:bg-primary/10',
-                  "[html[data-brand='pink']_&]:bg-zinc-900/70",
+                  "[html[data-brand='pink']_&]:bg-primary/10",
                 )}
               >
                 <FileText
                   className={cn(
                     'h-5 w-5 text-green-600 dark:text-primary',
-                    "[html[data-brand='pink']_&]:text-pink-400",
+                    "[html[data-brand='pink']_&]:text-[#ff007f]",
                   )}
                   aria-hidden
                 />
               </div>
               <div className="text-left">
                 <p className="text-sm font-semibold tracking-tight text-foreground">Ver Reporte del Día</p>
-                <p className="text-xs text-muted-foreground/60">Bitácora, nutrición y descanso</p>
+                <p className="text-xs text-muted-foreground/60">
+                  <span className="tabular-nums">{dateStr}</span>
+                  {' · '}
+                  Bitácora, nutrición y descanso
+                </p>
               </div>
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground/40" />
           </button>
-        )}
+        ) : null}
       </div>
 
       <Sheet open={viewerOpen} onOpenChange={setViewerOpen}>
@@ -1762,7 +1842,8 @@ const Workout = () => {
           side="bottom"
           className={cn(
             'flex max-h-[88vh] flex-col gap-3 overflow-hidden rounded-t-3xl border border-border/60 px-4 pb-6 pt-4',
-            "[html[data-brand='pink']_&]:border-pink-800/45 [html[data-brand='pink']_&]:bg-zinc-950",
+            "[html[data-brand='pink']_&]:border-[#ff007f]/28",
+            "dark:[html[data-brand='pink']_&]:border-pink-800/45",
           )}
         >
           <SheetHeader className="flex-shrink-0 border-b border-border/40 pb-3 text-left">
@@ -1793,7 +1874,7 @@ const Workout = () => {
               </div>
               <Button
                 type="button"
-                className="h-12 w-full shrink-0 rounded-2xl font-semibold"
+                className="workout-gym-register-cta h-12 w-full shrink-0 rounded-2xl font-semibold"
                 onClick={openGymRegisterFresh}
               >
                 Registrar mi resultado
@@ -1817,6 +1898,7 @@ const Workout = () => {
       ) : null}
 
       <DailyReportSheet
+        key={dateStr}
         open={reportOpen}
         onClose={() => setReportOpen(false)}
         dateStr={dateStr}

@@ -3,6 +3,7 @@ import * as htmlToImage from 'html-to-image';
 import { Share2, Sun, Moon } from 'lucide-react';
 import type { LatLng } from '@/lib/runAnalysis';
 import { fmtTime, fmtPace } from '@/lib/runFormat';
+import { cn } from '@/lib/utils';
 
 interface ShareStickerProps {
   distanceKm: number;
@@ -51,7 +52,6 @@ function thinPoints(points: LatLng[], maxPts: number): LatLng[] {
   return out;
 }
 
-const NEON = '#22FF55';
 const SVG_W = 80;
 const SVG_H = 80;
 const PAD = 6;
@@ -64,7 +64,7 @@ function RouteTrace({ points }: { points: LatLng[] }) {
   if (pts.length < 2) {
     return (
       <svg width={SVG_W} height={SVG_H} className="shrink-0">
-        <text x={SVG_W / 2} y={SVG_H / 2} textAnchor="middle" fill="#555" fontSize="9">
+        <text x={SVG_W / 2} y={SVG_H / 2} textAnchor="middle" fill="#888" fontSize="9">
           Sin ruta
         </text>
       </svg>
@@ -80,36 +80,19 @@ function RouteTrace({ points }: { points: LatLng[] }) {
       width={SVG_W}
       height={SVG_H}
       viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-      className="shrink-0"
-      style={{ filter: `drop-shadow(0 0 4px ${NEON}88)` }}
+      className="shrink-0 text-primary"
+      aria-hidden
     >
-      <defs>
-        <filter id="glow">
-          <feGaussianBlur stdDeviation="1.5" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-      <path d={d} fill="none" stroke={NEON} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" filter="url(#glow)" />
-      <circle cx={start[0]} cy={start[1]} r={DOT_R} fill={NEON} />
+      <path
+        d={d}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx={start[0]} cy={start[1]} r={DOT_R} fill="currentColor" />
       <circle cx={end[0]} cy={end[1]} r={DOT_R} fill="#ef4444" />
-    </svg>
-  );
-}
-
-/* ─── Pana logo inline SVG ─────────────────────────────────────────────────── */
-function PanaLogo({ dark }: { dark: boolean }) {
-  const accent = NEON;
-  const bg = dark ? '#141417' : '#f0fdf4';
-  return (
-    <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
-      <rect width="32" height="32" rx="7" fill={bg} />
-      <path fill={accent} d="M8 12h3v8H8V12zm13 0h3v8h-3V12z" />
-      <path stroke={accent} strokeWidth="2.5" strokeLinecap="round" d="M11 16h10" />
-      <circle cx="9.5" cy="16" r="2.25" fill={accent} />
-      <circle cx="22.5" cy="16" r="2.25" fill={accent} />
     </svg>
   );
 }
@@ -124,7 +107,7 @@ export default function ShareSticker({
   const [theme, setTheme] = useState<Theme>('night');
   const [exporting, setExporting] = useState(false);
 
-  const isDark = theme === 'night';
+  const isNight = theme === 'night';
 
   const handleShare = async () => {
     if (!stickerRef.current || exporting) return;
@@ -154,29 +137,9 @@ export default function ShareSticker({
     }
   };
 
-  /* ── Night theme tokens ── */
-  const nightBg = 'rgba(0,0,0,0.82)';
-  const nightBorder = 'rgba(34,255,85,0.18)';
-  const textPrimary = isDark ? '#ffffff' : '#0a1a0f';
-  const textMuted = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(10,26,15,0.5)';
-  const accentColor = NEON;
-  const dividerColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(10,26,15,0.12)';
-
-  const stickerStyle: React.CSSProperties = isDark
-    ? {
-        background: nightBg,
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        border: `1.5px solid ${nightBorder}`,
-        boxShadow: `0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px ${nightBorder} inset, 0 0 20px rgba(34,255,85,0.06)`,
-      }
-    : {
-        background: 'rgba(255,255,255,0.92)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        border: '1.5px solid rgba(16,185,129,0.2)',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(16,185,129,0.1) inset',
-      };
+  const textStrong = isNight ? '#ffffff' : '#0f172a';
+  const statLabel = isNight ? 'rgba(255,255,255,0.45)' : 'rgba(71,85,105,0.92)';
+  const paceSuffix = isNight ? 'rgba(255,255,255,0.42)' : 'rgba(71,85,105,0.75)';
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -184,161 +147,117 @@ export default function ShareSticker({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => setTheme(isDark ? 'day' : 'night')}
+          onClick={() => setTheme(isNight ? 'day' : 'night')}
           className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-secondary"
         >
-          {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-          {isDark ? 'Modo Día' : 'Modo Noche'}
+          {isNight ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          {isNight ? 'Modo Día' : 'Modo Noche'}
         </button>
         <button
           type="button"
           onClick={() => void handleShare()}
           disabled={exporting}
-          className="flex items-center gap-1.5 rounded-full bg-[#22FF55] px-4 py-1.5 text-xs font-bold text-black transition active:scale-95 disabled:opacity-60"
+          className="flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-bold text-black transition active:scale-95 disabled:opacity-60"
+          style={{ backgroundColor: 'var(--brand-color)' }}
         >
           <Share2 className="h-3.5 w-3.5" />
           {exporting ? 'Generando…' : 'Compartir'}
         </button>
       </div>
 
-      {/* Preview (visible) */}
+      {/* Preview exportada */}
       <div
         ref={stickerRef}
+        data-share-sticker
+        className={cn(
+          'relative flex h-[174px] w-[450px] items-stretch gap-3 overflow-hidden rounded-3xl px-5 py-4 font-sans antialiased backdrop-blur-md',
+          isNight ? 'border border-white/10 bg-black/82 shadow-2xl' : 'border border-black/[0.08] bg-white/95 shadow-xl',
+        )}
         style={{
-          width: 450,
-          height: 150,
-          borderRadius: 24,
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 20px',
-          gap: 0,
-          position: 'relative',
-          overflow: 'hidden',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-          ...stickerStyle,
+          WebkitFontSmoothing: 'antialiased',
         }}
       >
-        {/* ── LEFT: Route trace ── */}
+        {/* ── Logo + marca (tarjeta iOS-like) ── */}
         <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 90,
-            flexShrink: 0,
-          }}
+          className={cn(
+            'absolute right-5 top-3.5 flex items-center gap-2',
+            isNight ? 'text-zinc-300' : 'text-zinc-500',
+          )}
+        >
+          <img
+            src="/android-chrome-192x192.png"
+            alt="Logo Pana Fitness"
+            width={24}
+            height={24}
+            className={cn(
+              'h-6 w-6 shrink-0 rounded-md object-cover shadow-sm ring-1',
+              isNight ? 'ring-white/12' : 'ring-black/10',
+            )}
+          />
+          <span className="text-[9px] font-extrabold uppercase tracking-[0.14em]">Pana Fitness</span>
+        </div>
+
+        {/* ── Ruta ── */}
+        <div className={cn(
+          'mt-9 flex w-[104px] shrink-0 flex-col items-center justify-center self-center rounded-2xl px-2 py-2.5 ring-1',
+          isNight
+            ? 'bg-white/[0.06] ring-white/[0.07]'
+            : 'bg-black/[0.045] ring-black/[0.06]',
+        )}
         >
           <RouteTrace points={routePoints} />
           <span
-            style={{
-              marginTop: 4,
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: textMuted,
-            }}
+            style={{ color: statLabel }}
+            className="mt-2 text-[9px] font-bold uppercase tracking-[0.22em]"
           >
             Ruta
           </span>
         </div>
 
-        {/* ── Divider ── */}
-        <div style={{ width: 1, height: 80, background: dividerColor, flexShrink: 0, marginLeft: 6, marginRight: 18 }} />
-
-        {/* ── CENTER: Distance ── */}
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+        {/* ── Distancia ── */}
+        <div className="mt-9 flex flex-1 flex-col items-center justify-center text-center leading-none">
           <span
-            style={{
-              fontSize: 52,
-              fontWeight: 900,
-              lineHeight: 1,
-              letterSpacing: '-0.03em',
-              color: textPrimary,
-              fontVariantNumeric: 'tabular-nums',
-            }}
+            style={{ color: textStrong }}
+            className="text-6xl font-black tabular-nums leading-none tracking-tight"
           >
             {distanceKm.toFixed(2)}
           </span>
-          <span
-            style={{
-              marginTop: 4,
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              color: accentColor,
-            }}
-          >
-            Kilómetros
-          </span>
+          <span className="mt-2 text-xs font-bold uppercase tracking-[0.2em] text-primary">Kilómetros</span>
         </div>
 
-        {/* ── Divider ── */}
-        <div style={{ width: 1, height: 80, background: dividerColor, flexShrink: 0, marginLeft: 18, marginRight: 18 }} />
-
-        {/* ── RIGHT: Stats ── */}
+        {/* ── Tiempo · Ritmo ── */}
         <div
-          style={{
-            width: 110,
-            flexShrink: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            gap: 12,
-          }}
+          className="mt-9 flex w-[118px] shrink-0 flex-col justify-center gap-5 pr-1"
         >
           <div>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: textMuted }}>
+            <div
+              style={{ color: statLabel }}
+              className="mb-1 text-[9px] font-bold uppercase tracking-[0.22em]"
+            >
               Tiempo
             </div>
-            <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.01em', color: textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
+            <div
+              style={{ color: textStrong }}
+              className="text-xl font-black tabular-nums leading-snug tracking-tight"
+            >
               {fmtTime(durationSec)}
             </div>
           </div>
           <div>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: textMuted }}>
+            <div
+              style={{ color: statLabel }}
+              className="mb-1 text-[9px] font-bold uppercase tracking-[0.22em]"
+            >
               Ritmo
             </div>
-            <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.01em', color: textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
-              {fmtPace(avgPaceSecPerKm)}<span style={{ fontSize: 11, fontWeight: 600, color: textMuted }}> /km</span>
+            <div style={{ color: textStrong }} className="text-xl font-black tabular-nums leading-snug tracking-tight">
+              {fmtPace(avgPaceSecPerKm)}
+              <span style={{ color: paceSuffix }} className="text-xs font-bold">
+                {' '}
+                /km
+              </span>
             </div>
           </div>
-        </div>
-
-        {/* ── Branding: top-right ── */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 10,
-            right: 12,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            opacity: 0.7,
-          }}
-        >
-          <PanaLogo dark={isDark} />
-          <span
-            style={{
-              fontSize: 9,
-              fontWeight: 800,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: textMuted,
-            }}
-          >
-            Pana Fitness
-          </span>
         </div>
       </div>
     </div>

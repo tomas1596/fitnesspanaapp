@@ -7,6 +7,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
+import {
+  hapticsTimerCountdownPulse,
+  hapticsTimerPhaseAdvance,
+  hapticsTimerTransport,
+} from '@/lib/haptics';
+import { getBrandThemeEventName } from '@/lib/brandTheme';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -143,6 +149,17 @@ const timerInputClass =
 
 const Timer = () => {
   const { resolved } = useTheme();
+  const [pinkBrand, setPinkBrand] = useState(() =>
+    typeof document !== 'undefined' && document.documentElement.dataset.brand === 'pink',
+  );
+  useEffect(() => {
+    const syncPink = () => setPinkBrand(document.documentElement.dataset.brand === 'pink');
+    syncPink();
+    const ev = getBrandThemeEventName();
+    window.addEventListener(ev, syncPink);
+    return () => window.removeEventListener(ev, syncPink);
+  }, []);
+
   const [presets, setPresets]             = useState<Preset[]>(loadPresets);
   const [activePresetId, setActivePresetId] = useState<string>(presets[0]?.id ?? 'default');
   const active = useMemo(
@@ -171,7 +188,7 @@ const Timer = () => {
   const advancePhase = () => {
     if (!active) return;
     playTransitionSound();
-    if (navigator.vibrate) navigator.vibrate(400);
+    hapticsTimerPhaseAdvance();
 
     setPhase(prev => {
       if (prev === 'prep') {
@@ -210,7 +227,7 @@ const Timer = () => {
         const next = prev - 1;
         if (next <= 3 && next > 0) {
           playCountdownBeep();
-          if (navigator.vibrate) navigator.vibrate(80);
+          hapticsTimerCountdownPulse();
         }
         if (next <= 0) {
           setTimeout(advancePhase, 0);
@@ -261,6 +278,89 @@ const Timer = () => {
   const mins    = Math.floor(remaining / 60);
   const secs    = remaining % 60;
   const isRunning = (phase === 'prep' || phase === 'work' || phase === 'rest') && !paused;
+
+  const phaseHeadline =
+    paused && (phase === 'prep' || phase === 'work' || phase === 'rest')
+      ? { text: 'EN PAUSA', className: 'text-white' }
+      : phase === 'prep'
+        ? { text: 'PREPARATE', className: 'text-zinc-950' }
+        : phase === 'work'
+          ? { text: '¡A ENTRENAR!', className: 'text-white' }
+          : phase === 'rest'
+            ? { text: 'DESCANSÁ', className: 'text-white' }
+            : null;
+
+  const totalRounds = active?.rounds ?? 0;
+
+  const timeToneClass =
+    phase === 'idle' || phase === 'done'
+      ? 'text-foreground'
+      : paused
+        ? 'text-white drop-shadow-[0_2px_24px_rgba(0,0,0,0.45)]'
+        : 'text-zinc-950 drop-shadow-none';
+
+  const glassRoundBadgeTone =
+    paused
+      ? 'bg-black/25 text-white ring-1 ring-white/25'
+      : phase === 'prep'
+        ? 'bg-black/15 text-zinc-950 ring-1 ring-black/15'
+        : 'bg-black/25 text-white ring-1 ring-white/25';
+
+  /** Play/Pause circular: tonos por fase + estado pausa y override Modo Rosa (VIP). */
+  const playTransportUi = useMemo(() => {
+    if (pinkBrand) {
+      return {
+        button: cn(
+          'flex h-[5.5rem] w-[5.5rem] shrink-0 items-center justify-center rounded-full bg-zinc-950',
+          'shadow-lg shadow-black/45 ring-1 ring-[#ff007f]',
+          'transition-all duration-300 ease-in-out hover:brightness-110 active:scale-[0.96]',
+        ),
+        icon: 'text-[#ff007f]',
+      };
+    }
+
+    const inActiveCircuit = phase === 'prep' || phase === 'work' || phase === 'rest';
+    if (paused && inActiveCircuit) {
+      return {
+        button: cn(
+          'flex h-[5.5rem] w-[5.5rem] shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white',
+          'shadow-lg shadow-black/40 ring-1 ring-white/15',
+          'transition-all duration-300 ease-in-out hover:brightness-110 active:scale-[0.96]',
+        ),
+        icon: 'text-white',
+      };
+    }
+
+    const icon =
+      phase === 'prep'
+        ? 'text-zinc-950'
+        : phase === 'rest'
+          ? 'text-red-600'
+          : 'text-[color:var(--brand-color)]';
+
+    return {
+      button: cn(
+        'flex h-[5.5rem] w-[5.5rem] shrink-0 items-center justify-center rounded-full bg-white',
+        'shadow-lg shadow-white/20 ring-1 ring-black/10',
+        'transition-all duration-300 ease-in-out hover:brightness-[1.04] active:scale-[0.96]',
+      ),
+      icon,
+    };
+  }, [pinkBrand, paused, phase]);
+
+
+  /** Superficie de botón secundario según modo claro/oscur (pantalla en reposo sin fase activa). */
+  const mutedControlSurface =
+    resolved === 'dark'
+      ? 'border-white/15 bg-white/10 text-white hover:bg-white/15'
+      : 'border-zinc-200/80 bg-zinc-100/95 text-zinc-800 hover:bg-zinc-200/90 dark:border-white/15 dark:bg-white/10 dark:text-white';
+
+  /** Superficie de botón sobre fondos de fase (amarillo / verde marca / celeste pausa-roja): neutro translúcido. */
+  const phaseSecondaryControlSurface = paused
+    ? 'border-white/30 bg-black/25 text-white hover:bg-black/35'
+    : phase === 'prep'
+      ? 'border-zinc-900/25 bg-black/15 text-zinc-950 hover:bg-black/25'
+      : 'border-white/35 bg-black/20 text-white hover:bg-black/30';
 
   // ── Settings helpers ─────────────────────────────────────────────────────────
 
@@ -334,60 +434,110 @@ const Timer = () => {
           </span>
         </div>
 
-        {/* Giant clock */}
-        <div className="flex flex-1 flex-col items-center justify-center">
+        {/* Centro: etiqueta de fase · tiempo · badge de ronda */}
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 px-1">
+          {phaseHeadline && (
+            <p
+              className={cn(
+                'pointer-events-none text-center font-black uppercase tracking-[0.12em]',
+                'text-4xl sm:text-5xl',
+                'leading-[1.05] drop-shadow-sm',
+                phaseHeadline.className,
+              )}
+              aria-live="polite"
+            >
+              {phaseHeadline.text}
+            </p>
+          )}
+
+          {!phaseHeadline && (phase === 'idle' || phase === 'done') && (
+            <span className="sr-only">{phase === 'done' ? 'Ejercicio finalizado' : 'Listo para iniciar'}</span>
+          )}
+
           <div
-            className={`text-center font-bold leading-none tracking-tight ${
-              fgDark ? 'text-black' : 'text-foreground'
-            }`}
-            style={{ fontSize: 'clamp(7rem, 36vw, 12rem)' }}
+            className={cn(
+              'text-center tabular-nums font-black tracking-tighter sm:tracking-tight',
+              phase === 'idle' || phase === 'done'
+                ? 'drop-shadow-[0_2px_24px_rgba(0,0,0,0.12)] dark:drop-shadow-[0_2px_28px_rgba(0,0,0,0.22)]'
+                : '',
+              timeToneClass,
+            )}
+            style={{ fontSize: 'clamp(4.75rem, 26vw, 11rem)', lineHeight: 0.9 }}
           >
-            <span className="tabular-nums">{String(mins).padStart(2, '0')}</span>
-            <span className="tabular-nums">:</span>
-            <span className="tabular-nums">{String(secs).padStart(2, '0')}</span>
+            <span>{String(mins).padStart(2, '0')}</span>
+            <span>:</span>
+            <span>{String(secs).padStart(2, '0')}</span>
           </div>
 
-          {/* Round counter */}
-          <div className={`mt-6 text-sm font-medium ${fgDark ? 'text-black/70' : 'text-muted-foreground'}`}>
-            {phase === 'done'
-              ? '✓'
-              : `${Math.max(0, (active?.rounds ?? 0) - round + (phase === 'work' || phase === 'rest' ? 0 : 0))} / ${active?.rounds ?? 0}`}
+          {/* Ronda · badge */}
+          <div className="mt-2 min-h-[2rem] flex items-center justify-center">
+            {phase === 'done' ? (
+              <span
+                className={cn(
+                  'rounded-full px-4 py-1 text-sm font-bold tracking-wide backdrop-blur-sm',
+                  fgDark
+                    ? 'bg-black/25 text-white ring-1 ring-white/25'
+                    : resolved === 'dark'
+                      ? 'bg-white/15 text-white ring-1 ring-white/20'
+                      : 'bg-black/10 text-zinc-900 ring-1 ring-black/10',
+                )}
+              >
+                COMPLETADO
+              </span>
+            ) : phase !== 'idle' && totalRounds > 0 ? (
+              <span
+                className={cn(
+                  'rounded-full px-4 py-1 text-xs font-bold uppercase backdrop-blur-sm',
+                  fgDark ? cn(glassRoundBadgeTone, 'tracking-[0.2em]') : null,
+                  !fgDark &&
+                    (resolved === 'dark'
+                      ? 'bg-white/15 text-white ring-1 ring-white/20 tracking-[0.2em]'
+                      : 'bg-black/10 text-zinc-900 ring-1 ring-black/10 tracking-[0.2em]'),
+                )}
+              >
+                Ronda&nbsp;{round}&nbsp;/&nbsp;{totalRounds}
+              </span>
+            ) : null}
           </div>
         </div>
 
-        {/* Controls — circular, espaciado tipo Modo Ruta */}
-        <div className="flex items-center justify-center gap-6 pb-2">
+        {/* Controles */}
+        <div className="flex flex-col items-center gap-6 pb-2">
+          <button
+            type="button"
+            onClick={() => {
+              hapticsTimerTransport();
+              if (isRunning) pause();
+              else start();
+            }}
+            className={playTransportUi.button}
+            aria-label={isRunning ? 'Pausar' : 'Iniciar'}
+          >
+            {isRunning ? (
+              <Pause
+                className={cn('h-10 w-10', playTransportUi.icon)}
+                strokeWidth={2.5}
+              />
+            ) : (
+              <Play
+                className={cn('ml-1 h-10 w-10', playTransportUi.icon)}
+                strokeWidth={2.5}
+              />
+            )}
+          </button>
+
           <button
             type="button"
             onClick={reset}
             className={cn(
-              'flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-300 active:scale-95',
-              fgDark
-                ? 'border-black/25 bg-black/15 text-black shadow-lg shadow-black/10 hover:bg-black/25'
-                : 'border-border/50 bg-white/90 text-zinc-900 shadow-md shadow-black/8 backdrop-blur-sm hover:bg-white dark:bg-zinc-800/90 dark:text-zinc-50',
+              'flex h-12 items-center gap-2 rounded-full border px-6 text-sm font-semibold backdrop-blur-sm transition-all duration-300 active:scale-[0.97]',
+              fgDark ? phaseSecondaryControlSurface : cn('shadow-sm', mutedControlSurface),
             )}
             aria-label="Reiniciar"
           >
-            <RotateCcw className="h-7 w-7" strokeWidth={2.25} />
+            <RotateCcw className="h-5 w-5 shrink-0" strokeWidth={2.25} />
+            Reiniciar
           </button>
-
-          <button
-            type="button"
-            onClick={isRunning ? pause : start}
-            className={cn(
-              'flex h-[5.5rem] w-[5.5rem] shrink-0 items-center justify-center rounded-full transition-all duration-300 active:scale-[0.96]',
-              fgDark
-                ? 'bg-zinc-950 text-white shadow-[0_10px_32px_rgba(0,0,0,0.45)] ring-2 ring-black/20'
-                : resolved === 'dark'
-                  ? 'bg-primary text-primary-foreground shadow-[0_0_36px_var(--brand-glow-lg),0_10px_28px_rgba(0,0,0,0.5)] ring-2 ring-primary/45 hover:bg-[color:var(--brand-hover)] dark:text-black'
-                  : 'bg-primary text-primary-foreground shadow-sm ring-0 hover:bg-[color:var(--brand-hover)] dark:text-black',
-            )}
-            aria-label={isRunning ? 'Pausar' : 'Iniciar'}
-          >
-            {isRunning ? <Pause className="h-10 w-10" strokeWidth={2.5} /> : <Play className="ml-1 h-10 w-10" strokeWidth={2.5} />}
-          </button>
-
-          <div className="h-16 w-16 shrink-0" aria-hidden />
         </div>
       </div>
 

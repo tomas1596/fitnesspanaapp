@@ -1,5 +1,6 @@
 import { Dumbbell, Timer, Footprints, Flame, User } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { hapticsNavTap } from '@/lib/haptics';
 
 const tabs = [
   { path: '/', icon: Dumbbell, label: 'Entreno' },
@@ -34,7 +35,12 @@ const BottomNav = () => {
             <button
               key={path}
               type="button"
-              onClick={() => navigate(path)}
+              onClick={() => {
+                if (location.pathname !== path) {
+                  hapticsNavTap();
+                }
+                navigate(path);
+              }}
               aria-label={label}
               className="group flex flex-col items-center gap-0.5 px-3 py-1.5 transition-all duration-300 active:scale-90"
             >

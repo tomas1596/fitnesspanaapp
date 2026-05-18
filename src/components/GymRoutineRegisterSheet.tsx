@@ -26,6 +26,7 @@ import { modalityToLibraryCategory } from '@/lib/exerciseLibraryNaming';
 import { insertMissingExerciseLibraryEntries } from '@/lib/exerciseLibrarySync';
 import { insertConditioningRoutineTemplate } from '@/lib/workoutTemplatesConditioning';
 import { sanitizeTimeDigitColonInput } from '@/lib/workoutNumericInput';
+import { hapticsSuccess } from '@/lib/haptics';
 
 type Props = {
   open: boolean;
@@ -140,7 +141,7 @@ export function GymRoutineRegisterSheet({
       setResultado('');
       setNotas('');
     }
-  }, [open, routine, modality, initialQuickResult]);
+  }, [open, routine, modality, initialQuickResult, dateStr]);
 
   const cfSubtype = coachCf?.subtype ?? null;
 
@@ -185,6 +186,7 @@ export function GymRoutineRegisterSheet({
       });
       if (tplErr) console.error('Mis Rutinas (conditioning)', tplErr);
 
+      hapticsSuccess();
       toast({ title: 'Resultado registrado', description: routine.title || `Día ${routine.day_number}` });
       onRecorded();
       onClose();
@@ -282,6 +284,7 @@ export function GymRoutineRegisterSheet({
       const libEntries = exercisesPayload.map((e) => ({ name: e.name, muscle_group: e.muscle_group }));
       await insertMissingExerciseLibraryEntries(supabase, userId, libEntries, modalityToLibraryCategory('musculacion'));
 
+      hapticsSuccess();
       toast({ title: 'Resultado registrado', description: routine.title || `Día ${routine.day_number}` });
       onRecorded();
       onClose();
@@ -302,7 +305,7 @@ export function GymRoutineRegisterSheet({
         side="bottom"
         className={cn(
           'flex max-h-[92vh] flex-col rounded-t-3xl border border-border/60 px-4 pb-6 pt-4',
-          "[html[data-brand='pink']_&]:border-pink-800/45 [html[data-brand='pink']_&]:bg-zinc-950",
+          "[html[data-brand='pink']_&]:border-[#ff007f]/28 dark:[html[data-brand='pink']_&]:border-pink-800/45",
         )}
       >
         <SheetHeader className="flex-shrink-0 border-b border-border/40 pb-3 text-left">

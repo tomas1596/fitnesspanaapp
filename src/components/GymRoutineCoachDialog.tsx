@@ -86,7 +86,7 @@ function MusculacionRoutineEditor({
           key={line.id}
           className={cn(
             'space-y-3 rounded-xl border border-border/50 bg-card/80 p-4',
-            "[html[data-brand='pink']_&]:border-pink-700/35 [html[data-brand='pink']_&]:bg-zinc-950/85",
+            "[html[data-brand='pink']_&]:border-pink-700/35",
           )}
         >
           <div className="flex items-start justify-between gap-2">
@@ -296,8 +296,8 @@ export function GymRoutineCoachDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          'flex max-h-[90vh] max-w-lg flex-col gap-0 overflow-hidden rounded-2xl p-0',
-          "[html[data-brand='pink']_&]:border-pink-800/45 [html[data-brand='pink']_&]:bg-zinc-950",
+          'flex max-h-[90vh] max-w-lg flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-background p-0',
+          "[html[data-brand='pink']_&]:border-[#ff007f]/35",
         )}
       >
         <DialogHeader className="border-b border-border/50 px-5 py-4">

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { Navigate } from 'react-router-dom';
@@ -8,7 +8,8 @@ import { ThemeSegmentedControl } from '@/components/ThemeSegmentedControl';
 import { cn } from '@/lib/utils';
 import { passwordMeetsPolicy } from '@/lib/passwordPolicy';
 import { PasswordRequirementsList } from '@/components/PasswordRequirementsList';
-import { Eye, EyeOff } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 const DOB_RANGE_ERROR = 'Debes tener entre 10 y 100 años para usar Pana Fitness';
 const DOB_REQUIRED_ERROR = 'Seleccioná tu fecha de nacimiento.';
@@ -120,6 +121,42 @@ const Auth = () => {
   const { theme, setTheme, resolved } = useTheme();
   const isDark = resolved === 'dark';
   const S = useAuthStyles(isDark);
+  const prefersReducedMotion = useReducedMotion();
+
+  const { cascadeContainer, cascadeItem, formCascadeContainer } = useMemo(() => {
+    if (prefersReducedMotion) {
+      const neutralItem = {
+        hidden: { opacity: 1, y: 0 },
+        visible: { opacity: 1, y: 0, transition: { duration: 0 } },
+      } as const;
+      return {
+        cascadeContainer: { hidden: {}, visible: { transition: { staggerChildren: 0 } } } as const,
+        cascadeItem: neutralItem,
+        formCascadeContainer: { hidden: {}, visible: { transition: { staggerChildren: 0 } } } as const,
+      };
+    }
+    const easeOut = 'easeOut' as const;
+    return {
+      cascadeContainer: {
+        hidden: {},
+        visible: { transition: { staggerChildren: 0.065, delayChildren: 0.02 } },
+      } as const,
+      cascadeItem: {
+        hidden: { opacity: 0, y: 15 },
+        visible: {
+          opacity: 1,
+          y: 0,
+          transition: { duration: 0.25, ease: easeOut },
+        },
+      } as const,
+      formCascadeContainer: {
+        hidden: {},
+        visible: {
+          transition: { staggerChildren: 0.045, delayChildren: 0.08 },
+        },
+      } as const,
+    };
+  }, [prefersReducedMotion]);
 
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -133,7 +170,7 @@ const Auth = () => {
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState('');
   const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [signUpRedirectHold, setSignUpRedirectHold] = useState(false);
   const [dobInputType, setDobInputType] = useState<'text' | 'date'>('text');
@@ -200,7 +237,7 @@ const Auth = () => {
       }
     }
 
-    setSubmitting(true);
+    setIsLoading(true);
 
     if (isLogin) {
       const { error } = await signIn(emailClean, password);
@@ -223,7 +260,7 @@ const Auth = () => {
       }
     }
 
-    setSubmitting(false);
+    setIsLoading(false);
   };
 
   return (
@@ -234,31 +271,49 @@ const Auth = () => {
         </div>
       </div>
 
-      {/* ── Logo ── */}
-      <div className="mb-8 flex flex-col items-center gap-3 text-center">
-        <img
-          src="/android-chrome-192x192.png"
-          alt="Pana Fitness Logo"
-          className="h-20 w-20 rounded-2xl object-cover shadow-lg"
-        />
-        <h1 className={`text-2xl font-extrabold tracking-tight ${S.titleColor}`}>
-          Pana Fitness
-        </h1>
-        <p className={`text-sm ${S.subtitleColor}`}>Tu compañero de fitness</p>
-      </div>
+      <motion.div
+        className="flex w-full max-w-sm flex-col items-center gap-8"
+        variants={cascadeContainer}
+        initial="hidden"
+        animate="visible"
+      >
+        {/* ── Logo ── */}
+        <motion.div
+          className="flex flex-col items-center gap-3 text-center"
+          variants={cascadeItem}
+        >
+          <img
+            src="/android-chrome-192x192.png"
+            alt="Pana Fitness Logo"
+            className="h-20 w-20 rounded-2xl object-cover shadow-lg"
+          />
+          <h1 className={`text-2xl font-extrabold tracking-tight ${S.titleColor}`}>
+            Pana Fitness
+          </h1>
+          <p className={`text-sm ${S.subtitleColor}`}>Tu compañero de fitness</p>
+        </motion.div>
 
-      {/* ── Glass card ── */}
-      <div className={`w-full max-w-sm rounded-3xl p-7 ${S.card}`}>
-        <h2 className={`mb-6 text-lg font-bold tracking-tight ${S.titleColor}`}>
-          {isLogin ? 'Iniciar Sesión' : 'Crear cuenta'}
-        </h2>
+        {/* ── Glass card ── */}
+        <motion.div className={cn('w-full rounded-3xl p-7', S.card)} variants={cascadeItem}>
+            <motion.form
+            key={isLogin ? 'login' : 'signup'}
+            variants={formCascadeContainer}
+            initial="hidden"
+            animate="visible"
+            onSubmit={handleSubmit}
+            className="flex flex-col gap-3"
+          >
+            <motion.h2
+              className={cn(`mb-6 text-lg font-bold tracking-tight`, S.titleColor)}
+              variants={cascadeItem}
+            >
+              {isLogin ? 'Iniciar Sesión' : 'Crear cuenta'}
+            </motion.h2>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-
-          {/* ── Register-only fields ── */}
-          {!isLogin && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
+              {/* ── Register-only fields ── */}
+              {!isLogin && (
+                <>
+                  <motion.div className="grid grid-cols-2 gap-3" variants={cascadeItem}>
                 <Input
                   type="text"
                   placeholder="Nombre"
@@ -277,9 +332,9 @@ const Auth = () => {
                   autoComplete="family-name"
                   className={S.inputCls}
                 />
-              </div>
+              </motion.div>
 
-              <div>
+              <motion.div variants={cascadeItem}>
                 <Input
                   ref={dobRef}
                   type={dobInputType}
@@ -314,38 +369,40 @@ const Auth = () => {
                 {dobFieldError ? (
                   <p className="mt-1.5 text-sm text-red-500">{dobFieldError}</p>
                 ) : null}
-              </div>
+              </motion.div>
 
-              <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Género</p>
-              <div className={cn('flex gap-2 rounded-2xl border p-1', S.genderPillTrack)}>
-                {(
-                  [
-                    { value: 'male' as const, label: 'Masculino' },
-                    { value: 'female' as const, label: 'Femenino' },
-                  ] as const
-                ).map(({ value, label }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setGender(value)}
-                    className={cn(
-                      'flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all',
-                      gender === value
-                        ? 'bg-primary text-primary-foreground shadow-[0_4px_14px_var(--brand-glow-sm)] dark:text-black'
-                        : isDark
-                          ? 'text-zinc-400 hover:bg-zinc-800/80'
-                          : 'text-zinc-600 hover:bg-white/80',
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <motion.div variants={cascadeItem} className="flex flex-col gap-2">
+                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Género</p>
+                <div className={cn('flex gap-2 rounded-2xl border p-1', S.genderPillTrack)}>
+                  {(
+                    [
+                      { value: 'male' as const, label: 'Masculino' },
+                      { value: 'female' as const, label: 'Femenino' },
+                    ] as const
+                  ).map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setGender(value)}
+                      className={cn(
+                        'flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all',
+                        gender === value
+                          ? 'bg-primary text-primary-foreground shadow-[0_4px_14px_var(--brand-glow-sm)] dark:text-black'
+                          : isDark
+                            ? 'text-zinc-400 hover:bg-zinc-800/80'
+                            : 'text-zinc-600 hover:bg-white/80',
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
             </>
           )}
 
-          {/* ── Common fields ── */}
-          <div>
+              {/* ── Common fields ── */}
+              <motion.div variants={cascadeItem}>
             <Input
               type="email"
               placeholder="Email"
@@ -366,9 +423,9 @@ const Auth = () => {
             {emailFieldError ? (
               <p className="mt-1.5 text-sm text-red-500">{emailFieldError}</p>
             ) : null}
-          </div>
+              </motion.div>
 
-          <div className="relative">
+              <motion.div variants={cascadeItem} className="relative">
             <Input
               type={
                 isLogin
@@ -411,11 +468,15 @@ const Auth = () => {
                 <Eye className="h-4 w-4" />
               )}
             </button>
-          </div>
-          {!isLogin ? <PasswordRequirementsList password={password} className="mt-1.5" /> : null}
+              </motion.div>
+              {!isLogin ? (
+            <motion.div variants={cascadeItem}>
+              <PasswordRequirementsList password={password} className="mt-1.5" />
+            </motion.div>
+              ) : null}
 
-          {!isLogin && (
-            <div>
+              {!isLogin && (
+            <motion.div variants={cascadeItem}>
               <div className="relative">
                 <Input
                   type={showConfirmPassword ? 'text' : 'password'}
@@ -449,36 +510,58 @@ const Auth = () => {
               {confirmPassword.length > 0 && !passwordsMatch ? (
                 <p className="mt-1.5 text-sm text-red-500">Las contraseñas no coinciden</p>
               ) : null}
-            </div>
-          )}
+            </motion.div>
+              )}
 
-          {error && (
+              {error ? (
+            <motion.div variants={cascadeItem}>
             <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
               {error}
             </p>
-          )}
-          {successMsg && (
+            </motion.div>
+              ) : null}
+              {successMsg ? (
+            <motion.div variants={cascadeItem}>
             <p className="rounded-lg bg-primary/10 px-3 py-2 text-sm font-medium text-primary">
               {successMsg}
             </p>
-          )}
+            </motion.div>
+              ) : null}
 
+              <motion.div variants={cascadeItem}>
           <Button
             type="submit"
-            disabled={submitting || !registerSubmitEnabled}
-            aria-busy={submitting}
+            disabled={isLoading || !registerSubmitEnabled}
+            aria-busy={isLoading}
             className={cn(
               'h-14 w-full rounded-xl border-0 bg-primary text-base font-bold tracking-tight text-primary-foreground',
               'shadow-[0_0_24px_var(--brand-glow),0_4px_18px_var(--brand-color-dim)] transition-all duration-300',
               'hover:bg-[color:var(--brand-hover)] hover:shadow-[0_0_32px_var(--brand-glow-lg)] active:scale-[0.98]',
               'disabled:pointer-events-none disabled:opacity-50 dark:text-black',
-            )}
-          >
-            {submitting ? '…' : isLogin ? 'Iniciar Sesión' : 'Crear Cuenta'}
+                  '[&_svg]:size-6',
+                )}
+              >
+                {isLoading ? (
+                  <>
+                    <span className="sr-only">{isLogin ? 'Iniciando sesión…' : 'Creando cuenta…'}</span>
+                    <Loader2
+                      className={cn(
+                        'shrink-0 animate-spin',
+                        'text-primary-foreground dark:text-black',
+                      )}
+                      aria-hidden
+                    />
+                  </>
+                ) : isLogin ? (
+                  'Iniciar Sesión'
+                ) : (
+                  'Crear Cuenta'
+                )}
           </Button>
-        </form>
+              </motion.div>
 
-        {/* ── Toggle login / register ── */}
+              {/* ── Toggle login / register ── */}
+              <motion.div variants={cascadeItem}>
         <button
           type="button"
           onClick={() => {
@@ -509,7 +592,10 @@ const Auth = () => {
             </>
           )}
         </button>
-      </div>
+              </motion.div>
+            </motion.form>
+        </motion.div>
+      </motion.div>
     </div>
   );
 };

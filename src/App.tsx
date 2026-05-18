@@ -1,6 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { BrowserRouter, Route, Routes, Navigate, useLocation, useNavigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Route,
+  Routes,
+  Navigate,
+  useLocation,
+  useNavigate,
+  Outlet,
+} from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
@@ -160,13 +168,15 @@ const AppRoutes = () => {
       <Routes>
         <Route path="/auth" element={<Auth />} />
         <Route path="/onboarding" element={<Navigate to="/" replace />} />
-        <Route path="/" element={<AppRoute><Workout /></AppRoute>} />
-        <Route path="/timer" element={<AppRoute><Timer /></AppRoute>} />
+        <Route element={<Outlet />}>
+          <Route path="/" element={<AppRoute><Workout /></AppRoute>} />
+          <Route path="/timer" element={<AppRoute><Timer /></AppRoute>} />
+          <Route path="/cardio" element={<AppRoute><Cardio /></AppRoute>} />
+          <Route path="/nutrition" element={<AppRoute><Nutrition /></AppRoute>} />
+          <Route path="/profile" element={<AppRoute><Profile /></AppRoute>} />
+        </Route>
         <Route path="/cardio/:activityId" element={<AppRoute><ActivityDetail /></AppRoute>} />
-        <Route path="/cardio" element={<AppRoute><Cardio /></AppRoute>} />
         <Route path="/actividad/:id" element={<AppRoute><ActivityDetail /></AppRoute>} />
-        <Route path="/nutrition" element={<AppRoute><Nutrition /></AppRoute>} />
-        <Route path="/profile" element={<AppRoute><Profile /></AppRoute>} />
         <Route path="/coach" element={<AppRoute><CoachRoute><CoachPanel /></CoachRoute></AppRoute>} />
         {/* /paywall y /verificado: sólo requieren auth, sin subscription guard */}
         <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />

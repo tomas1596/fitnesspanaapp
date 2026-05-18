@@ -97,12 +97,7 @@ function functionalPhaseDurationParen(phase: FunctionalPhaseDraft): string {
 
 function BlockTitleBadge({ children }: { children: ReactNode }) {
   return (
-    <div
-      className={cn(
-        'inline-flex w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-lg border border-primary/35 bg-primary/12 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-primary',
-        "[html[data-brand='pink']_&]:border-pink-500/45 [html[data-brand='pink']_&]:bg-pink-950/35 [html[data-brand='pink']_&]:text-pink-200",
-      )}
-    >
+    <div className="gym-routine-block-badge inline-flex w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-lg border border-primary/35 bg-primary/12 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-primary">
       {children}
     </div>
   );
@@ -137,7 +132,7 @@ function CrossfitRoutinePreview({ draft }: { draft: CrossfitLogDraft }) {
         <div
           className={cn(
             'rounded-xl border border-border/50 bg-muted/25 p-3 dark:bg-muted/15',
-            "[html[data-brand='pink']_&]:border-pink-700/35 [html[data-brand='pink']_&]:bg-zinc-900/65",
+            "[html[data-brand='pink']_&]:border-[#ff007f]/25 dark:[html[data-brand='pink']_&]:border-pink-700/35",
           )}
         >
           <BlockTitleBadge>Calentamiento / skill</BlockTitleBadge>
@@ -156,7 +151,7 @@ function CrossfitRoutinePreview({ draft }: { draft: CrossfitLogDraft }) {
                 key={b.id}
                 className={cn(
                   'rounded-xl border border-border/50 bg-card/80 p-3',
-                  "[html[data-brand='pink']_&]:border-pink-700/35 [html[data-brand='pink']_&]:bg-zinc-950/80",
+                  "[html[data-brand='pink']_&]:border-[#ff007f]/25 dark:[html[data-brand='pink']_&]:border-pink-700/35",
                 )}
               >
                 <BlockTitleBadge>
@@ -179,7 +174,7 @@ function CrossfitRoutinePreview({ draft }: { draft: CrossfitLogDraft }) {
           <div
             className={cn(
               'rounded-xl border border-border/50 bg-card/80 p-3',
-              "[html[data-brand='pink']_&]:border-pink-700/35 [html[data-brand='pink']_&]:bg-zinc-950/80",
+              "[html[data-brand='pink']_&]:border-[#ff007f]/25 dark:[html[data-brand='pink']_&]:border-pink-700/35",
             )}
           >
             <BlockTitleBadge>
@@ -194,7 +189,7 @@ function CrossfitRoutinePreview({ draft }: { draft: CrossfitLogDraft }) {
           <div
             className={cn(
               'rounded-xl border border-border/50 bg-card/80 p-3',
-              "[html[data-brand='pink']_&]:border-pink-700/35 [html[data-brand='pink']_&]:bg-zinc-950/80",
+              "[html[data-brand='pink']_&]:border-[#ff007f]/25 dark:[html[data-brand='pink']_&]:border-pink-700/35",
             )}
           >
             <BlockTitleBadge>
@@ -215,7 +210,7 @@ function CrossfitRoutinePreview({ draft }: { draft: CrossfitLogDraft }) {
           <div
             className={cn(
               'rounded-xl border border-border/50 bg-card/80 p-3',
-              "[html[data-brand='pink']_&]:border-pink-700/35 [html[data-brand='pink']_&]:bg-zinc-950/80",
+              "[html[data-brand='pink']_&]:border-[#ff007f]/25 dark:[html[data-brand='pink']_&]:border-pink-700/35",
             )}
           >
             <BlockTitleBadge>
@@ -257,7 +252,7 @@ function FunctionalPhasePreview({ phase, index }: { phase: FunctionalPhaseDraft;
     <div
       className={cn(
         'rounded-xl border border-border/50 bg-muted/20 p-3 dark:bg-muted/15',
-        "[html[data-brand='pink']_&]:border-pink-700/35 [html[data-brand='pink']_&]:bg-zinc-900/70",
+        "[html[data-brand='pink']_&]:border-[#ff007f]/25 dark:[html[data-brand='pink']_&]:border-pink-700/35",
       )}
     >
       <BlockTitleBadge>
@@ -336,12 +331,7 @@ export function GymRoutineBlockViewer({
 
       {!hideCoachNotesSection ? (
         notes ? (
-          <div
-            className={cn(
-              'rounded-2xl border-2 border-primary/45 bg-primary/12 p-4 shadow-md dark:bg-primary/14',
-              "[html[data-brand='pink']_&]:border-pink-500/55 [html[data-brand='pink']_&]:bg-pink-950/45",
-            )}
-          >
+          <div className="workout-coach-notes-panel rounded-2xl border-2 border-primary/45 bg-primary/12 p-4 shadow-md dark:bg-primary/14">
             <p className="text-center text-[11px] font-bold uppercase tracking-wide text-primary">
               Instrucciones del coach
             </p>
@@ -377,7 +367,7 @@ export function GymRoutineBlockViewer({
                   key={e.id}
                   className={cn(
                     'rounded-xl border border-border/50 bg-card/80 px-4 py-3',
-                    "[html[data-brand='pink']_&]:border-pink-700/35 [html[data-brand='pink']_&]:bg-zinc-950/80",
+                    "[html[data-brand='pink']_&]:border-[#ff007f]/25 dark:[html[data-brand='pink']_&]:border-pink-700/35",
                   )}
                 >
                   <p className="font-semibold text-foreground">{e.name.trim() || '—'}</p>

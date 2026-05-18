@@ -75,7 +75,7 @@ function FunctionalPhaseReportBlock({ phase, index }: { phase: FunctionalPhaseDr
     <div
       className={cn(
         'rounded-lg border border-border/60 bg-muted/20 p-3 dark:bg-muted/15',
-        "[html[data-brand='pink']_&]:border-pink-600/35 [html[data-brand='pink']_&]:bg-zinc-900/70",
+        "[html[data-brand='pink']_&]:border-[#ff007f]/25",
       )}
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -145,8 +145,7 @@ function ReportModalityHeader({
           'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider',
           'border-border/70 bg-muted/40 text-foreground',
           'dark:border-border dark:bg-secondary/80',
-          "[html[data-brand='pink']_&]:border-pink-600/35 [html[data-brand='pink']_&]:bg-zinc-900/80 [html[data-brand='pink']_&]:text-pink-100",
-          "dark:[html[data-brand='pink']_&]:border-pink-800/50 dark:[html[data-brand='pink']_&]:bg-pink-950/40 dark:[html[data-brand='pink']_&]:text-pink-100",
+          "[html[data-brand='pink']_&]:border-[#ff007f]/35",
         )
       : variant === 'crossfit'
         ? cn(
@@ -157,8 +156,7 @@ function ReportModalityHeader({
         : cn(
             'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider',
             'border-emerald-500/35 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300',
-            "[html[data-brand='pink']_&]:border-fuchsia-600/35 [html[data-brand='pink']_&]:bg-zinc-900/78 [html[data-brand='pink']_&]:text-fuchsia-200",
-            "dark:[html[data-brand='pink']_&]:border-fuchsia-700/40 dark:[html[data-brand='pink']_&]:bg-fuchsia-950/35 dark:[html[data-brand='pink']_&]:text-fuchsia-200",
+            "[html[data-brand='pink']_&]:border-[#ff007f]/35",
           );
   return (
     <div className={shell}>
@@ -213,6 +211,10 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises, workoutLogs }: Da
   const [foodsOpen, setFoodsOpen] = useState(false);
   const [steps, setSteps] = useState(0);
   const [stepGoal, setStepGoal] = useState(10000);
+
+  useEffect(() => {
+    setFoodsOpen(false);
+  }, [dateStr]);
 
   useEffect(() => {
     if (!user || !open) return;
@@ -479,7 +481,7 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises, workoutLogs }: Da
 
   const blockShellCrossfit = cn(
     'mt-3 rounded-lg border border-primary/15 bg-muted/20 p-2.5 dark:bg-muted/25',
-    "[html[data-brand='pink']_&]:border-pink-600/30 [html[data-brand='pink']_&]:bg-zinc-900/72",
+    "[html[data-brand='pink']_&]:border-[#ff007f]/22",
   );
 
   const renderManualExerciseLines = (lines: ManualExerciseLine[], listTitle: string) => {
@@ -512,21 +514,21 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises, workoutLogs }: Da
           <div
             className={cn(
               'rounded-lg border border-primary/15 bg-muted/20 p-2.5 dark:bg-muted/25',
-              "[html[data-brand='pink']_&]:border-pink-600/30 [html[data-brand='pink']_&]:bg-zinc-900/72",
+              "[html[data-brand='pink']_&]:border-[#ff007f]/22",
             )}
           >
             <div className="flex items-center gap-1.5">
               <Flame
                 className={cn(
                   'h-3.5 w-3.5 shrink-0 text-orange-500 dark:text-orange-400',
-                  "[html[data-brand='pink']_&]:text-fuchsia-500 dark:[html[data-brand='pink']_&]:text-fuchsia-400",
+                  "[html[data-brand='pink']_&]:text-[#ff007f] dark:[html[data-brand='pink']_&]:text-fuchsia-400",
                 )}
                 aria-hidden
               />
               <span
                 className={cn(
                   'text-[11px] font-semibold uppercase tracking-wide text-foreground',
-                  "[html[data-brand='pink']_&]:text-fuchsia-300 dark:[html[data-brand='pink']_&]:text-fuchsia-200",
+                  "[html[data-brand='pink']_&]:text-foreground dark:[html[data-brand='pink']_&]:text-fuchsia-200",
                 )}
               >
                 Calentamiento
@@ -546,8 +548,8 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises, workoutLogs }: Da
             'inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
             'border-primary/35 bg-primary/10 text-primary',
             'dark:border-primary/40 dark:bg-primary/15',
-            "[html[data-brand='pink']_&]:border-fuchsia-600/35 [html[data-brand='pink']_&]:bg-zinc-900/75 [html[data-brand='pink']_&]:text-pink-100",
-            "dark:[html[data-brand='pink']_&]:border-fuchsia-500/35 dark:[html[data-brand='pink']_&]:bg-fuchsia-950/35 dark:[html[data-brand='pink']_&]:text-fuchsia-100",
+            "[html[data-brand='pink']_&]:border-[#ff007f]/35",
+            "dark:[html[data-brand='pink']_&]:border-fuchsia-500/35 dark:[html[data-brand='pink']_&]:text-fuchsia-100",
           )}
         >
           {subtypeLabel}
@@ -711,27 +713,33 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises, workoutLogs }: Da
 
   const hasAnyWorkout = exercises.length > 0 || workoutLogs.length > 0;
 
+  const headerDateLabel = (() => {
+    const parts = dateStr.split('-').map((x) => Number.parseInt(x, 10));
+    const [y, m, d] = parts;
+    if (!y || !m || !d) return dateStr;
+    return new Date(y, m - 1, d).toLocaleDateString('es-ES', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  })();
+
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent
         side="bottom"
-        className={cn(
-          'max-h-[85vh] overflow-y-auto rounded-t-3xl border-border/50 bg-background p-5',
-          "[html[data-brand='pink']_&]:border-pink-700/35 [html[data-brand='pink']_&]:!bg-gradient-to-b [html[data-brand='pink']_&]:from-zinc-950 [html[data-brand='pink']_&]:to-zinc-900",
-          "dark:[html[data-brand='pink']_&]:border-pink-800/45 dark:[html[data-brand='pink']_&]:bg-gradient-to-b dark:[html[data-brand='pink']_&]:from-zinc-950 dark:[html[data-brand='pink']_&]:to-zinc-900",
-        )}
+        className="max-h-[85vh] overflow-y-auto rounded-t-3xl border-border/50 bg-background p-5"
       >
         <SheetHeader className="mb-4">
-          <SheetTitle className="text-left text-xl text-foreground">Reporte del Día</SheetTitle>
+          <SheetTitle className="text-left text-xl text-foreground">
+            Reporte del día · <span className="capitalize">{headerDateLabel}</span>
+          </SheetTitle>
+          <p className="mt-1 text-left text-xs font-medium tabular-nums text-muted-foreground">{dateStr}</p>
         </SheetHeader>
 
         {/* Resumen entrenamiento */}
-        <div
-          className={cn(
-            'mb-4 rounded-2xl bg-card p-4',
-            "[html[data-brand='pink']_&]:border [html[data-brand='pink']_&]:border-pink-700/25 [html[data-brand='pink']_&]:!bg-zinc-900/88",
-          )}
-        >
+        <div className="mb-4 rounded-2xl bg-card p-4">
           <div className="mb-3 flex items-center gap-2">
             <Dumbbell className="h-4 w-4 text-primary" />
             <h4 className="text-sm font-semibold text-foreground">Entrenamiento</h4>
@@ -758,7 +766,7 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises, workoutLogs }: Da
                     'rounded-xl border p-3',
                     'border-border/60 bg-muted/25',
                     'dark:border-border dark:bg-muted/20',
-                    "[html[data-brand='pink']_&]:border-pink-600/35 [html[data-brand='pink']_&]:bg-zinc-900/65",
+                    "[html[data-brand='pink']_&]:border-[#ff007f]/25",
                   )}
                 >
                   <ReportModalityHeader icon={Dumbbell} label="Musculación" variant="strength" />
@@ -772,7 +780,7 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises, workoutLogs }: Da
                     'rounded-xl border p-3',
                     'border-primary/30 bg-primary/[0.07]',
                     'dark:border-primary/35 dark:bg-primary/10',
-                    "[html[data-brand='pink']_&]:border-fuchsia-600/35 [html[data-brand='pink']_&]:bg-zinc-900/72",
+                    "[html[data-brand='pink']_&]:border-[#ff007f]/25",
                   )}
                 >
                   <ReportModalityHeader icon={Zap} label="CrossFit" variant="crossfit" />
@@ -825,7 +833,7 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises, workoutLogs }: Da
                     'rounded-xl border p-3',
                     'border-emerald-500/25 bg-emerald-500/[0.06]',
                     'dark:border-emerald-500/30 dark:bg-emerald-950/20',
-                    "[html[data-brand='pink']_&]:border-fuchsia-600/35 [html[data-brand='pink']_&]:bg-zinc-900/70",
+                    "[html[data-brand='pink']_&]:border-[#ff007f]/25",
                   )}
                 >
                   <ReportModalityHeader icon={Repeat2} label="Funcional" variant="funcional" />
@@ -893,12 +901,7 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises, workoutLogs }: Da
         </div>
 
         {/* Nutrición */}
-        <div
-          className={cn(
-            'mb-4 rounded-2xl bg-card p-4',
-            "[html[data-brand='pink']_&]:border [html[data-brand='pink']_&]:border-pink-700/25 [html[data-brand='pink']_&]:!bg-zinc-900/88",
-          )}
-        >
+        <div className="mb-4 rounded-2xl bg-card p-4">
           <div className="mb-3 flex items-center gap-2">
             <Utensils className="h-4 w-4 text-primary" />
             <h4 className="text-sm font-semibold text-foreground">Nutrición</h4>
@@ -932,8 +935,7 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises, workoutLogs }: Da
               <CollapsibleTrigger
                 className={cn(
                   'flex w-full items-center justify-between gap-3 rounded-xl bg-secondary px-4 py-3.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-accent',
-                  "[html[data-brand='pink']_&]:bg-zinc-900/80 [html[data-brand='pink']_&]:hover:bg-zinc-800",
-                  "dark:[html[data-brand='pink']_&]:bg-pink-950/40 dark:[html[data-brand='pink']_&]:hover:bg-pink-950/55",
+                  "dark:[html[data-brand='pink']_&]:hover:bg-accent",
                 )}
               >
                 <span className="min-w-0 flex-1 leading-snug">
@@ -988,12 +990,7 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises, workoutLogs }: Da
 
         {/* Hidratación + Recovery */}
         <div className="flex flex-col gap-3">
-          <div
-            className={cn(
-              'rounded-2xl bg-card p-4',
-              "[html[data-brand='pink']_&]:border [html[data-brand='pink']_&]:border-pink-700/25 [html[data-brand='pink']_&]:!bg-zinc-900/88",
-            )}
-          >
+          <div className="rounded-2xl bg-card p-4">
             <div className="mb-2 flex items-center gap-2">
               <Droplet className="h-4 w-4 text-primary" />
               <h4 className="text-sm font-semibold text-foreground">Hidratación</h4>
@@ -1002,12 +999,7 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises, workoutLogs }: Da
             <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{glasses}</p>
             <p className="text-[10px] text-muted-foreground">{(glasses * 0.25).toFixed(2)} L</p>
           </div>
-          <div
-            className={cn(
-              'rounded-2xl bg-card p-4',
-              "[html[data-brand='pink']_&]:border [html[data-brand='pink']_&]:border-pink-700/25 [html[data-brand='pink']_&]:!bg-zinc-900/88",
-            )}
-          >
+          <div className="rounded-2xl bg-card p-4">
             <div className="mb-3 flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-primary" />
               <h4 className="text-sm font-semibold text-foreground">Descanso</h4>
@@ -1020,12 +1012,7 @@ const DailyReportSheet = ({ open, onClose, dateStr, exercises, workoutLogs }: Da
         </div>
 
         {/* Pasos */}
-        <div
-          className={cn(
-            'mt-3 rounded-2xl bg-card p-4',
-            "[html[data-brand='pink']_&]:border [html[data-brand='pink']_&]:border-pink-700/25 [html[data-brand='pink']_&]:!bg-zinc-900/88",
-          )}
-        >
+        <div className="mt-3 rounded-2xl bg-card p-4">
           <div className="mb-2 flex items-center gap-2">
             <Footprints className="h-4 w-4 text-primary" />
             <h4 className="text-sm font-semibold text-foreground">Pasos</h4>

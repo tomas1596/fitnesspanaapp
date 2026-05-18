@@ -106,8 +106,8 @@ export function GymRoutineLeaderboard({
   return (
     <div
       className={cn(
-        'flex min-h-0 flex-shrink-0 flex-col rounded-2xl border border-border/50 bg-muted/25 p-3 dark:bg-muted/15',
-        "[html[data-brand='pink']_&]:border-pink-700/35 [html[data-brand='pink']_&]:bg-zinc-900/72",
+        'workout-gym-leaderboard flex min-h-0 flex-shrink-0 flex-col rounded-2xl border border-border/50 bg-muted/25 p-3 dark:bg-muted/15',
+        "[html[data-brand='pink']_&]:border-[#ff007f]/25 dark:[html[data-brand='pink']_&]:border-pink-700/35",
       )}
     >
       <p className="text-[11px] font-bold uppercase tracking-wide text-primary">Ranking del día</p>
@@ -132,14 +132,14 @@ export function GymRoutineLeaderboard({
                 <li
                   key={r.user_id}
                   className={cn(
-                    'flex items-center gap-1.5 rounded-lg border border-transparent bg-card/70 px-2 py-1',
-                    isOwnRow && 'border-primary/45 bg-primary/8',
+                    'workout-gym-lb-row flex items-center gap-1.5 rounded-lg border border-transparent bg-card/70 px-2 py-1',
+                    isOwnRow && 'workout-gym-lb-own border-primary/45 bg-primary/8',
                   )}
                 >
                   <span className="w-5 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground">
                     {idx + 1}
                   </span>
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
+                  <div className="workout-gym-lb-avatar flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
                     {r.avatar_url ? (
                       <img src={r.avatar_url} alt="" className="h-full w-full object-cover" />
                     ) : (
