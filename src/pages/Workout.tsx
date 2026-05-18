@@ -1444,11 +1444,7 @@ const Workout = () => {
 
         {coachCtxReady && user && showGymSwitch ? (
           <div
-            className={cn(
-              'workout-gym-scope-tablist mb-5 flex gap-1 rounded-2xl border border-border/40 bg-muted/90 p-1 transition-colors duration-200 dark:bg-secondary/90',
-              "[html[data-brand='pink']_&]:border-[#ff007f]/25",
-              "dark:[html[data-brand='pink']_&]:border-pink-800/45",
-            )}
+            className="workout-gym-scope-tablist mx-auto mb-5 flex w-full max-w-md rounded-full bg-zinc-900 p-1"
             role="tablist"
             aria-label="Ámbito del entrenamiento"
           >
@@ -1460,12 +1456,10 @@ const Workout = () => {
                 aria-selected={workoutScope === scope}
                 onClick={() => setWorkoutScope(scope)}
                 className={cn(
-                  'flex-1 rounded-xl px-2 py-2.5 text-center text-xs font-semibold transition-colors duration-200 sm:text-sm',
+                  'w-1/2 flex-1 rounded-full px-2 py-2.5 text-center text-xs transition-all duration-300 sm:text-sm',
                   workoutScope === scope
-                    ? "bg-primary text-primary-foreground shadow-sm [html[data-brand='pink']_&]:shadow-none"
-                    : cn(
-                        'bg-transparent text-muted-foreground hover:bg-background/60 hover:text-foreground',
-                      ),
+                    ? 'bg-primary font-bold text-zinc-950 shadow-md'
+                    : 'bg-transparent font-semibold text-zinc-400 hover:text-zinc-200',
                 )}
               >
                 {scope === 'personal' ? 'Personal' : 'Gimnasio'}
@@ -1494,9 +1488,6 @@ const Workout = () => {
               {[1, 2, 3, 4, 5, 6].map((d) => {
                 const row = gymRoutines.find((r) => r.day_number === d);
                 const dayLog = row ? gymRoutineLogById.get(row.id) : undefined;
-                const subtitle = row
-                  ? subtitleForGymRoutineLog(dayLog, activeModalidad)
-                  : '';
                 const filled = Boolean(dayLog);
                 const gymDaySheetOpen =
                   (viewerOpen && viewingRoutine?.day_number === d) ||
@@ -1517,6 +1508,7 @@ const Workout = () => {
                       gymDaySheetOpen && 'workout-gym-day-cell--viewing',
                       row
                         ? cn(
+                            'transition-all duration-200 motion-safe:active:scale-[0.98] motion-safe:active:brightness-110',
                             filled
                               ? 'border-emerald-500/45 bg-emerald-500/[0.06] hover:bg-emerald-500/10'
                               : 'border-primary/35 bg-card shadow-sm hover:bg-accent/40',
@@ -1525,20 +1517,37 @@ const Workout = () => {
                         : 'cursor-default border-dashed border-border/50 bg-muted/25 opacity-80',
                     )}
                   >
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary">Día {d}</span>
-                    <span className="mt-1 line-clamp-3 text-xs font-semibold text-foreground">
-                      {row?.title?.trim() || (row ? 'Ver rutina' : 'Sin rutina')}
-                    </span>
+                    <div className="flex items-start justify-between gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-primary">Día {d}</span>
+                      {row && !filled ? (
+                        <span
+                          className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-primary shadow-[0_0_8px_var(--brand-glow-sm)]"
+                          aria-hidden
+                        />
+                      ) : null}
+                    </div>
                     {row ? (
-                      <span
-                        className={cn(
-                          'mt-auto pt-2 text-[10px] font-medium leading-snug',
-                          filled ? 'text-emerald-700 dark:text-emerald-400 workout-gym-day-status' : 'text-muted-foreground',
-                        )}
-                      >
-                        {subtitle}
-                      </span>
-                    ) : null}
+                      <>
+                        <span className="mt-1 line-clamp-2 text-xs font-semibold text-foreground">
+                          {row.title?.trim() || 'Ver rutina'}
+                        </span>
+                        <span
+                          className={cn(
+                            'mt-auto pt-2 text-[10px] font-medium leading-snug',
+                            filled
+                              ? 'text-emerald-700 dark:text-emerald-400 workout-gym-day-status'
+                              : 'text-zinc-600 dark:text-zinc-500',
+                          )}
+                        >
+                          {filled ? subtitleForGymRoutineLog(dayLog, activeModalidad) : 'Descanso'}
+                        </span>
+                      </>
+                    ) : (
+                      <div className="mt-auto flex flex-col items-start gap-1 pt-2">
+                        <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-zinc-600 dark:text-zinc-500" aria-hidden />
+                        <span className="text-[10px] font-medium text-zinc-600 dark:text-zinc-500">Descanso</span>
+                      </div>
+                    )}
                   </button>
                 );
               })}

@@ -7,7 +7,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import { Loader2, Search, SwitchCamera } from 'lucide-react';
+import { Info, Loader2, Search, SwitchCamera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BarcodeFormat, DecodeHintType, type Result } from '@zxing/library';
@@ -608,6 +608,19 @@ export function NutritionBarcodeScanner({
             ) : null}
           </>
         )}
+      </div>
+      <div
+        role="note"
+        className="mx-auto flex max-w-[400px] gap-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4"
+      >
+        <Info className="mt-0.5 h-5 w-5 shrink-0 text-yellow-500" aria-hidden />
+        <p className="text-sm leading-snug">
+          <strong className="text-yellow-500">Nota sobre productos:</strong>{' '}
+          <span className="text-zinc-400">
+            Nuestra base de datos es global. Es posible que algunos productos nacionales o regionales no sean reconocidos.
+            Si tu producto no aparece, podés crearlo manualmente.
+          </span>
+        </p>
       </div>
       {active ? (
         <p className="mx-auto max-w-[400px] text-center text-[11px] leading-snug text-muted-foreground px-1">

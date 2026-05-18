@@ -102,7 +102,7 @@ export function FAQBottomSheet({ open, onOpenChange }: Props) {
         )}
       >
         <DrawerHeader className="border-0 px-4 pb-2 pt-0 text-left">
-          <DrawerTitle className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">Suscripción y ayuda</DrawerTitle>
+          <DrawerTitle className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">FAQ - Pana Fitness</DrawerTitle>
           <DrawerDescription className="sr-only">
             Preguntas frecuentes sobre suscripción, pagos y cuenta.
           </DrawerDescription>

@@ -18,7 +18,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import {
   LogOut, User, Activity, Flame, Beef, Droplets, Save, Camera, Lock,
-  Target, Plus, TrendingUp, Settings2, Pencil, LayoutDashboard, HelpCircle,
+  Target, TrendingUp, Pencil, LayoutDashboard, HelpCircle,
   FileText, Heart, Sparkles, AlertTriangle, Loader2, Trash2, X, ZoomIn, ChevronRight,
   Eye, EyeOff,
   Scale,
@@ -28,7 +28,6 @@ import {
   Link2,
   Unlink,
 } from 'lucide-react';
-import StepsRing from '@/components/StepsRing';
 import { AvatarCropModal } from '@/components/AvatarCropModal';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { ThemeSegmentedControl } from '@/components/ThemeSegmentedControl';
@@ -46,14 +45,6 @@ const ADMIN_EMAIL = 'thomzonlyskills@gmail.com';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
-/** Fecha corta estilo feedback producto ("Lun. 11 Nov") para pasos diarios */
-const formatStepsHeaderDate = (d = new Date()) => {
-  const dow = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][d.getDay()];
-  const mon = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][d.getMonth()];
-  return `${dow}. ${d.getDate()} ${mon}`;
-};
-
-/** Convierte input de formulario a número para columnas numeric en `profiles` (null si vacío o inválido). */
 const parseProfileNumber = (raw: string): number | null => {
   const t = String(raw).trim().replace(',', '.');
   if (t === '') return null;
@@ -178,12 +169,6 @@ const Profile = () => {
   const [draftGender, setDraftGender] = useState('');
   const [savingIdentity, setSavingIdentity] = useState(false);
 
-  const [steps, setSteps] = useState(0);
-  const [stepsId, setStepsId] = useState<string | null>(null);
-  const [stepGoal, setStepGoal] = useState(10000);
-  const [goalDialog, setGoalDialog] = useState(false);
-  const [draftGoal, setDraftGoal] = useState('10000');
-
   const [faqOpen, setFaqOpen] = useState(false);
   /** Calorías y prote registradas hoy + vasos (hidratación) para barras de avance sutiles */
   const [todayMacroTotals, setTodayMacroTotals] = useState({ calories: 0, protein: 0, glasses: 0 });
@@ -230,10 +215,9 @@ const Profile = () => {
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
-    const today = todayStr();
     const meta = (user.user_metadata ?? {}) as Record<string, string | undefined>;
     const { data, error } = await supabase.from('profiles').select(
-      'first_name, last_name, date_of_birth, height, weight, gender, target_weight, avatar_url, step_goal, theme, is_coach, coach_code, coach_id, gym_name',
+      'first_name, last_name, date_of_birth, height, weight, gender, target_weight, avatar_url, theme, is_coach, coach_code, coach_id, gym_name',
     ).eq('user_id', user.id).maybeSingle();
     const pick = (db: string | null | undefined, metaKey: string) =>
       (db != null && String(db).trim() !== '' ? String(db).trim() : '') || (meta[metaKey]?.trim() ?? '');
@@ -246,8 +230,6 @@ const Profile = () => {
       setGender(pick(data.gender, 'gender'));
       setTargetWeight(data.target_weight?.toString() || '');
       setAvatarUrl(data.avatar_url || null);
-      setStepGoal(data.step_goal || 10000);
-      setDraftGoal((data.step_goal || 10000).toString());
       setBrandTheme((data as { theme?: string }).theme || 'default');
       const rowCoach = data as {
         is_coach?: boolean | null;
@@ -281,8 +263,6 @@ const Profile = () => {
       setLinkedCoachGymDisplay(null);
       setCoachOwnGymName(null);
     }
-    const { data: s } = await supabase.from('step_logs').select('*').eq('user_id', user.id).eq('log_date', today).maybeSingle();
-    if (s) { setSteps(s.steps); setStepsId(s.id); } else { setSteps(0); setStepsId(null); }
   }, [user]);
 
   const loadTodayMacroTotals = useCallback(async () => {
@@ -507,28 +487,6 @@ const Profile = () => {
     toast({ title: 'Foto eliminada' });
   };
 
-  const updateSteps = async (val: number) => {
-    if (!user) return;
-    const next = Math.max(0, val);
-    setSteps(next);
-    const today = todayStr();
-    if (stepsId) {
-      await supabase.from('step_logs').update({ steps: next }).eq('id', stepsId);
-    } else {
-      const { data } = await supabase.from('step_logs').insert(
-        { user_id: user.id, log_date: today, steps: next },
-      ).select().single();
-      if (data) setStepsId(data.id);
-    }
-  };
-
-  const saveStepGoal = async () => {
-    if (!user) return;
-    const g = parseInt(draftGoal) || 10000;
-    setStepGoal(g);
-    setGoalDialog(false);
-    await supabase.from('profiles').update({ step_goal: g }).eq('user_id', user.id);
-  };
 
   const newPasswordOk = passwordMeetsPolicy(newPassword);
 
@@ -684,7 +642,6 @@ const Profile = () => {
   };
 
   const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
-  const stepsProgressPct = stepGoal > 0 ? Math.min(100, Math.round((steps / stepGoal) * 100)) : 0;
   const kcalProgressPct = hasData && tdee > 0 ? Math.min(100, Math.round((todayMacroTotals.calories / tdee) * 100)) : 0;
   const proteinProgressPct = hasData && proteinGoal > 0 ? Math.min(100, Math.round((todayMacroTotals.protein / proteinGoal) * 100)) : 0;
   const hydrationProgressPct = hasData && hydrationGlassGoal > 0 ? Math.min(100, Math.round((todayMacroTotals.glasses / hydrationGlassGoal) * 100)) : 0;
@@ -939,64 +896,6 @@ const Profile = () => {
           </>
         )}
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-zinc-900 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:shadow-none">
-          <div className="flex items-center gap-4">
-            <StepsRing steps={steps} goal={stepGoal} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 space-y-1">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
-                    Pasos hoy
-                  </p>
-                  <p className="text-sm font-semibold leading-tight tracking-tight text-zinc-800 dark:text-zinc-100">
-                    {formatStepsHeaderDate()}
-                  </p>
-                  <div className="flex flex-wrap items-baseline gap-x-2 pt-1 text-[13px] leading-snug sm:gap-x-3 sm:text-sm">
-                    <span className="text-zinc-500 dark:text-zinc-400">
-                      Meta:{' '}
-                      <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
-                        {stepGoal.toLocaleString()}
-                      </span>
-                    </span>
-                    <span className="text-zinc-300 dark:text-zinc-600 select-none" aria-hidden>
-                      |
-                    </span>
-                    <span className="font-bold tabular-nums text-primary dark:text-primary">
-                      {stepsProgressPct}%
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setGoalDialog(true)}
-                  className="flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/10 dark:text-primary"
-                >
-                  <Settings2 className="h-3 w-3" /> Meta
-                </button>
-              </div>
-              <div className="mt-2 flex items-center gap-2">
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  value={steps || ''}
-                  placeholder="0"
-                  onChange={e => updateSteps(parseInt(e.target.value) || 0)}
-                  className={cn(profileFormInputClass, 'flex-1')}
-                />
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  type="button"
-                  onClick={() => updateSteps(steps + 1000)}
-                  className="h-10 shrink-0 rounded-xl border border-zinc-200 bg-zinc-100 px-3 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                >
-                  <Plus className="mr-1 h-3 w-3" /> 1k
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {hasData && (
           <div className="rounded-2xl border border-zinc-200 bg-white px-2 py-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none sm:px-5">
             <div className="grid grid-cols-4 gap-x-2 sm:gap-x-8">
@@ -1062,7 +961,7 @@ const Profile = () => {
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/12">
               <HelpCircle className="h-[18px] w-[18px] text-primary dark:text-primary" />
             </span>
-            <span className="min-w-0 flex-1 text-left font-medium leading-snug">Suscripción y Ayuda</span>
+            <span className="min-w-0 flex-1 text-left font-medium leading-snug">FAQ</span>
             <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
           </button>
         </div>
@@ -1438,26 +1337,6 @@ const Profile = () => {
               className={cn('mt-1 h-12', profileNeonButtonClass)}
             >
               {savingIdentity ? 'Guardando...' : 'Guardar cambios'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={goalDialog} onOpenChange={setGoalDialog}>
-        <DialogContent className={cn(modalSurfaceClass)}>
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Meta diaria de pasos</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input
-              type="number"
-              inputMode="numeric"
-              value={draftGoal}
-              onChange={(e) => setDraftGoal(e.target.value)}
-              className={editModalInputClass}
-            />
-            <Button onClick={saveStepGoal} className={cn('h-12', profileNeonButtonClass)}>
-              Guardar
             </Button>
           </div>
         </DialogContent>

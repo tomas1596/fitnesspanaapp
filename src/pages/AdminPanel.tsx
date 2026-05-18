@@ -860,14 +860,17 @@ const AdminPanel = () => {
         </div>
 
         {/* Search */}
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+        <div className="group relative">
+          <Search
+            className="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-zinc-500 transition-all duration-300 group-focus-within:text-primary dark:text-zinc-400 dark:group-focus-within:text-white"
+            aria-hidden
+          />
           <Input
             type="search"
             placeholder="Buscar por nombre o email…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="h-12 rounded-full border-zinc-200/90 bg-zinc-100 pl-11 pr-4 text-sm text-zinc-900 shadow-inner shadow-zinc-900/5 placeholder:text-zinc-400 focus-visible:ring-primary/30 dark:border-white/10 dark:bg-zinc-900/90 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+            className="h-12 w-full rounded-full border border-zinc-700 bg-zinc-800/50 pl-11 pr-4 text-sm text-zinc-900 shadow-none outline-none transition-all duration-300 placeholder:text-zinc-500 focus:border-primary focus:ring-1 focus:ring-primary/50 dark:text-zinc-100 dark:placeholder:text-zinc-400"
             aria-label="Filtrar usuarios"
           />
         </div>

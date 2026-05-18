@@ -1,5 +1,21 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Plus, Minus, Droplets, Trash2, Sun, Sunset, Cookie, Moon, BookOpen, Search, Pencil, Apple, Barcode } from 'lucide-react';
+import {
+  Plus,
+  Minus,
+  Droplets,
+  Trash2,
+  Sun,
+  Sunset,
+  Cookie,
+  Moon,
+  BookOpen,
+  Search,
+  Pencil,
+  Apple,
+  Barcode,
+  Footprints,
+  Settings2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -21,6 +37,7 @@ import { useToast } from '@/hooks/use-toast';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { NutritionBarcodeScanner, NutritionBarcodeScanLoadingOverlay } from '@/components/NutritionBarcodeScanner';
 import { CountUpSpan } from '@/components/CountUpSpan';
+import StepsRing from '@/components/StepsRing';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { fetchOpenFoodFactsProduct, mapOpenFoodFactsToNutritionFields, type MacrosPer100g, type OpenFoodFactsPackageTotal } from '@/lib/openFoodFacts';
 import { calculateAge } from '@/lib/age';
@@ -201,6 +218,11 @@ const Nutrition = () => {
   const [nutritionLogs, setNutritionLogs] = useState<NutritionLogRow[]>([]);
   const [glasses, setGlasses] = useState(0);
   const [hydrationId, setHydrationId] = useState<string | null>(null);
+  const [steps, setSteps] = useState(0);
+  const [stepsId, setStepsId] = useState<string | null>(null);
+  const [stepGoal, setStepGoal] = useState(10000);
+  const [stepsGoalDialog, setStepsGoalDialog] = useState(false);
+  const [draftStepGoal, setDraftStepGoal] = useState('10000');
 
   const [newFoodOpen, setNewFoodOpen] = useState(false);
   /** Origen del formulario: biblioteca vs. flujo + del diario (tras guardar abre calculadora con comida fijada). */
@@ -243,11 +265,17 @@ const Nutrition = () => {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('profiles').select('weight, height, date_of_birth, gender').eq('user_id', user.id).single().then(({ data }) => {
+    supabase.from('profiles').select('weight, height, date_of_birth, gender, step_goal').eq('user_id', user.id).single().then(({ data }) => {
       const a = calculateAge(data?.date_of_birth);
       if (!data || !data.weight || !data.height || a == null || a <= 0 || !data.gender) return;
       const w = Number(data.weight);
       const h = Number(data.height);
+      const sg = data.step_goal != null ? Number(data.step_goal) : 10000;
+      if (Number.isFinite(sg) && sg > 0) {
+        const g = Math.round(sg);
+        setStepGoal(g);
+        setDraftStepGoal(String(g));
+      }
       const bmr = data.gender === 'male' ? 10 * w + 6.25 * h - 5 * a + 5 : 10 * w + 6.25 * h - 5 * a - 161;
       const cals = Math.round(bmr * 1.55);
       const protein = Math.round(w * 2);
@@ -308,8 +336,22 @@ const Nutrition = () => {
 
   const fetchHydration = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase.from('hydration_logs').select('*').eq('user_id', user.id).eq('log_date', todayLocalYMD()).maybeSingle();
-    if (data) { setGlasses(data.glasses); setHydrationId(data.id); }
+    const day = todayLocalYMD();
+    const [{ data }, { data: st }] = await Promise.all([
+      supabase.from('hydration_logs').select('*').eq('user_id', user.id).eq('log_date', day).maybeSingle(),
+      supabase.from('step_logs').select('*').eq('user_id', user.id).eq('log_date', day).maybeSingle(),
+    ]);
+    if (data) {
+      setGlasses(data.glasses);
+      setHydrationId(data.id);
+    }
+    if (st) {
+      setSteps(Number((st as { steps: unknown }).steps));
+      setStepsId(st.id as string);
+    } else {
+      setSteps(0);
+      setStepsId(null);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -770,6 +812,31 @@ const Nutrition = () => {
     }
   };
 
+  const updateStepsCount = async (val: number) => {
+    if (!user) return;
+    const next = Math.max(0, Math.round(val));
+    setSteps(next);
+    const day = todayLocalYMD();
+    if (stepsId) {
+      await supabase.from('step_logs').update({ steps: next }).eq('id', stepsId);
+    } else {
+      const { data } = await supabase
+        .from('step_logs')
+        .insert({ user_id: user.id, log_date: day, steps: next })
+        .select()
+        .single();
+      if (data) setStepsId(data.id);
+    }
+  };
+
+  const saveStepGoalFromDialog = async () => {
+    if (!user) return;
+    const g = Math.max(1000, parseInt(draftStepGoal, 10) || 10000);
+    setStepGoal(g);
+    setStepsGoalDialog(false);
+    await supabase.from('profiles').update({ step_goal: g }).eq('user_id', user.id);
+  };
+
   const glassesLiters = (glasses * 0.25).toFixed(2);
 
   const ringPct = goals.calories ? Math.min(100, (totals.calories / goals.calories) * 100) : 0;
@@ -969,38 +1036,95 @@ const Nutrition = () => {
               })}
             </div>
 
-            <div className="rounded-2xl border border-border/40 bg-card/80 p-4 backdrop-blur-sm">
-              <div className="mb-3 flex items-center gap-2">
-                <Droplets className="h-4 w-4 text-primary/70" />
-                <h2 className="text-sm font-bold tracking-tight text-foreground">Hidratación</h2>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-2xl font-bold tabular-nums text-foreground">{glassesLiters}<span className="ml-1 text-sm font-normal text-muted-foreground">L</span></p>
-                  <p className="text-[11px] text-muted-foreground">{glasses} vasos · Meta: {goals.hydrationGlasses}</p>
+            <div className="space-y-3">
+              <h2 className="px-1 text-xs font-bold uppercase tracking-widest text-muted-foreground/70">Hábitos diarios</h2>
+
+              <div className="rounded-2xl border border-border/40 bg-card/80 p-4 backdrop-blur-sm">
+                <div className="mb-3 flex items-center gap-2">
+                  <Droplets className="h-4 w-4 text-primary/70" />
+                  <h3 className="text-sm font-bold tracking-tight text-foreground">Hidratación</h3>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="secondary" size="icon" onClick={() => updateGlasses(glasses - 1)} className="h-10 w-10 rounded-xl">
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <span className="w-6 text-center font-bold tabular-nums">{glasses}</span>
-                  <Button variant="secondary" size="icon" onClick={() => updateGlasses(glasses + 1)} className="h-10 w-10 rounded-xl">
-                    <Plus className="h-4 w-4" />
-                  </Button>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-2xl font-bold tabular-nums text-foreground">{glassesLiters}<span className="ml-1 text-sm font-normal text-muted-foreground">L</span></p>
+                    <p className="text-[11px] text-muted-foreground">{glasses} vasos · Meta: {goals.hydrationGlasses}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="secondary" size="icon" onClick={() => updateGlasses(glasses - 1)} className="h-10 w-10 rounded-xl">
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <span className="w-6 text-center font-bold tabular-nums">{glasses}</span>
+                    <Button variant="secondary" size="icon" onClick={() => updateGlasses(glasses + 1)} className="h-10 w-10 rounded-xl">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-3 flex gap-1">
+                  {Array.from({ length: goals.hydrationGlasses }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        'h-1.5 flex-1 rounded-full',
+                        i < glasses
+                          ? "bg-green-600 dark:bg-primary [html[data-brand='pink']_&]:bg-pink-600"
+                          : 'bg-secondary',
+                      )}
+                    />
+                  ))}
                 </div>
               </div>
-              <div className="mt-3 flex gap-1">
-                {Array.from({ length: goals.hydrationGlasses }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      'h-1.5 flex-1 rounded-full',
-                      i < glasses
-                        ? "bg-green-600 dark:bg-primary [html[data-brand='pink']_&]:bg-pink-600"
-                        : 'bg-secondary',
-                    )}
-                  />
-                ))}
+
+              <div className="rounded-2xl border border-border/40 bg-card/80 px-4 py-3 backdrop-blur-sm">
+                <div className="mb-2 flex items-center gap-2">
+                  <Footprints className="h-4 w-4 shrink-0 text-primary/70" aria-hidden />
+                  <h3 className="text-sm font-bold tracking-tight text-foreground">Pasos</h3>
+                  <button
+                    type="button"
+                    className="ml-auto flex shrink-0 items-center justify-center rounded-xl p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                    aria-label="Editar meta de pasos"
+                    onClick={() => {
+                      setDraftStepGoal(String(stepGoal));
+                      setStepsGoalDialog(true);
+                    }}
+                  >
+                    <Settings2 className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <StepsRing steps={steps} goal={stepGoal} size={76} variant="compact" compactCenter="percent" />
+                  <div className="min-w-0 flex-1 py-0.5">
+                    <p className="truncate text-3xl font-bold tabular-nums tracking-tight text-foreground sm:text-4xl">
+                      {steps.toLocaleString()}
+                    </p>
+                    <p className="truncate text-sm text-muted-foreground tabular-nums">Meta: {stepGoal.toLocaleString()}</p>
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      title="Menos mil pasos"
+                      className={cn(
+                        'h-10 w-[3.25rem] shrink-0 rounded-full border-border/60 p-0 text-[11px] font-bold shadow-none',
+                        'hover:border-primary hover:bg-primary hover:text-primary-foreground motion-safe:active:scale-95 dark:hover:text-black',
+                      )}
+                      onClick={() => void updateStepsCount(steps - 1000)}
+                    >
+                      −1k
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      title="Más mil pasos"
+                      className={cn(
+                        'h-10 w-[3.25rem] shrink-0 rounded-full border-border/60 p-0 text-[11px] font-bold shadow-none',
+                        'hover:border-primary hover:bg-primary hover:text-primary-foreground motion-safe:active:scale-95 dark:hover:text-black',
+                      )}
+                      onClick={() => void updateStepsCount(steps + 1000)}
+                    >
+                      +1k
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1442,6 +1566,35 @@ const Nutrition = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={stepsGoalDialog}
+        onOpenChange={(open) => {
+          setStepsGoalDialog(open);
+          if (open) setDraftStepGoal(String(stepGoal));
+        }}
+      >
+        <DialogContent className="rounded-2xl border-0 bg-card sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Meta diaria de pasos</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1000}
+              step={500}
+              value={draftStepGoal}
+              onChange={(e) => setDraftStepGoal(e.target.value)}
+              className={NUTRITION_FORM_INPUT_CLASS}
+              aria-label="Pasos objetivo por día"
+            />
+            <Button type="button" className="h-12 w-full rounded-xl" onClick={() => void saveStepGoalFromDialog()}>
+              Guardar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={calculatorOpen} onOpenChange={(o) => { if (!o) closeCalculator(); }}>
         <DialogContent className="rounded-2xl border-0 bg-card sm:max-w-md">

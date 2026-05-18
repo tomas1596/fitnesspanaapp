@@ -23,9 +23,13 @@ type Preset = {
   work: number;
   rest: number;
   rounds: number;
+  /** Series (bloques repetidos tras descanso largo opcional). Mínimo 1. */
+  sets: number;
+  /** Descanso entre series (segundos). Si es 0, pasa al siguiente set sin fase aparte. */
+  setRest: number;
 };
 
-type Phase = 'idle' | 'prep' | 'work' | 'rest' | 'done';
+type Phase = 'idle' | 'prep' | 'work' | 'rest' | 'setRest' | 'done';
 
 // ── Storage helpers ──────────────────────────────────────────────────────────
 
@@ -38,14 +42,31 @@ const DEFAULT_PRESET: Preset = {
   work: 20,
   rest: 10,
   rounds: 8,
+  sets: 1,
+  setRest: 0,
 };
+
+function normalizePreset(p: Partial<Preset>): Preset | null {
+  if (!p || typeof p.id !== 'string') return null;
+  const name = typeof p.name === 'string' && p.name.trim() ? p.name.trim() : DEFAULT_PRESET.name;
+  const prep = Math.max(0, Math.round(Number(p.prep ?? 0)));
+  const work = Math.max(1, Math.round(Number(p.work ?? 1)));
+  const rest = Math.max(0, Math.round(Number(p.rest ?? 0)));
+  const rounds = Math.max(1, Math.round(Number(p.rounds ?? 1)));
+  const sets = Math.max(1, Math.round(Number(p.sets ?? 1)));
+  const setRest = Math.max(0, Math.round(Number(p.setRest ?? 0)));
+  return { id: p.id, name, prep, work, rest, rounds, sets, setRest };
+}
 
 const loadPresets = (): Preset[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [DEFAULT_PRESET];
-    const parsed = JSON.parse(raw) as Preset[];
-    return parsed.length ? parsed : [DEFAULT_PRESET];
+    const parsed = JSON.parse(raw) as Partial<Preset>[];
+    const next = parsed
+      .map((row) => normalizePreset(row))
+      .filter((x): x is Preset => x != null);
+    return next.length ? next : [DEFAULT_PRESET];
   } catch {
     return [DEFAULT_PRESET];
   }
@@ -171,17 +192,30 @@ const Timer = () => {
   const [paused,   setPaused]   = useState(false);
   const [remaining, setRemaining] = useState(active?.prep ?? 10);
   const [round,    setRound]    = useState(1);
+  const [currentSet, setCurrentSet] = useState(1);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editing,      setEditing]      = useState<Preset | null>(null);
 
   const intervalRef = useRef<number | null>(null);
+  const roundRef = useRef(1);
+  const currentSetRef = useRef(1);
+
+  useEffect(() => {
+    roundRef.current = round;
+  }, [round]);
+  useEffect(() => {
+    currentSetRef.current = currentSet;
+  }, [currentSet]);
 
   // Reset displayed time when preset changes while idle
   useEffect(() => {
     if (phase === 'idle' && active) {
       setRemaining(active.prep);
       setRound(1);
+      setCurrentSet(1);
+      roundRef.current = 1;
+      currentSetRef.current = 1;
     }
   }, [active, phase]);
 
@@ -198,18 +232,38 @@ const Timer = () => {
         return 'work';
       }
       if (prev === 'work') {
-        if (round >= active.rounds) {
-          // Last round just finished — announce completion
+        const rNow = roundRef.current;
+        const sNow = currentSetRef.current;
+        if (rNow < active.rounds) {
+          setRemaining(active.rest);
+          return 'rest';
+        }
+        if (sNow >= active.sets) {
           speak('Ejercicio finalizado');
           setRemaining(0);
           return 'done';
         }
-        // Mid-circuit rest — no voice announcement
-        setRemaining(active.rest);
-        return 'rest';
+
+        const nextSet = sNow + 1;
+        roundRef.current = 1;
+        currentSetRef.current = nextSet;
+        setRound(1);
+        setCurrentSet(nextSet);
+
+        if (active.setRest > 0) {
+          setRemaining(active.setRest);
+          return 'setRest';
+        }
+        setRemaining(active.work);
+        return 'work';
       }
       if (prev === 'rest') {
         setRound(r => r + 1);
+        setRemaining(active.work);
+        return 'work';
+      }
+      if (prev === 'setRest') {
+        speak('Comienza');
         setRemaining(active.work);
         return 'work';
       }
@@ -238,13 +292,16 @@ const Timer = () => {
     }, 1000);
     return () => { if (intervalRef.current) window.clearInterval(intervalRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, paused, active, round]);
+  }, [phase, paused, active, round, currentSet]);
 
   const start = () => {
     if (!active) return;
     primeTimerAudio();
     if (phase === 'idle' || phase === 'done') {
       setRound(1);
+      roundRef.current = 1;
+      setCurrentSet(1);
+      currentSetRef.current = 1;
       setRemaining(active.prep);
       setPhase('prep');
       setPaused(false);
@@ -260,6 +317,9 @@ const Timer = () => {
     setPhase('idle');
     setPaused(false);
     setRound(1);
+    setCurrentSet(1);
+    roundRef.current = 1;
+    currentSetRef.current = 1;
     setRemaining(active?.prep ?? 0);
   };
 
@@ -270,17 +330,18 @@ const Timer = () => {
     if (phase === 'prep')   return '#FACC15';
     if (phase === 'work')   return 'var(--brand-color)';
     if (phase === 'rest')   return '#38BDF8';
+    if (phase === 'setRest') return '#DC2626';
     return 'hsl(var(--background))';
   })();
 
-  const fgDark = phase === 'prep' || phase === 'work' || phase === 'rest' || paused;
+  const fgDark = phase === 'prep' || phase === 'work' || phase === 'rest' || phase === 'setRest' || paused;
 
   const mins    = Math.floor(remaining / 60);
   const secs    = remaining % 60;
-  const isRunning = (phase === 'prep' || phase === 'work' || phase === 'rest') && !paused;
+  const isRunning = (phase === 'prep' || phase === 'work' || phase === 'rest' || phase === 'setRest') && !paused;
 
   const phaseHeadline =
-    paused && (phase === 'prep' || phase === 'work' || phase === 'rest')
+    paused && (phase === 'prep' || phase === 'work' || phase === 'rest' || phase === 'setRest')
       ? { text: 'EN PAUSA', className: 'text-white' }
       : phase === 'prep'
         ? { text: 'PREPARATE', className: 'text-zinc-950' }
@@ -288,9 +349,12 @@ const Timer = () => {
           ? { text: '¡A ENTRENAR!', className: 'text-white' }
           : phase === 'rest'
             ? { text: 'DESCANSÁ', className: 'text-white' }
-            : null;
+            : phase === 'setRest'
+              ? { text: 'DESCANSO LARGO', className: 'text-white' }
+              : null;
 
   const totalRounds = active?.rounds ?? 0;
+  const totalSets = Math.max(1, active?.sets ?? 1);
 
   const timeToneClass =
     phase === 'idle' || phase === 'done'
@@ -319,7 +383,8 @@ const Timer = () => {
       };
     }
 
-    const inActiveCircuit = phase === 'prep' || phase === 'work' || phase === 'rest';
+    const inActiveCircuit =
+      phase === 'prep' || phase === 'work' || phase === 'rest' || phase === 'setRest';
     if (paused && inActiveCircuit) {
       return {
         button: cn(
@@ -334,7 +399,7 @@ const Timer = () => {
     const icon =
       phase === 'prep'
         ? 'text-zinc-950'
-        : phase === 'rest'
+        : phase === 'rest' || phase === 'setRest'
           ? 'text-red-600'
           : 'text-[color:var(--brand-color)]';
 
@@ -372,6 +437,8 @@ const Timer = () => {
       work: 30,
       rest: 15,
       rounds: 8,
+      sets: 1,
+      setRest: 0,
     });
   };
 
@@ -469,8 +536,8 @@ const Timer = () => {
             <span>{String(secs).padStart(2, '0')}</span>
           </div>
 
-          {/* Ronda · badge */}
-          <div className="mt-2 min-h-[2rem] flex items-center justify-center">
+          {/* Ronda · Set · badges */}
+          <div className="mt-2 flex min-h-[2rem] flex-wrap items-center justify-center gap-2">
             {phase === 'done' ? (
               <span
                 className={cn(
@@ -485,18 +552,34 @@ const Timer = () => {
                 COMPLETADO
               </span>
             ) : phase !== 'idle' && totalRounds > 0 ? (
-              <span
-                className={cn(
-                  'rounded-full px-4 py-1 text-xs font-bold uppercase backdrop-blur-sm',
-                  fgDark ? cn(glassRoundBadgeTone, 'tracking-[0.2em]') : null,
-                  !fgDark &&
-                    (resolved === 'dark'
-                      ? 'bg-white/15 text-white ring-1 ring-white/20 tracking-[0.2em]'
-                      : 'bg-black/10 text-zinc-900 ring-1 ring-black/10 tracking-[0.2em]'),
-                )}
-              >
-                Ronda&nbsp;{round}&nbsp;/&nbsp;{totalRounds}
-              </span>
+              <>
+                {totalSets > 1 ? (
+                  <span
+                    className={cn(
+                      'rounded-full px-3.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em] backdrop-blur-sm',
+                      fgDark ? 'bg-black/40 text-white ring-1 ring-white/35' : null,
+                      !fgDark &&
+                        (resolved === 'dark'
+                          ? 'bg-zinc-900/85 text-white ring-1 ring-white/25 tracking-[0.18em]'
+                          : 'bg-zinc-950/85 text-white ring-1 ring-white/20 tracking-[0.18em]'),
+                    )}
+                  >
+                    Set&nbsp;{currentSet}&nbsp;/&nbsp;{totalSets}
+                  </span>
+                ) : null}
+                <span
+                  className={cn(
+                    'rounded-full px-4 py-1 text-xs font-bold uppercase backdrop-blur-sm',
+                    fgDark ? cn(glassRoundBadgeTone, 'tracking-[0.2em]') : null,
+                    !fgDark &&
+                      (resolved === 'dark'
+                        ? 'bg-white/15 text-white ring-1 ring-white/20 tracking-[0.2em]'
+                        : 'bg-black/10 text-zinc-900 ring-1 ring-black/10 tracking-[0.2em]'),
+                  )}
+                >
+                  Ronda&nbsp;{round}&nbsp;/&nbsp;{totalRounds}
+                </span>
+              </>
             ) : null}
           </div>
         </div>
@@ -581,6 +664,8 @@ const Timer = () => {
                   <div className="font-semibold text-zinc-900 dark:text-zinc-100">{p.name}</div>
                   <div className="text-xs text-zinc-500 dark:text-zinc-400">
                     Prep {p.prep}s · Trabajo {p.work}s · Descanso {p.rest}s · {p.rounds} rondas
+                    {p.sets > 1 ? ` · ${p.sets} sets` : ''}
+                    {p.setRest > 0 ? ` · Entre sets ${p.setRest}s` : ''}
                   </div>
                 </button>
                 <div className="flex shrink-0 items-center gap-0.5">
@@ -680,6 +765,26 @@ const Timer = () => {
                     min={1}
                     value={editing.rounds}
                     onChange={e => setEditing({ ...editing, rounds: Math.max(1, +e.target.value || 1) })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-zinc-600 dark:text-zinc-400">Sets</Label>
+                  <Input
+                    className={cn('mt-1.5', timerInputClass)}
+                    type="number"
+                    min={1}
+                    value={editing.sets}
+                    onChange={e => setEditing({ ...editing, sets: Math.max(1, +e.target.value || 1) })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-zinc-600 dark:text-zinc-400">Descanso entre sets (s)</Label>
+                  <Input
+                    className={cn('mt-1.5', timerInputClass)}
+                    type="number"
+                    min={0}
+                    value={editing.setRest}
+                    onChange={e => setEditing({ ...editing, setRest: Math.max(0, +e.target.value || 0) })}
                   />
                 </div>
               </div>
