@@ -162,7 +162,10 @@ const Workout = () => {
   const [coachCtxReady, setCoachCtxReady] = useState(false);
   const [workoutScope, setWorkoutScope] = useState<'personal' | 'gimnasio'>('personal');
 
-  const showGymSwitch = coachCtxReady && !!user && (!!studentCoachProfileId || isCoachUser);
+  /** Alumno con `profiles.coach_id` o usuario coach (`is_coach`). */
+  const isLinkedToGymOrCoach = Boolean(studentCoachProfileId) || isCoachUser;
+  const showGymSwitch = coachCtxReady && !!user && isLinkedToGymOrCoach;
+  const isGymView = showGymSwitch && workoutScope === 'gimnasio';
 
   const gymSourceCoachProfileId = useMemo(() => {
     if (!coachCtxReady || !user) return null;
@@ -205,7 +208,9 @@ const Workout = () => {
 
       const pid = typeof row?.id === 'string' ? row.id : null;
       const coachFlag = row?.is_coach === true;
-      const studentCoachId = typeof row?.coach_id === 'string' ? row.coach_id : null;
+      const rawCoachId = row?.coach_id;
+      const studentCoachId =
+        typeof rawCoachId === 'string' && rawCoachId.trim().length > 0 ? rawCoachId.trim() : null;
 
       setMyProfileId(pid);
       setIsCoachUser(coachFlag);
@@ -261,11 +266,16 @@ const Workout = () => {
   }, [workoutScope, coachCtxReady, user, studentCoachProfileId, isCoachUser]);
 
   useEffect(() => {
-    if (!coachCtxReady || workoutScope !== 'gimnasio') return;
+    if (!coachCtxReady || isLinkedToGymOrCoach) return;
+    if (workoutScope !== 'personal') setWorkoutScope('personal');
+  }, [coachCtxReady, isLinkedToGymOrCoach, workoutScope]);
+
+  useEffect(() => {
+    if (!coachCtxReady || !isGymView) return;
     if (!gymAllowedModalities.includes(activeModalidad)) {
       setActiveModalidad(gymAllowedModalities[0] ?? 'musculacion');
     }
-  }, [coachCtxReady, workoutScope, gymAllowedModalities, activeModalidad, setActiveModalidad]);
+  }, [coachCtxReady, isGymView, gymAllowedModalities, activeModalidad, setActiveModalidad]);
 
   useEffect(() => {
     setPersonalConditioningEditorOpen(false);
@@ -286,7 +296,7 @@ const Workout = () => {
   const [personalConditioningEditorOpen, setPersonalConditioningEditorOpen] = useState(false);
 
   useEffect(() => {
-    if (!user?.id || workoutScope !== 'gimnasio' || !gymSourceCoachProfileId) {
+    if (!user?.id || !isGymView || !gymSourceCoachProfileId) {
       setGymRoutines([]);
       setGymRoutinesLoading(false);
       return;
@@ -312,7 +322,7 @@ const Workout = () => {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, workoutScope, gymSourceCoachProfileId, activeModalidad]);
+  }, [user?.id, isGymView, gymSourceCoachProfileId, activeModalidad]);
 
   // Inline add form
   const [addingExercise, setAddingExercise] = useState(false);
@@ -339,13 +349,13 @@ const Workout = () => {
 
   const gymRoutineLogById = useMemo(() => {
     const m = new Map<string, Tables<'workout_logs'>>();
-    if (workoutScope !== 'gimnasio') return m;
+    if (!isGymView) return m;
     for (const log of workoutLogs) {
       if (log.modality !== activeModalidad || !log.gym_routine_id) continue;
       m.set(log.gym_routine_id, log);
     }
     return m;
-  }, [workoutLogs, workoutScope, activeModalidad]);
+  }, [workoutLogs, isGymView, activeModalidad]);
 
   /** Evita ver rankings / formularios de otra fecha si el usuario cambia el día en el selector. */
   useEffect(() => {
@@ -461,10 +471,9 @@ const Workout = () => {
       .eq('workout_date', dateStr);
 
     const logsAll = logsRaw || [];
-    const logs =
-      workoutScope === 'gimnasio'
-        ? logsAll.filter((l) => l.gym_routine_id != null)
-        : logsAll.filter((l) => l.gym_routine_id == null);
+    const logs = isGymView
+      ? logsAll.filter((l) => l.gym_routine_id != null)
+      : logsAll.filter((l) => l.gym_routine_id == null);
 
     setWorkoutLogs(logs);
 
@@ -508,7 +517,7 @@ const Workout = () => {
     } else {
       setLastPerfMap({});
     }
-  }, [user, dateStr, workoutScope, fetchLastPerformances]);
+  }, [user, dateStr, isGymView, fetchLastPerformances]);
 
   useEffect(() => { setHydrated(false); fetchExercises(); }, [fetchExercises]);
 
@@ -1328,10 +1337,9 @@ const Workout = () => {
     hydrated && !hasWorkoutOnDay && isPast && !enableEmptyDay && !addingExercise;
   const showWorkoutUI = !showEmptyPastState;
 
-  const showDailyReportButton =
-    workoutScope === 'gimnasio'
-      ? hydrated && !!user
-      : showWorkoutUI && (exercises.length > 0 || isToday);
+  const showDailyReportButton = isGymView
+    ? hydrated && !!user
+    : showWorkoutUI && (exercises.length > 0 || isToday);
 
   const conditioningCardSurface =
     activeModalidad !== 'musculacion' ? CONDITIONING_EXERCISE_CARD_CLASS : undefined;
@@ -1384,7 +1392,7 @@ const Workout = () => {
     <div className="min-h-screen bg-background px-4 pb-24">
       <div className="mx-auto max-w-lg">
         <PageScreenHeader
-          title="Entrenamiento"
+          title="Entreno"
           right={
             <div className="flex flex-row items-center gap-2">
               <button
@@ -1442,7 +1450,7 @@ const Workout = () => {
           </Popover>
         </div>
 
-        {coachCtxReady && user && showGymSwitch ? (
+        {showGymSwitch ? (
           <div
             className="workout-gym-scope-tablist mx-auto mb-5 flex w-full max-w-md rounded-full border border-zinc-200 bg-zinc-100 p-1 shadow-inner dark:border-zinc-800 dark:bg-zinc-900"
             role="tablist"
@@ -1471,11 +1479,11 @@ const Workout = () => {
         <WorkoutModalityTabs
           value={activeModalidad}
           onChange={setActiveModalidad}
-          allowedModalities={workoutScope === 'gimnasio' ? gymAllowedModalities : undefined}
+          allowedModalities={isGymView ? gymAllowedModalities : undefined}
           className="mb-5"
         />
 
-        {workoutScope === 'gimnasio' ? (
+        {isGymView ? (
           <div className="space-y-4">
             <p className="text-center text-xs font-medium text-muted-foreground">
               Tocá un día para ver la rutina del coach y registrar tu resultado en esta fecha (

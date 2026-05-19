@@ -828,7 +828,7 @@ const Profile = () => {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-bold text-zinc-900 dark:text-zinc-50">
-                    Vincularme a un Gimnasio/Coach
+                    Vincularme a un Gimnasio
                   </span>
                   <span className="mt-0.5 block text-xs text-zinc-600 dark:text-zinc-400">
                     Ingresá el código que te dio tu profe (ej. PANA-X7B9).
