@@ -1444,7 +1444,7 @@ const Workout = () => {
 
         {coachCtxReady && user && showGymSwitch ? (
           <div
-            className="workout-gym-scope-tablist mx-auto mb-5 flex w-full max-w-md rounded-full bg-zinc-900 p-1"
+            className="workout-gym-scope-tablist mx-auto mb-5 flex w-full max-w-md rounded-full border border-zinc-200 bg-zinc-100 p-1 shadow-inner dark:border-zinc-800 dark:bg-zinc-900"
             role="tablist"
             aria-label="Ámbito del entrenamiento"
           >
@@ -1456,10 +1456,10 @@ const Workout = () => {
                 aria-selected={workoutScope === scope}
                 onClick={() => setWorkoutScope(scope)}
                 className={cn(
-                  'w-1/2 flex-1 rounded-full px-2 py-2.5 text-center text-xs transition-all duration-300 sm:text-sm',
+                  'w-1/2 flex-1 rounded-full px-4 py-2 text-center text-xs font-bold transition-all duration-300 sm:text-sm',
                   workoutScope === scope
-                    ? 'bg-primary font-bold text-zinc-950 shadow-md'
-                    : 'bg-transparent font-semibold text-zinc-400 hover:text-zinc-200',
+                    ? 'bg-primary text-zinc-950 shadow-md'
+                    : 'bg-transparent text-zinc-600 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200',
                 )}
               >
                 {scope === 'personal' ? 'Personal' : 'Gimnasio'}
@@ -1539,13 +1539,13 @@ const Workout = () => {
                               : 'text-zinc-600 dark:text-zinc-500',
                           )}
                         >
-                          {filled ? subtitleForGymRoutineLog(dayLog, activeModalidad) : 'Descanso'}
+                          {filled ? subtitleForGymRoutineLog(dayLog, activeModalidad) : 'Rutina'}
                         </span>
                       </>
                     ) : (
                       <div className="mt-auto flex flex-col items-start gap-1 pt-2">
                         <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-zinc-600 dark:text-zinc-500" aria-hidden />
-                        <span className="text-[10px] font-medium text-zinc-600 dark:text-zinc-500">Descanso</span>
+                        <span className="text-[10px] font-medium text-zinc-600 dark:text-zinc-500">Sin rutina</span>
                       </div>
                     )}
                   </button>

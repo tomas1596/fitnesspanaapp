@@ -35,6 +35,7 @@ import {
   Check,
   ChevronDown,
   Copy,
+  CreditCard,
   Crown,
   Medal,
   Palette,
@@ -80,7 +81,210 @@ type DirectoryRow = {
   gym_modalities: string[];
 };
 
+type SubRole = 'free' | 'premium' | 'tester';
+
 const COACH_MODALITY_LABELS = WORKOUT_MODALITY_OPTIONS.map((o) => o.label);
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const TRIAL_DAYS = 7;
+/** Acceso ilimitado (Tester / referencia Admin en UI). */
+const LIFETIME_ACCESS_EXPIRES_ISO = '2049-12-31T23:59:59.999Z';
+
+function formatSubscriptionDate(d: Date): string {
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function trialEndFromRegisteredAt(registeredAt: string): Date {
+  return new Date(new Date(registeredAt).getTime() + TRIAL_DAYS * MS_PER_DAY);
+}
+
+/** Fecha de vencimiento coherente con el rol elegido en el panel admin. */
+function computeExpiryForRoleChange(newRole: SubRole, row: DirectoryRow): string {
+  if (newRole === 'tester') {
+    return LIFETIME_ACCESS_EXPIRES_ISO;
+  }
+  if (newRole === 'free') {
+    if (row.registered_at) {
+      return trialEndFromRegisteredAt(row.registered_at).toISOString();
+    }
+    return new Date(0).toISOString();
+  }
+  return new Date(Date.now() + 30 * MS_PER_DAY).toISOString();
+}
+
+function computePremiumExpiryPlus30Days(
+  subscriptionExpiresAt: string | null,
+  premiumUntil: string | null,
+): string {
+  const now = Date.now();
+  let base = now;
+  const raw = subscriptionExpiresAt ?? premiumUntil;
+  if (raw) {
+    const prev = new Date(raw).getTime();
+    if (!Number.isNaN(prev) && prev > now) base = prev;
+  }
+  return new Date(base + 30 * MS_PER_DAY).toISOString();
+}
+
+type SubscriptionFinancialKind = 'admin' | 'tester' | 'premium' | 'trial' | 'expired';
+
+type SubscriptionFinancialStatus = {
+  kind: SubscriptionFinancialKind;
+  badgeLabel: string;
+  expiryText: string | null;
+  badgeClass: string;
+};
+
+function resolveDirectorySubscriptionStatus(row: DirectoryRow): SubscriptionFinancialStatus {
+  const now = new Date();
+
+  if (row.is_admin) {
+    return {
+      kind: 'admin',
+      badgeLabel: 'Al día',
+      expiryText: null,
+      badgeClass: 'bg-green-500/20 text-green-500',
+    };
+  }
+
+  if (row.subscription_role === 'tester') {
+    const testerExp = row.subscription_expires_at ?? row.premium_until;
+    const exp = testerExp ? new Date(testerExp) : null;
+    return {
+      kind: 'tester',
+      badgeLabel: 'Tester ∞',
+      expiryText:
+        exp && !Number.isNaN(exp.getTime())
+          ? `Vence: ${formatSubscriptionDate(exp)}`
+          : 'Sin vencimiento',
+      badgeClass: 'bg-green-500/20 text-green-500',
+    };
+  }
+
+  const expiresRaw = row.subscription_expires_at ?? row.premium_until ?? null;
+
+  if (row.subscription_role === 'premium' && expiresRaw) {
+    const exp = new Date(expiresRaw);
+    if (!Number.isNaN(exp.getTime()) && exp > now) {
+      return {
+        kind: 'premium',
+        badgeLabel: 'Premium',
+        expiryText: `Vence: ${formatSubscriptionDate(exp)}`,
+        badgeClass: 'bg-green-500/20 text-green-500',
+      };
+    }
+  }
+
+  // Compat legacy: sólo si el rol no es Free (Free usa trial por registered_at).
+  if (row.subscription_role !== 'free' && expiresRaw) {
+    const legacy = new Date(expiresRaw);
+    if (!Number.isNaN(legacy.getTime()) && legacy > now) {
+      return {
+        kind: 'premium',
+        badgeLabel: 'Al día',
+        expiryText: `Vence: ${formatSubscriptionDate(legacy)}`,
+        badgeClass: 'bg-green-500/20 text-green-500',
+      };
+    }
+  }
+
+  if (row.subscription_role === 'free' || !row.subscription_role) {
+    if (row.registered_at) {
+      const trialEnd = trialEndFromRegisteredAt(row.registered_at);
+      if (now < trialEnd) {
+        const daysLeft = Math.max(1, Math.ceil((trialEnd.getTime() - now.getTime()) / MS_PER_DAY));
+        return {
+          kind: 'trial',
+          badgeLabel: `Trial (Quedan ${daysLeft} ${daysLeft === 1 ? 'día' : 'días'})`,
+          expiryText: `Vence: ${formatSubscriptionDate(trialEnd)}`,
+          badgeClass: 'bg-yellow-500/20 text-yellow-500',
+        };
+      }
+    }
+
+    let expiryText: string | null = null;
+    if (expiresRaw) {
+      const expiredAt = new Date(expiresRaw);
+      if (!Number.isNaN(expiredAt.getTime())) {
+        expiryText = `Venció: ${formatSubscriptionDate(expiredAt)}`;
+      }
+    } else if (row.registered_at) {
+      expiryText = `Vence: ${formatSubscriptionDate(trialEndFromRegisteredAt(row.registered_at))}`;
+    }
+
+    return {
+      kind: 'expired',
+      badgeLabel: 'Vencido',
+      expiryText,
+      badgeClass: 'bg-red-500/20 text-red-500',
+    };
+  }
+
+  if (row.subscription_role === 'premium') {
+    let expiryText: string | null = null;
+    if (expiresRaw) {
+      const expiredAt = new Date(expiresRaw);
+      if (!Number.isNaN(expiredAt.getTime())) {
+        expiryText = `Venció: ${formatSubscriptionDate(expiredAt)}`;
+      }
+    }
+    return {
+      kind: 'expired',
+      badgeLabel: 'Vencido',
+      expiryText,
+      badgeClass: 'bg-red-500/20 text-red-500',
+    };
+  }
+
+  if (row.registered_at) {
+    const trialEnd = trialEndFromRegisteredAt(row.registered_at);
+    if (now < trialEnd) {
+      const daysLeft = Math.max(1, Math.ceil((trialEnd.getTime() - now.getTime()) / MS_PER_DAY));
+      return {
+        kind: 'trial',
+        badgeLabel: `Trial (Quedan ${daysLeft} ${daysLeft === 1 ? 'día' : 'días'})`,
+        expiryText: `Vence: ${formatSubscriptionDate(trialEnd)}`,
+        badgeClass: 'bg-yellow-500/20 text-yellow-500',
+      };
+    }
+  }
+
+  let expiryText: string | null = null;
+  if (expiresRaw) {
+    const expiredAt = new Date(expiresRaw);
+    if (!Number.isNaN(expiredAt.getTime())) {
+      expiryText = `Venció: ${formatSubscriptionDate(expiredAt)}`;
+    }
+  } else if (row.registered_at) {
+    expiryText = `Vence: ${formatSubscriptionDate(trialEndFromRegisteredAt(row.registered_at))}`;
+  }
+
+  return {
+    kind: 'expired',
+    badgeLabel: 'Vencido',
+    expiryText,
+    badgeClass: 'bg-red-500/20 text-red-500',
+  };
+}
+
+function SubscriptionFinancialRow({ row }: { row: DirectoryRow }) {
+  const status = resolveDirectorySubscriptionStatus(row);
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span
+        className={cn(
+          'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-wide',
+          status.badgeClass,
+        )}
+      >
+        {status.badgeLabel}
+      </span>
+      {status.expiryText ? (
+        <span className="text-xs text-zinc-400">{status.expiryText}</span>
+      ) : null}
+    </div>
+  );
+}
 
 function normalizeCoachGymModalities(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -102,8 +306,6 @@ function parseCoachRpcResponse(data: unknown): {
     gym_modalities: normalizeCoachGymModalities(row.gym_modalities),
   };
 }
-
-type SubRole = 'free' | 'premium' | 'tester';
 
 const ROLE_META: Record<
   SubRole,
@@ -433,14 +635,11 @@ const AdminPanel = () => {
     async (row: DirectoryRow, newRole: 'free' | 'premium' | 'tester') => {
       setToggling((prev) => new Set([...prev, row.user_id]));
 
-      const expiresAt =
-        newRole === 'premium'
-          ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-          : null;
+      const expiresAt = computeExpiryForRoleChange(newRole, row);
 
       try {
         const targetId = row.user_id;
-        console.log('🚀 Enviando ID a Supabase:', targetId, 'para el rol:', newRole);
+        console.log('🚀 Enviando ID a Supabase:', targetId, 'para el rol:', newRole, 'expires:', expiresAt);
 
         if (!targetId) {
           throw new Error('user_id está vacío — verifica el campo que devuelve admin_user_directory');
@@ -453,6 +652,18 @@ const AdminPanel = () => {
         });
 
         if (rpcError) throw rpcError;
+
+        const { error: syncError } = await supabase
+          .from('profiles')
+          .update({
+            subscription_expires_at: expiresAt,
+            premium_until: expiresAt,
+          })
+          .eq('user_id', targetId);
+
+        if (syncError) {
+          console.warn('[admin] sync subscription expiry columns:', syncError.message);
+        }
 
         if (currentUser?.id === row.user_id) {
           const { data: prof } = await supabase
@@ -472,6 +683,7 @@ const AdminPanel = () => {
                   ...r,
                   subscription_role: newRole,
                   subscription_expires_at: expiresAt,
+                  premium_until: expiresAt,
                   notified_premium: newRole === 'premium' ? false : r.notified_premium,
                   notified_tester: newRole === 'tester' ? false : r.notified_tester,
                 }
@@ -484,7 +696,13 @@ const AdminPanel = () => {
           premium: '30 días Premium asignados',
           tester: 'Acceso Tester ∞ activado',
         };
-        toast({ title: labels[newRole], description: row.email });
+        const expiryHint =
+          newRole === 'free' && row.registered_at
+            ? ` · trial hasta ${formatSubscriptionDate(trialEndFromRegisteredAt(row.registered_at))}`
+            : newRole === 'tester'
+              ? ` · vence ${formatSubscriptionDate(new Date(LIFETIME_ACCESS_EXPIRES_ISO))}`
+              : ` · vence ${formatSubscriptionDate(new Date(expiresAt))}`;
+        toast({ title: labels[newRole], description: `${row.email}${expiryHint}` });
       } catch (err) {
         console.error('Error de Supabase RPC:', err);
         const msg =
@@ -507,6 +725,61 @@ const AdminPanel = () => {
       });
     },
     [toast, currentUser?.id, refreshIsAdmin, loadDirectory],
+  );
+
+  const handleExtendPremium30 = useCallback(
+    async (row: DirectoryRow) => {
+      if (!row.user_id || row.is_admin || row.subscription_role === 'tester') return;
+
+      setToggling((prev) => new Set([...prev, row.user_id]));
+
+      const expiresAt = computePremiumExpiryPlus30Days(
+        row.subscription_expires_at,
+        row.premium_until,
+      );
+
+      try {
+        const { error: rpcError } = await supabase.rpc('set_user_subscription_role', {
+          target_user_id: row.user_id,
+          new_role: 'premium',
+          new_expires_at: expiresAt,
+        });
+
+        if (rpcError) throw rpcError;
+
+        setRows((prev) =>
+          prev.map((r) =>
+            r.user_id === row.user_id
+              ? {
+                  ...r,
+                  subscription_role: 'premium',
+                  subscription_expires_at: expiresAt,
+                  premium_until: expiresAt,
+                  notified_premium: false,
+                }
+              : r,
+          ),
+        );
+
+        toast({
+          title: '+30 días Premium',
+          description: `${row.email} · vence ${formatSubscriptionDate(new Date(expiresAt))}`,
+        });
+      } catch (err) {
+        const msg =
+          err != null && typeof err === 'object' && 'message' in err
+            ? String((err as { message: unknown }).message)
+            : 'No se pudo extender la suscripción';
+        toast({ title: 'Error al renovar', description: msg, variant: 'destructive' });
+      }
+
+      setToggling((prev) => {
+        const next = new Set(prev);
+        next.delete(row.user_id);
+        return next;
+      });
+    },
+    [toast],
   );
 
   const requestRoleChange = useCallback(
@@ -826,7 +1099,7 @@ const AdminPanel = () => {
         </div>
 
         <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          Directorio de usuarios · Roles, tema VIP y configuración Modo Coach (código + gimnasio).
+          Directorio de usuarios · Suscripciones, roles, tema VIP y Modo Coach (código + gimnasio).
         </p>
 
         {/* Stats */}
@@ -941,6 +1214,8 @@ const AdminPanel = () => {
                   Boolean(r.user_id) &&
                   r.user_id !== currentUser?.id &&
                   !r.is_admin;
+                const canExtendPremium =
+                  Boolean(r.user_id) && !r.is_admin && r.subscription_role !== 'tester';
 
                 return (
                   <div
@@ -959,6 +1234,9 @@ const AdminPanel = () => {
                         <div className="min-w-0 flex-1 sm:hidden">
                           <div className="font-semibold text-zinc-900 dark:text-zinc-100">{name}</div>
                           <div className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">{r.email || '—'}</div>
+                          <div className="mt-2">
+                            <SubscriptionFinancialRow row={r} />
+                          </div>
                           <div className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">Alta {dateLabel}</div>
                           <div className="mt-3 sm:hidden">
                             <LastActivityCell iso={r.last_active_at} refreshTick={activityRefreshTick} />
@@ -968,6 +1246,9 @@ const AdminPanel = () => {
 
                       <div className="hidden min-w-0 flex-1 sm:block">
                         <div className="font-semibold text-zinc-900 dark:text-zinc-100">{name}</div>
+                        <div className="mt-1.5">
+                          <SubscriptionFinancialRow row={r} />
+                        </div>
                       </div>
                       <div className="hidden min-w-0 max-w-[220px] truncate text-sm text-zinc-600 dark:text-zinc-400 sm:block">
                         {r.email || '—'}
@@ -1057,6 +1338,19 @@ const AdminPanel = () => {
                               current={currentRole}
                               onSelect={(row2, role) => requestRoleChange(row2, role)}
                             />
+                            {canExtendPremium ? (
+                              <button
+                                type="button"
+                                title="Sumar 30 días Premium (transferencia / comprobante)"
+                                disabled={isBusy || deleteAccountDoing}
+                                onClick={() => void handleExtendPremium30(r)}
+                                className="flex h-10 min-w-10 shrink-0 items-center justify-center gap-0.5 rounded-xl border border-amber-500/35 bg-amber-500/10 px-2 text-xs font-bold text-amber-800 shadow-sm transition hover:bg-amber-500/20 disabled:opacity-50 dark:border-amber-500/40 dark:bg-amber-500/12 dark:text-amber-200 dark:hover:bg-amber-500/20"
+                                aria-label="Sumar 30 días de Premium"
+                              >
+                                <CreditCard className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                                <span className="tabular-nums">+30</span>
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               title="Modo Coach — código y gimnasio"
@@ -1384,7 +1678,7 @@ const AdminPanel = () => {
           <AlertDialogHeader>
             <AlertDialogTitle className="text-zinc-900 dark:text-zinc-50">Cambiar tu rol</AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-zinc-600 dark:text-zinc-400">
-              ¿Estás seguro? Perderás el acceso al Panel de Control si dejas de ser Admin.
+              ¿Estás seguro? Perderás el acceso al Panel si dejas de ser Admin.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

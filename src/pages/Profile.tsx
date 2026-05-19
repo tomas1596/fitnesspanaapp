@@ -95,7 +95,7 @@ const AdminButton = () => {
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/15">
           <LayoutDashboard className="h-[18px] w-[18px] text-violet-600 dark:text-violet-400" />
         </span>
-        <span className="min-w-0 flex-1 text-left font-medium leading-snug">Panel de Control</span>
+        <span className="min-w-0 flex-1 text-left font-medium leading-snug">Admin Panel</span>
         <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
       </button>
     </div>
