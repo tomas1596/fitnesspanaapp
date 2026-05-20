@@ -21,6 +21,7 @@ import {
   Target, TrendingUp, Pencil, LayoutDashboard, HelpCircle,
   FileText, Heart, Sparkles, AlertTriangle, Loader2, Trash2, X, ZoomIn, ChevronRight,
   Eye, EyeOff,
+  ScanFace,
   Scale,
   Medal,
   Copy,
@@ -40,6 +41,9 @@ import { passwordMeetsPolicy } from '@/lib/passwordPolicy';
 import { PasswordRequirementsList } from '@/components/PasswordRequirementsList';
 import { WeightEvolutionSheet } from '@/components/WeightEvolutionSheet';
 import { syncProfileWeightFromLogs } from '@/lib/weightProfileSync';
+import { useBiometrics } from '@/hooks/useBiometrics';
+import { BiometricAuthError } from '@/lib/biometricAuth';
+import { Switch } from '@/components/ui/switch';
 
 const ADMIN_EMAIL = 'thomzonlyskills@gmail.com';
 
@@ -104,6 +108,15 @@ const AdminButton = () => {
 
 const Profile = () => {
   const { user, signOut, isAdmin } = useAuth();
+  const {
+    supported: biometricsSupported,
+    checking: biometricsChecking,
+    flowEnabled: biometricFlowEnabled,
+    biometricLabel,
+    registerWithPassword,
+    revokeCredential,
+    refreshCredentialState,
+  } = useBiometrics();
   const navigate = useNavigate();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -161,6 +174,10 @@ const Profile = () => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [biometricToggling, setBiometricToggling] = useState(false);
+  const [biometricEnableDialogOpen, setBiometricEnableDialogOpen] = useState(false);
+  const [biometricEnablePassword, setBiometricEnablePassword] = useState('');
+  const [showBiometricEnablePassword, setShowBiometricEnablePassword] = useState(false);
 
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [draftFirst, setDraftFirst] = useState('');
@@ -516,6 +533,49 @@ const Profile = () => {
     setNewPassword('');
     setConfirmPassword('');
     setPasswordDialog(false);
+  };
+
+  const handleBiometricToggle = async (enabled: boolean, password?: string) => {
+    if (biometricToggling) return;
+    setBiometricToggling(true);
+    try {
+      if (enabled) {
+        const accountEmail = user?.email?.trim();
+        if (!accountEmail) {
+          throw new BiometricAuthError('Tu cuenta no tiene email asociado.', 'session');
+        }
+        if (!password?.trim()) {
+          setBiometricEnableDialogOpen(true);
+          return;
+        }
+        await registerWithPassword(accountEmail, password);
+        setBiometricEnablePassword('');
+        setShowBiometricEnablePassword(false);
+        setBiometricEnableDialogOpen(false);
+        toast({
+          title: 'Biometría activada',
+          description: `La próxima vez podés entrar con ${biometricLabel}.`,
+        });
+      } else {
+        revokeCredential();
+        toast({
+          title: 'Biometría desactivada',
+          description: 'Volvé a iniciar sesión con email y contraseña.',
+        });
+      }
+    } catch (err) {
+      console.error('[biometric] profile toggle failed', err);
+      refreshCredentialState();
+      if (err instanceof BiometricAuthError && err.code === 'cancelled') return;
+      toast({
+        title: enabled ? 'No se pudo activar' : 'No se pudo desactivar',
+        description:
+          err instanceof BiometricAuthError ? err.message : 'Probá de nuevo en unos segundos.',
+        variant: 'destructive',
+      });
+    } finally {
+      setBiometricToggling(false);
+    }
   };
 
   const handleConfirmLogout = useCallback(async () => {
@@ -1020,6 +1080,44 @@ const Profile = () => {
               <span className="min-w-0 flex-1 text-left font-medium leading-snug">Cambiar contraseña</span>
               <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
             </button>
+            {!biometricsChecking && biometricsSupported ? (
+              <div
+                className={cn(
+                  settingsListRowCn,
+                  'cursor-default hover:bg-zinc-50 active:bg-zinc-50 dark:hover:bg-zinc-900/70 dark:active:bg-zinc-900/70',
+                )}
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15">
+                  <ScanFace className="h-[18px] w-[18px] text-primary" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1 pr-2">
+                  <p className="font-medium leading-snug text-zinc-900 dark:text-zinc-100">
+                    Inicio de sesión biométrico
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                    {biometricLabel}
+                  </p>
+                </div>
+                <Switch
+                  id="profile-biometric-login"
+                  checked={biometricFlowEnabled}
+                  disabled={biometricToggling}
+                  onCheckedChange={(on) => {
+                    if (on) {
+                      setBiometricEnableDialogOpen(true);
+                      return;
+                    }
+                    void handleBiometricToggle(false);
+                  }}
+                  aria-label={
+                    biometricFlowEnabled
+                      ? `Desactivar inicio con ${biometricLabel}`
+                      : `Activar inicio con ${biometricLabel}`
+                  }
+                  className="data-[state=checked]:bg-primary"
+                />
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={() => setLogoutDialogOpen(true)}
@@ -1337,6 +1435,63 @@ const Profile = () => {
               className={cn('mt-1 h-12', profileNeonButtonClass)}
             >
               {savingIdentity ? 'Guardando...' : 'Guardar cambios'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={biometricEnableDialogOpen}
+        onOpenChange={(open) => {
+          setBiometricEnableDialogOpen(open);
+          if (!open) {
+            setBiometricEnablePassword('');
+            setShowBiometricEnablePassword(false);
+            refreshCredentialState();
+          }
+        }}
+      >
+        <DialogContent className={cn(modalSurfaceClass)}>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+              Activar {biometricLabel}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-zinc-600 dark:text-zinc-400">
+              Confirmá tu contraseña actual. Se guardará cifrada en este dispositivo y solo se usará
+              tras verificar {biometricLabel.toLowerCase()} para crear una sesión nueva.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Input
+                type={showBiometricEnablePassword ? 'text' : 'password'}
+                placeholder="Contraseña actual"
+                value={biometricEnablePassword}
+                onChange={(e) => setBiometricEnablePassword(e.target.value)}
+                autoComplete="current-password"
+                className={cn(editModalInputClass, 'pr-12')}
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowBiometricEnablePassword((v) => !v)}
+                className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-200/80 dark:hover:bg-zinc-800/80"
+                aria-label={showBiometricEnablePassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showBiometricEnablePassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            <Button
+              type="button"
+              disabled={biometricToggling || !biometricEnablePassword.trim()}
+              className={cn('h-12 w-full', profileNeonButtonClass)}
+              onClick={() => void handleBiometricToggle(true, biometricEnablePassword)}
+            >
+              {biometricToggling ? 'Activando…' : 'Confirmar y activar'}
             </Button>
           </div>
         </DialogContent>

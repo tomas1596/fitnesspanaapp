@@ -8,16 +8,19 @@ import {
   getBiometricLabel,
   getStoredBiometricCredential,
   hasStoredBiometricCredential,
+  isBiometricFlowEnabled,
   registerBiometricCredential,
 } from '@/lib/biometricAuth';
 
 export function useBiometrics() {
   const [supported, setSupported] = useState(false);
   const [hasCredential, setHasCredential] = useState(false);
+  const [flowEnabled, setFlowEnabled] = useState(false);
   const [checking, setChecking] = useState(true);
 
   const refreshCredentialState = useCallback(() => {
     setHasCredential(hasStoredBiometricCredential());
+    setFlowEnabled(isBiometricFlowEnabled());
   }, []);
 
   useEffect(() => {
@@ -27,6 +30,7 @@ export function useBiometrics() {
       if (cancelled) return;
       setSupported(ok);
       setHasCredential(hasStoredBiometricCredential());
+      setFlowEnabled(isBiometricFlowEnabled());
       setChecking(false);
     })();
     return () => {
@@ -34,42 +38,34 @@ export function useBiometrics() {
     };
   }, []);
 
-  const registerFromCurrentSession = useCallback(async () => {
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.getSession();
-
-    if (error || !session?.refresh_token) {
-      throw new BiometricAuthError('No hay sesión activa para vincular la biometría.', 'session');
-    }
-
-    const email = session.user.email;
-    if (!email) {
-      throw new BiometricAuthError('Tu cuenta no tiene email asociado.', 'session');
-    }
-
-    await registerBiometricCredential(email, session.refresh_token);
-    refreshCredentialState();
-  }, [refreshCredentialState]);
+  const registerWithPassword = useCallback(
+    async (email: string, password: string) => {
+      await registerBiometricCredential(email, password);
+      refreshCredentialState();
+    },
+    [refreshCredentialState],
+  );
 
   const signInWithBiometric = useCallback(async () => {
-    const stored = await authenticateWithBiometric();
+    const unlock = await authenticateWithBiometric();
 
-    const { data, error } = await supabase.auth.refreshSession({
-      refresh_token: stored.refreshToken,
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: unlock.email,
+      password: unlock.password,
     });
 
-    if (error || !data.session) {
-      clearBiometricCredential();
-      refreshCredentialState();
-      throw new BiometricAuthError(
-        'Tu acceso biométrico expiró. Iniciá sesión con email y contraseña para reactivarlo.',
-        'session',
-      );
+    if (error) {
+      console.error('[biometric] supabase.auth.signInWithPassword', error);
+      throw new BiometricAuthError(error.message, 'session');
     }
 
-    return { email: stored.email };
+    if (!data.session) {
+      console.error('[biometric] signInWithPassword returned no session', data);
+      throw new BiometricAuthError('Supabase no devolvió una sesión activa.', 'session');
+    }
+
+    refreshCredentialState();
+    return { email: unlock.email };
   }, [refreshCredentialState]);
 
   const revokeCredential = useCallback(() => {
@@ -82,10 +78,11 @@ export function useBiometrics() {
   return {
     supported,
     hasCredential,
+    flowEnabled,
     checking,
     biometricLabel: getBiometricLabel(),
     storedEmail,
-    registerFromCurrentSession,
+    registerWithPassword,
     signInWithBiometric,
     revokeCredential,
     refreshCredentialState,
