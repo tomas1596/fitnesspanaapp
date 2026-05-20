@@ -1,15 +1,19 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useBiometrics } from '@/hooks/useBiometrics';
 import { useTheme } from '@/hooks/useTheme';
 import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ThemeSegmentedControl } from '@/components/ThemeSegmentedControl';
+import { ToastAction } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { passwordMeetsPolicy } from '@/lib/passwordPolicy';
 import { PasswordRequirementsList } from '@/components/PasswordRequirementsList';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, ScanFace } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+import { BiometricAuthError } from '@/lib/biometricAuth';
 
 const DOB_RANGE_ERROR = 'Debes tener entre 10 y 100 años para usar Pana Fitness';
 const DOB_REQUIRED_ERROR = 'Seleccioná tu fecha de nacimiento.';
@@ -118,6 +122,15 @@ function useAuthStyles(isDark: boolean) {
 
 const Auth = () => {
   const { user, loading, signIn, signUp } = useAuth();
+  const {
+    supported: biometricsSupported,
+    hasCredential: hasBiometricCredential,
+    checking: biometricsChecking,
+    biometricLabel,
+    storedEmail,
+    registerFromCurrentSession,
+    signInWithBiometric,
+  } = useBiometrics();
   const { theme, setTheme, resolved } = useTheme();
   const isDark = resolved === 'dark';
   const S = useAuthStyles(isDark);
@@ -171,8 +184,10 @@ const Auth = () => {
   const [gender, setGender] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isBiometricLoading, setIsBiometricLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [signUpRedirectHold, setSignUpRedirectHold] = useState(false);
+  const [biometricOfferHold, setBiometricOfferHold] = useState(false);
   const [dobInputType, setDobInputType] = useState<'text' | 'date'>('text');
   const dobRef = useRef<HTMLInputElement>(null);
   const [emailFieldError, setEmailFieldError] = useState('');
@@ -183,6 +198,83 @@ const Auth = () => {
     isLogin || (passwordMeetsPolicy(password) && passwordsMatch);
 
   const { minStr: dobMinStr, maxStr: dobMaxStr, minDob, maxDob } = birthdateBounds();
+
+  useEffect(() => {
+    if (isLogin && storedEmail && !email.trim()) {
+      setEmail(storedEmail);
+    }
+  }, [isLogin, storedEmail, email]);
+
+  const offerBiometricEnrollment = useCallback(() => {
+    if (!biometricsSupported || hasBiometricCredential) return;
+
+    setBiometricOfferHold(true);
+
+    const releaseHold = () => setBiometricOfferHold(false);
+
+    toast({
+      title: '¿Querés usar Face ID / Huella la próxima vez?',
+      description: 'Iniciá sesión al instante con tu dispositivo.',
+      duration: 12_000,
+      onOpenChange: (open) => {
+        if (!open) releaseHold();
+      },
+      action: (
+        <ToastAction
+          altText="Activar biometría"
+          onClick={() => {
+            void (async () => {
+              try {
+                await registerFromCurrentSession();
+                toast({
+                  title: 'Biometría activada',
+                  description: 'La próxima vez podés entrar con un toque.',
+                });
+              } catch (err) {
+                const message =
+                  err instanceof BiometricAuthError
+                    ? err.message
+                    : 'No se pudo activar la biometría.';
+                if (err instanceof BiometricAuthError && err.code === 'cancelled') return;
+                toast({
+                  title: 'No se pudo activar',
+                  description: message,
+                  variant: 'destructive',
+                });
+              } finally {
+                releaseHold();
+              }
+            })();
+          }}
+        >
+          Activar
+        </ToastAction>
+      ),
+    });
+
+    window.setTimeout(releaseHold, 12_500);
+  }, [biometricsSupported, hasBiometricCredential, registerFromCurrentSession]);
+
+  const handleBiometricSignIn = async () => {
+    setError('');
+    setSuccessMsg('');
+    setIsBiometricLoading(true);
+    try {
+      const { email: bioEmail } = await signInWithBiometric();
+      setEmail(bioEmail);
+    } catch (err) {
+      if (err instanceof BiometricAuthError && err.code === 'cancelled') {
+        setIsBiometricLoading(false);
+        return;
+      }
+      setError(
+        err instanceof BiometricAuthError
+          ? err.message
+          : 'No se pudo iniciar sesión con biometría.',
+      );
+    }
+    setIsBiometricLoading(false);
+  };
 
   if (loading) {
     return (
@@ -196,7 +288,7 @@ const Auth = () => {
     );
   }
 
-  if (user && !signUpRedirectHold) return <Navigate to="/" replace />;
+  if (user && !signUpRedirectHold && !biometricOfferHold) return <Navigate to="/" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,7 +333,11 @@ const Auth = () => {
 
     if (isLogin) {
       const { error } = await signIn(emailClean, password);
-      if (error) setError(error.message);
+      if (error) {
+        setError(error.message);
+      } else {
+        offerBiometricEnrollment();
+      }
     } else {
       setSignUpRedirectHold(true);
       const { error } = await signUp(emailClean, password, {
@@ -531,7 +627,7 @@ const Auth = () => {
               <motion.div variants={cascadeItem}>
           <Button
             type="submit"
-            disabled={isLoading || !registerSubmitEnabled}
+            disabled={isLoading || isBiometricLoading || !registerSubmitEnabled}
             aria-busy={isLoading}
             className={cn(
               'h-14 w-full rounded-xl border-0 bg-primary text-base font-bold tracking-tight text-primary-foreground',
@@ -559,6 +655,54 @@ const Auth = () => {
                 )}
           </Button>
               </motion.div>
+
+              {isLogin && biometricsSupported && !biometricsChecking ? (
+                <>
+                  <motion.div variants={cascadeItem} className="flex items-center gap-3 py-1">
+                    <span className={cn('h-px flex-1', isDark ? 'bg-white/10' : 'bg-zinc-200')} />
+                    <span className={cn('text-[11px] font-medium uppercase tracking-wide', S.subtitleColor)}>
+                      o continuar con
+                    </span>
+                    <span className={cn('h-px flex-1', isDark ? 'bg-white/10' : 'bg-zinc-200')} />
+                  </motion.div>
+
+                  <motion.div variants={cascadeItem}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isLoading || isBiometricLoading || !hasBiometricCredential}
+                      aria-busy={isBiometricLoading}
+                      onClick={() => void handleBiometricSignIn()}
+                      className={cn(
+                        'h-14 w-full rounded-xl border text-sm font-semibold transition-all duration-300 active:scale-[0.98]',
+                        isDark
+                          ? 'border-white/15 bg-zinc-800/40 text-white hover:bg-zinc-800/70'
+                          : 'border-zinc-200 bg-zinc-50 text-zinc-900 hover:bg-white',
+                        !hasBiometricCredential && 'opacity-60',
+                      )}
+                    >
+                      {isBiometricLoading ? (
+                        <>
+                          <span className="sr-only">Verificando biometría…</span>
+                          <Loader2 className="mr-2 h-5 w-5 shrink-0 animate-spin" aria-hidden />
+                        </>
+                      ) : (
+                        <ScanFace className="mr-2 h-5 w-5 shrink-0" aria-hidden />
+                      )}
+                      Iniciar sesión con FaceID / Huella
+                    </Button>
+                    {!hasBiometricCredential ? (
+                      <p className={cn('mt-2 text-center text-[11px] leading-snug', S.subtitleColor)}>
+                        Activá {biometricLabel.toLowerCase()} después de tu primer inicio con email y contraseña.
+                      </p>
+                    ) : storedEmail ? (
+                      <p className={cn('mt-2 text-center text-[11px] leading-snug', S.subtitleColor)}>
+                        Cuenta vinculada: <span className="font-medium text-foreground/80">{storedEmail}</span>
+                      </p>
+                    ) : null}
+                  </motion.div>
+                </>
+              ) : null}
 
               {/* ── Toggle login / register ── */}
               <motion.div variants={cascadeItem}>

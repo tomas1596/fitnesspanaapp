@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useCallback, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { clearBiometricCredential } from '@/lib/biometricAuth';
 
 export type ProfileRow = {
   first_name?: string | null;
@@ -134,6 +135,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signOut = async () => {
+    clearBiometricCredential();
     await supabase.auth.signOut();
   };
 

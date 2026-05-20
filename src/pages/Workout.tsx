@@ -1464,7 +1464,7 @@ const Workout = () => {
                 aria-selected={workoutScope === scope}
                 onClick={() => setWorkoutScope(scope)}
                 className={cn(
-                  'w-1/2 flex-1 rounded-full px-4 py-2 text-center text-xs font-bold transition-all duration-300 sm:text-sm',
+                  'w-1/2 flex-1 rounded-full px-4 py-2 text-center text-xs font-bold transition-all duration-200 active:scale-[0.97] sm:text-sm',
                   workoutScope === scope
                     ? 'bg-primary text-zinc-950 shadow-md'
                     : 'bg-transparent text-zinc-600 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200',
@@ -1511,12 +1511,12 @@ const Workout = () => {
                       setViewerOpen(true);
                     }}
                     className={cn(
-                      'workout-gym-day-cell flex min-h-[5rem] flex-col rounded-2xl border px-3 py-3 text-left transition-colors',
+                      'workout-gym-day-cell flex min-h-[5rem] flex-col rounded-2xl border px-3 py-3 text-left',
                       filled && 'workout-gym-day-cell--filled',
                       gymDaySheetOpen && 'workout-gym-day-cell--viewing',
                       row
                         ? cn(
-                            'transition-all duration-200 motion-safe:active:scale-[0.98] motion-safe:active:brightness-110',
+                            'transition-all duration-200 active:scale-[0.97]',
                             filled
                               ? 'border-emerald-500/45 bg-emerald-500/[0.06] hover:bg-emerald-500/10'
                               : 'border-primary/35 bg-card shadow-sm hover:bg-accent/40',
@@ -1822,7 +1822,7 @@ const Workout = () => {
           <button
             type="button"
             onClick={() => setReportOpen(true)}
-            className="mt-5 flex w-full items-center justify-between rounded-2xl border border-border/40 bg-card/70 p-5 backdrop-blur-sm transition-colors hover:bg-accent/70"
+            className="mt-5 flex w-full items-center justify-between rounded-2xl border border-border/40 bg-card/70 p-5 backdrop-blur-sm transition-all duration-200 active:scale-[0.97] hover:bg-accent/70"
           >
             <div className="flex items-center gap-4">
               <div
@@ -1870,6 +1870,7 @@ const Workout = () => {
             <>
               <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
                 <GymRoutineBlockViewer
+                  variant="chalkboard"
                   payload={parseGymRoutineWorkoutData(
                     viewingRoutine.modality as WorkoutModalityId,
                     viewingRoutine.workout_data,

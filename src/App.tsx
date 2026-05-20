@@ -208,10 +208,16 @@ const App = () => (
         <AuthProvider>
           <SubscriptionProvider>
             <BrowserRouter>
-              <LastActiveHeartbeat />
-              <BrandThemeApplier />
-              <ServiceWorkerCardioBridge />
-              <AppRoutes />
+              <div className="app-visual-shell relative isolate min-h-dvh">
+                <div
+                  aria-hidden
+                  className="app-ambient-glow pointer-events-none fixed -right-[10%] -top-[10%] -z-10 h-[40vw] max-h-[560px] w-[40vw] max-w-[560px] rounded-full blur-[100px] dark:blur-[120px]"
+                />
+                <LastActiveHeartbeat />
+                <BrandThemeApplier />
+                <ServiceWorkerCardioBridge />
+                <AppRoutes />
+              </div>
             </BrowserRouter>
           </SubscriptionProvider>
         </AuthProvider>
