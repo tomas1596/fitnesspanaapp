@@ -20,7 +20,7 @@ export function WorkoutModalityTabs({ value, onChange, className, allowedModalit
   return (
     <div
       className={cn(
-        'workout-modality-tabs flex gap-1 rounded-2xl border border-zinc-800/50 bg-zinc-900 p-1 ring-1 ring-white/5',
+        'workout-modality-tabs flex gap-1 rounded-2xl bg-zinc-100 p-1 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-white/5',
         "[html[data-brand='pink']_&]:border-[#ff007f]/25",
         "dark:[html[data-brand='pink']_&]:border-pink-800/45",
         className,
@@ -36,8 +36,8 @@ export function WorkoutModalityTabs({ value, onChange, className, allowedModalit
             className={cn(
               'flex-1 rounded-xl px-1 py-2 text-center text-xs font-semibold transition-all duration-200 active:scale-[0.97] sm:text-sm',
               active
-                ? "bg-primary text-primary-foreground shadow-[0_4px_12px_-2px_rgba(57,255,20,0.25)] [html[data-brand='pink']_&]:shadow-none"
-                : 'bg-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                ? "bg-primary text-zinc-950 shadow-[0_4px_12px_-2px_rgba(57,255,20,0.25)] dark:text-zinc-950 [html[data-brand='pink']_&]:shadow-none"
+                : 'bg-transparent text-zinc-600 hover:bg-zinc-200/60 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-zinc-200',
             )}
           >
             {opt.label}
