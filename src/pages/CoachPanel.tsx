@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { GymRoutineCoachDialog } from '@/components/GymRoutineCoachDialog';
+import { GymRoutineVariantPickerSheet } from '@/components/GymRoutineVariantPickerSheet';
+import { gymRoutinesForDay, gymVariantDisplayLabel } from '@/lib/gymRoutineVariants';
 import { CoachTemplatePickerSheet } from '@/components/CoachTemplatePickerSheet';
 import type { Tables } from '@/integrations/supabase/types';
 import { WORKOUT_MODALITY_OPTIONS, modalityIdsAllowedByGymLabels } from '@/lib/workoutModality';
@@ -99,6 +101,9 @@ const CoachPanel = () => {
   const [routineDialogExisting, setRoutineDialogExisting] = useState<Tables<'gym_routines'> | null>(null);
   const [selectedCoachDay, setSelectedCoachDay] = useState(1);
   const [coachTemplatesPickerOpen, setCoachTemplatesPickerOpen] = useState(false);
+  const [coachVariantPickerOpen, setCoachVariantPickerOpen] = useState(false);
+  const [coachVariantPickerDay, setCoachVariantPickerDay] = useState(1);
+  const [coachVariantPickerRoutines, setCoachVariantPickerRoutines] = useState<Tables<'gym_routines'>[]>([]);
   const [templatePrefill, setTemplatePrefill] = useState<{
     title: string;
     coach_notes: string;
@@ -182,7 +187,8 @@ const CoachPanel = () => {
         .select('*')
         .eq('coach_id', coachProfileId)
         .eq('modality', libraryModality)
-        .order('day_number');
+        .order('day_number')
+        .order('variant_name', { ascending: true, nullsFirst: true });
       if (lrErr) throw lrErr;
       setGymRoutines(data ?? []);
     } catch {
@@ -209,6 +215,20 @@ const CoachPanel = () => {
     setRoutineDialogExisting(null);
     setRoutineDialogOpen(true);
   }, []);
+
+  const handleCoachDayClick = useCallback(
+    (day: number) => {
+      const dayRoutines = gymRoutinesForDay(gymRoutines, day);
+      if (dayRoutines.length <= 1) {
+        openRoutineEditor(day, dayRoutines[0] ?? null);
+        return;
+      }
+      setCoachVariantPickerDay(day);
+      setCoachVariantPickerRoutines(dayRoutines);
+      setCoachVariantPickerOpen(true);
+    },
+    [gymRoutines, openRoutineEditor],
+  );
 
   const consumeTemplatePrefill = useCallback(() => setTemplatePrefill(null), []);
 
@@ -354,24 +374,45 @@ const CoachPanel = () => {
 
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[1, 2, 3, 4, 5, 6].map((d) => {
-              const found = gymRoutines.find((r) => r.day_number === d);
+              const dayRoutines = gymRoutinesForDay(gymRoutines, d);
+              const hasRoutines = dayRoutines.length > 0;
+              const multiple = dayRoutines.length > 1;
               return (
                 <button
                   key={d}
                   type="button"
                   disabled={!coachProfileId}
-                  onClick={() => openRoutineEditor(d, found ?? null)}
+                  onClick={() => handleCoachDayClick(d)}
                   className={cn(
                     'flex min-h-[5.25rem] flex-col items-start rounded-2xl border px-3 py-3 text-left transition-colors',
-                    found
+                    hasRoutines
                       ? 'border-primary/35 bg-white shadow-sm dark:border-primary/30 dark:bg-zinc-900/80'
                       : 'border-zinc-200/70 border-dashed bg-white/60 hover:bg-white dark:border-white/15 dark:bg-zinc-950/40 dark:hover:bg-zinc-900/70',
                   )}
                 >
                   <span className="text-[10px] font-bold uppercase tracking-wide text-primary">Día {d}</span>
-                  <span className="mt-1 line-clamp-3 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                    {found?.title?.trim() || (found ? 'Rutina' : 'Vacío · tocar')}
-                  </span>
+                  {hasRoutines ? (
+                    multiple ? (
+                      <div className="mt-1 flex w-full flex-col gap-1">
+                        {dayRoutines.map((r) => (
+                          <span
+                            key={r.id}
+                            className="line-clamp-2 text-[11px] font-semibold leading-snug text-zinc-900 dark:text-zinc-100"
+                          >
+                            {gymVariantDisplayLabel(r)}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="mt-1 line-clamp-3 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                        {dayRoutines[0].title?.trim() || 'Rutina'}
+                      </span>
+                    )
+                  ) : (
+                    <span className="mt-1 line-clamp-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                      Vacío · tocar
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -489,6 +530,22 @@ const CoachPanel = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <GymRoutineVariantPickerSheet
+        open={coachVariantPickerOpen}
+        onOpenChange={setCoachVariantPickerOpen}
+        dayNumber={coachVariantPickerDay}
+        routines={coachVariantPickerRoutines}
+        title="Elegí qué variante editar"
+        onSelect={(routine) => {
+          setCoachVariantPickerOpen(false);
+          openRoutineEditor(routine.day_number, routine);
+        }}
+        onAddVariant={() => {
+          setCoachVariantPickerOpen(false);
+          openRoutineEditor(coachVariantPickerDay, null);
+        }}
+      />
 
       {coachProfileId ? (
         <GymRoutineCoachDialog

@@ -132,6 +132,57 @@ export function parseGymRoutineWorkoutData(
   return defaultPayloadForModality('musculacion');
 }
 
+function pushUniqueName(names: string[], seen: Set<string>, raw: string) {
+  const n = raw.trim();
+  if (!n) return;
+  const key = n.toLowerCase();
+  if (seen.has(key)) return;
+  seen.add(key);
+  names.push(n);
+}
+
+function namesFromManualLines(lines: { name: string }[], names: string[], seen: Set<string>) {
+  for (const line of lines) pushUniqueName(names, seen, line.name);
+}
+
+function exerciseNamesFromPayload(payload: GymRoutineWorkoutPayload): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+
+  if (payload.modality === 'musculacion') {
+    for (const ex of payload.exercises) pushUniqueName(names, seen, ex.name);
+    return names;
+  }
+
+  if (payload.modality === 'funcional') {
+    for (const phase of payload.draft.phases) {
+      namesFromManualLines(phase.exercises, names, seen);
+    }
+    return names;
+  }
+
+  const draft = payload.draft;
+  const warmup = draft.warmup_skill;
+  if (warmup) namesFromManualLines(warmup.exercises, names, seen);
+
+  if (draft.subtype === 'amrap') {
+    for (const block of draft.blocks) namesFromManualLines(block.exercises, names, seen);
+  } else {
+    namesFromManualLines(draft.exercises, names, seen);
+  }
+
+  return names;
+}
+
+/** Nombres de ejercicios unidos por coma para vista previa en selectores de variante. */
+export function gymRoutineExercisePreviewLine(
+  modality: WorkoutModalityId,
+  workout_data: Json | null | undefined,
+): string {
+  const payload = parseGymRoutineWorkoutData(modality, workout_data);
+  return exerciseNamesFromPayload(payload).join(', ');
+}
+
 export function serializeGymRoutinePayload(payload: GymRoutineWorkoutPayload): Json {
   if (payload.modality === 'crossfit') {
     const canonicalDraft = serializeCrossfitDetails(payload.draft);

@@ -39,6 +39,8 @@ import type { FunctionalSessionDraft } from '@/lib/functionalSessionDraft';
 import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
 import { insertCoachGymSnapshotTemplate } from '@/lib/coachWorkoutTemplates';
+import { normalizeGymVariantName } from '@/lib/gymRoutineVariants';
+import { GymRoutineBlockViewer } from '@/components/GymRoutineBlockViewer';
 
 const MUSCLE_GROUPS = ['Pecho', 'Espalda', 'Piernas', 'Brazos', 'Hombros', 'Core'];
 
@@ -162,6 +164,7 @@ export function GymRoutineCoachDialog({
 }: Props) {
   const { toast } = useToast();
   const [title, setTitle] = useState('');
+  const [variantNameDraft, setVariantNameDraft] = useState('');
   const [dayDraft, setDayDraft] = useState(dayNumber);
   const [payload, setPayload] = useState<GymRoutineWorkoutPayload>(() => defaultPayloadForModality(modality));
   const [coachNotes, setCoachNotes] = useState('');
@@ -180,6 +183,7 @@ export function GymRoutineCoachDialog({
 
     if (templatePrefill) {
       setTitle(templatePrefill.title);
+      setVariantNameDraft('');
       setCoachNotes(templatePrefill.coach_notes);
       setPayload(templatePrefill.payload);
       setDayDraft(dayNumber);
@@ -195,11 +199,13 @@ export function GymRoutineCoachDialog({
     const row = existing;
     if (row) {
       setTitle(row.title || `Día ${dayNumber}`);
+      setVariantNameDraft(row.variant_name ?? '');
       setDayDraft(row.day_number);
       setCoachNotes(row.coach_notes ?? '');
       setPayload(parseGymRoutineWorkoutData(modality as WorkoutModalityId, row.workout_data));
     } else {
       setTitle(`Día ${dayNumber}`);
+      setVariantNameDraft('');
       setDayDraft(dayNumber);
       setCoachNotes('');
       setPayload(defaultPayloadForModality(modality));
@@ -233,17 +239,19 @@ export function GymRoutineCoachDialog({
 
     setSaving(true);
     try {
+      const variant_name = normalizeGymVariantName(variantNameDraft);
       const row = {
         coach_id: coachProfileId,
         modality,
         day_number: dayDraft,
         title: title.trim() || `Día ${dayDraft}`,
+        variant_name,
         workout_data: serializeGymRoutinePayload(workoutPayload),
         coach_notes: coachNotes.trim(),
       };
-      const { error } = await supabase.from('gym_routines').upsert(row, {
-        onConflict: 'coach_id,modality,day_number',
-      });
+      const { error } = existing?.id
+        ? await supabase.from('gym_routines').update(row).eq('id', existing.id)
+        : await supabase.from('gym_routines').insert(row);
       if (error) throw error;
 
       if (saveAlsoAsTemplate && coachAuthUserId) {
@@ -265,7 +273,16 @@ export function GymRoutineCoachDialog({
       onSaved();
       onOpenChange(false);
     } catch (e) {
-      const msg = e != null && typeof e === 'object' && 'message' in e ? String((e as Error).message) : 'Error';
+      const err = e as { code?: string; message?: string } | null;
+      const duplicate =
+        err?.code === '23505' ||
+        (typeof err?.message === 'string' && err.message.includes('gym_routines_coach_modality_day_variant'));
+      const msg =
+        duplicate
+          ? 'Ya hay una rutina con esa variante en el mismo día. Elegí otro nombre o editá la existente.'
+          : err != null && typeof err.message === 'string'
+            ? err.message
+            : 'Error';
       toast({ title: 'No se pudo guardar', description: msg, variant: 'destructive' });
     } finally {
       setSaving(false);
@@ -337,6 +354,20 @@ export function GymRoutineCoachDialog({
               </div>
             ) : null}
 
+            <div className="space-y-2">
+              <Label htmlFor="gym-routine-variant">Variante / Opción (Opcional)</Label>
+              <Input
+                id="gym-routine-variant"
+                className="rounded-xl"
+                placeholder="Ej: Opción A, Piernas, Nivel Avanzado"
+                value={variantNameDraft}
+                onChange={(e) => setVariantNameDraft(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Dejalo vacío para la rutina principal del día. Usá un nombre distinto para subir Opción B, C, etc.
+              </p>
+            </div>
+
             {!modalityOk ? (
               <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
                 Esta modalidad no está marcada en las opciones de tu gimnasio. Podés guardar igualmente si fuiste
@@ -404,6 +435,20 @@ export function GymRoutineCoachDialog({
                 onChange={(next) => setPayload({ v: 1, modality: 'musculacion', exercises: next })}
               />
             ) : null}
+
+            <div className="space-y-2 border-t border-border/40 pt-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Vista previa (pizarra del alumno)
+              </p>
+              <GymRoutineBlockViewer
+                variant="chalkboard"
+                payload={payload}
+                title={title.trim() || `Día ${dayDraft}`}
+                dayNumber={dayDraft}
+                variantName={variantNameDraft}
+                coachNotes={coachNotes}
+              />
+            </div>
           </div>
         </div>
 

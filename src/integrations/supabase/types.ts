@@ -338,6 +338,7 @@ export type Database = {
           title: string
           workout_data: Json
           coach_notes: string
+          variant_name: string | null
           created_at: string
         }
         Insert: {
@@ -348,6 +349,7 @@ export type Database = {
           title?: string
           workout_data?: Json
           coach_notes?: string
+          variant_name?: string | null
           created_at?: string
         }
         Update: {
@@ -358,6 +360,7 @@ export type Database = {
           title?: string
           workout_data?: Json
           coach_notes?: string
+          variant_name?: string | null
           created_at?: string
         }
         Relationships: [

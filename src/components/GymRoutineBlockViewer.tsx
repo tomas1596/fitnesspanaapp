@@ -429,6 +429,7 @@ export function GymRoutineBlockViewer({
   payload,
   title,
   dayNumber,
+  variantName,
   coachNotes,
   hideDayBanner,
   hideCoachNotesSection,
@@ -437,6 +438,8 @@ export function GymRoutineBlockViewer({
   payload: GymRoutineWorkoutPayload;
   title: string;
   dayNumber: number;
+  /** Etiqueta de variante (Opción A, Piernas, etc.). */
+  variantName?: string | null;
   coachNotes?: string | null;
   /** Oculta la franja «Día N» (p. ej. vista previa en Mis Rutinas). */
   hideDayBanner?: boolean;
@@ -447,6 +450,7 @@ export function GymRoutineBlockViewer({
 }) {
   const notes = coachNotes?.trim() ?? '';
   const titleTrim = title.trim();
+  const variantTrim = variantName?.trim() ?? '';
   const chalkboard = variant === 'chalkboard';
 
   return (
@@ -464,13 +468,38 @@ export function GymRoutineBlockViewer({
       ) : null}
 
       {!hideDayBanner ? (
+        <div className={cn('text-center', chalkboard ? 'mb-4' : 'mb-3')}>
+          <p
+            className={cn(
+              'font-semibold uppercase',
+              chalkboard
+                ? 'text-sm font-black tracking-[0.2em] text-zinc-100'
+                : 'text-[11px] tracking-[0.12em] text-muted-foreground',
+            )}
+          >
+            Día {dayNumber}
+          </p>
+          {variantTrim ? (
+            <p
+              className={cn(
+                'mt-1.5 font-semibold uppercase',
+                chalkboard
+                  ? 'text-[10px] tracking-[0.28em] text-zinc-400'
+                  : 'text-[11px] tracking-[0.16em] text-muted-foreground/80',
+              )}
+            >
+              {variantTrim}
+            </p>
+          ) : null}
+        </div>
+      ) : hideDayBanner && variantTrim ? (
         <p
           className={cn(
-            'text-center text-[11px] font-semibold uppercase tracking-[0.12em]',
-            chalkboard ? 'mb-4 text-zinc-400' : 'text-muted-foreground',
+            'mb-3 text-center text-[11px] font-semibold uppercase tracking-[0.16em]',
+            chalkboard ? 'text-zinc-400' : 'text-muted-foreground',
           )}
         >
-          Día {dayNumber}
+          {variantTrim}
         </p>
       ) : null}
 

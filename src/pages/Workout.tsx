@@ -19,6 +19,8 @@ import { WorkoutModalityTabs } from '@/components/WorkoutModalityTabs';
 import { GymRoutineBlockViewer } from "@/components/GymRoutineBlockViewer";
 import { GymRoutineLeaderboard } from '@/components/GymRoutineLeaderboard';
 import { GymRoutineRegisterSheet } from '@/components/GymRoutineRegisterSheet';
+import { GymRoutineVariantPickerSheet } from '@/components/GymRoutineVariantPickerSheet';
+import { gymRoutinesForDay, gymVariantDisplayLabel } from '@/lib/gymRoutineVariants';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -294,6 +296,9 @@ const Workout = () => {
   } | null>(null);
   const [registerSheetVariant, setRegisterSheetVariant] = useState<'register' | 'edit'>('register');
   const [personalConditioningEditorOpen, setPersonalConditioningEditorOpen] = useState(false);
+  const [gymVariantPickerOpen, setGymVariantPickerOpen] = useState(false);
+  const [gymVariantPickerDay, setGymVariantPickerDay] = useState(1);
+  const [gymVariantPickerRoutines, setGymVariantPickerRoutines] = useState<Tables<'gym_routines'>[]>([]);
 
   useEffect(() => {
     if (!user?.id || !isGymView || !gymSourceCoachProfileId) {
@@ -309,7 +314,8 @@ const Workout = () => {
         .select('*')
         .eq('coach_id', gymSourceCoachProfileId)
         .eq('modality', activeModalidad)
-        .order('day_number');
+        .order('day_number')
+        .order('variant_name', { ascending: true, nullsFirst: true });
       if (cancelled) return;
       if (error) {
         console.error(error);
@@ -364,8 +370,34 @@ const Workout = () => {
     setRegisterQuickPrefill(null);
     setRegisterSheetVariant('register');
     setViewingRoutine(null);
+    setGymVariantPickerOpen(false);
     setReportOpen(false);
   }, [dateStr]);
+
+  const gymLoggedRoutineIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const log of workoutLogs) {
+      if (log.modality === activeModalidad && log.gym_routine_id) ids.add(log.gym_routine_id);
+    }
+    return ids;
+  }, [workoutLogs, activeModalidad]);
+
+  const openGymRoutineViewer = useCallback((routine: Tables<'gym_routines'>) => {
+    setViewingRoutine(routine);
+    setViewerOpen(true);
+  }, []);
+
+  const handleGymDayClick = useCallback((day: number) => {
+    const dayRoutines = gymRoutinesForDay(gymRoutines, day);
+    if (dayRoutines.length === 0) return;
+    if (dayRoutines.length === 1) {
+      openGymRoutineViewer(dayRoutines[0]);
+      return;
+    }
+    setGymVariantPickerDay(day);
+    setGymVariantPickerRoutines(dayRoutines);
+    setGymVariantPickerOpen(true);
+  }, [gymRoutines, openGymRoutineViewer]);
 
   const formattedDate = selectedDate.toLocaleDateString('es-ES', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -1494,27 +1526,27 @@ const Workout = () => {
             ) : null}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[1, 2, 3, 4, 5, 6].map((d) => {
-                const row = gymRoutines.find((r) => r.day_number === d);
-                const dayLog = row ? gymRoutineLogById.get(row.id) : undefined;
-                const filled = Boolean(dayLog);
+                const dayRoutines = gymRoutinesForDay(gymRoutines, d);
+                const hasRoutines = dayRoutines.length > 0;
+                const multiple = dayRoutines.length > 1;
+                const loggedOnDay = dayRoutines.filter((r) => gymRoutineLogById.has(r.id));
+                const filled = loggedOnDay.length > 0;
+                const dayLog = loggedOnDay[0] ? gymRoutineLogById.get(loggedOnDay[0].id) : undefined;
                 const gymDaySheetOpen =
                   (viewerOpen && viewingRoutine?.day_number === d) ||
-                  (registerOpen && registerRoutine?.day_number === d);
+                  (registerOpen && registerRoutine?.day_number === d) ||
+                  (gymVariantPickerOpen && gymVariantPickerDay === d);
                 return (
                   <button
                     key={d}
                     type="button"
-                    disabled={!row}
-                    onClick={() => {
-                      if (!row) return;
-                      setViewingRoutine(row);
-                      setViewerOpen(true);
-                    }}
+                    disabled={!hasRoutines}
+                    onClick={() => handleGymDayClick(d)}
                     className={cn(
                       'workout-gym-day-cell flex min-h-[5rem] flex-col rounded-2xl border px-3 py-3 text-left',
                       filled && 'workout-gym-day-cell--filled',
                       gymDaySheetOpen && 'workout-gym-day-cell--viewing',
-                      row
+                      hasRoutines
                         ? cn(
                             'transition-all duration-200 active:scale-[0.97]',
                             filled
@@ -1527,18 +1559,31 @@ const Workout = () => {
                   >
                     <div className="flex items-start justify-between gap-1.5">
                       <span className="text-[10px] font-bold uppercase tracking-wide text-primary">Día {d}</span>
-                      {row && !filled ? (
+                      {hasRoutines && !filled ? (
                         <span
                           className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-primary shadow-[0_0_8px_var(--brand-glow-sm)]"
                           aria-hidden
                         />
                       ) : null}
                     </div>
-                    {row ? (
+                    {hasRoutines ? (
                       <>
-                        <span className="mt-1 line-clamp-2 text-xs font-semibold text-foreground">
-                          {row.title?.trim() || 'Ver rutina'}
-                        </span>
+                        {multiple ? (
+                          <div className="mt-1 flex w-full flex-col gap-0.5">
+                            {dayRoutines.map((r) => (
+                              <span
+                                key={r.id}
+                                className="line-clamp-2 text-[11px] font-semibold leading-snug text-foreground"
+                              >
+                                {gymVariantDisplayLabel(r)}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="mt-1 line-clamp-2 text-xs font-semibold text-foreground">
+                            {dayRoutines[0].title?.trim() || 'Ver rutina'}
+                          </span>
+                        )}
                         <span
                           className={cn(
                             'mt-auto pt-2 text-[10px] font-medium leading-snug',
@@ -1547,7 +1592,13 @@ const Workout = () => {
                               : 'text-zinc-600 dark:text-zinc-500',
                           )}
                         >
-                          {filled ? subtitleForGymRoutineLog(dayLog, activeModalidad) : 'Rutina'}
+                          {filled
+                            ? multiple
+                              ? `${loggedOnDay.length} registrada${loggedOnDay.length === 1 ? '' : 's'}`
+                              : subtitleForGymRoutineLog(dayLog, activeModalidad)
+                            : multiple
+                              ? `${dayRoutines.length} opciones`
+                              : 'Rutina'}
                         </span>
                       </>
                     ) : (
@@ -1721,19 +1772,9 @@ const Workout = () => {
                   </div>
                 )}
               </>
-            ) : (
+            ) : strengthExerciseCards.length > 0 ? (
               <div className="space-y-3.5">{strengthExerciseCards}</div>
-            )}
-
-            {hydrated &&
-              activeModalidad === 'musculacion' &&
-              visibleExercises.length === 0 &&
-              !addingExercise &&
-              (isToday || enableEmptyDay) && (
-                <p className="py-12 text-center text-xs font-medium text-muted-foreground/50 tracking-wide">
-                  Agrega tu primer ejercicio para comenzar
-                </p>
-              )}
+            ) : null}
 
             {/* Inline add-exercise form (solo musculación — CF/FUNC usan bloques propios). */}
             {addingExercise && activeModalidad === 'musculacion' ? (
@@ -1854,6 +1895,18 @@ const Workout = () => {
         ) : null}
       </div>
 
+      <GymRoutineVariantPickerSheet
+        open={gymVariantPickerOpen}
+        onOpenChange={setGymVariantPickerOpen}
+        dayNumber={gymVariantPickerDay}
+        routines={gymVariantPickerRoutines}
+        loggedRoutineIds={gymLoggedRoutineIds}
+        onSelect={(routine) => {
+          setGymVariantPickerOpen(false);
+          openGymRoutineViewer(routine);
+        }}
+      />
+
       <Sheet open={viewerOpen} onOpenChange={setViewerOpen}>
         <SheetContent
           side="bottom"
@@ -1877,6 +1930,7 @@ const Workout = () => {
                   )}
                   title={viewingRoutine.title ?? ''}
                   dayNumber={viewingRoutine.day_number}
+                  variantName={viewingRoutine.variant_name}
                   coachNotes={viewingRoutine.coach_notes}
                 />
                 {viewingRoutine.modality === 'crossfit' || viewingRoutine.modality === 'funcional' ? (
