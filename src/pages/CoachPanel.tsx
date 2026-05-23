@@ -202,6 +202,11 @@ const CoachPanel = () => {
     void loadRoutines();
   }, [loadRoutines]);
 
+  useEffect(() => {
+    if (!coachVariantPickerOpen) return;
+    setCoachVariantPickerRoutines(gymRoutinesForDay(gymRoutines, coachVariantPickerDay));
+  }, [gymRoutines, coachVariantPickerOpen, coachVariantPickerDay]);
+
   const openRoutineEditor = useCallback((day: number, existing: Tables<'gym_routines'> | null) => {
     setSelectedCoachDay(day);
     setRoutineDialogDay(day);
@@ -537,6 +542,8 @@ const CoachPanel = () => {
         dayNumber={coachVariantPickerDay}
         routines={coachVariantPickerRoutines}
         title="Elegí qué variante editar"
+        coachMode
+        onRoutinesRefresh={() => void loadRoutines()}
         onSelect={(routine) => {
           setCoachVariantPickerOpen(false);
           openRoutineEditor(routine.day_number, routine);

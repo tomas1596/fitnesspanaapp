@@ -1544,7 +1544,7 @@ const Workout = () => {
                     onClick={() => handleGymDayClick(d)}
                     className={cn(
                       'workout-gym-day-cell flex min-h-[5rem] flex-col rounded-2xl border px-3 py-3 text-left',
-                      filled && 'workout-gym-day-cell--filled',
+                      filled && 'workout-gym-day-cell--filled animate-border-draw',
                       gymDaySheetOpen && 'workout-gym-day-cell--viewing',
                       hasRoutines
                         ? cn(
@@ -1559,7 +1559,12 @@ const Workout = () => {
                   >
                     <div className="flex items-start justify-between gap-1.5">
                       <span className="text-[10px] font-bold uppercase tracking-wide text-primary">Día {d}</span>
-                      {hasRoutines && !filled ? (
+                      {hasRoutines && filled ? (
+                        <span
+                          className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.55)] animate-success-pop dark:bg-emerald-400"
+                          aria-hidden
+                        />
+                      ) : hasRoutines ? (
                         <span
                           className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-primary shadow-[0_0_8px_var(--brand-glow-sm)]"
                           aria-hidden
@@ -1921,7 +1926,13 @@ const Workout = () => {
           </SheetHeader>
           {viewingRoutine ? (
             <>
-              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
+              <div
+                className={cn(
+                  'flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5',
+                  viewingRoutine.modality === 'musculacion' &&
+                    'pb-6 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]',
+                )}
+              >
                 <GymRoutineBlockViewer
                   variant="chalkboard"
                   payload={parseGymRoutineWorkoutData(
@@ -1944,13 +1955,15 @@ const Workout = () => {
                   />
                 ) : null}
               </div>
-              <Button
-                type="button"
-                className="workout-gym-register-cta h-12 w-full shrink-0 rounded-2xl font-semibold"
-                onClick={openGymRegisterFresh}
-              >
-                Registrar mi resultado
-              </Button>
+              {viewingRoutine.modality !== 'musculacion' ? (
+                <Button
+                  type="button"
+                  className="workout-gym-register-cta h-12 w-full shrink-0 rounded-2xl font-semibold"
+                  onClick={openGymRegisterFresh}
+                >
+                  Registrar mi resultado
+                </Button>
+              ) : null}
             </>
           ) : null}
         </SheetContent>
