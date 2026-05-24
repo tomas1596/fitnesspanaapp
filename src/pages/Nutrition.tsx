@@ -15,6 +15,9 @@ import {
   Barcode,
   Footprints,
   Settings2,
+  Activity,
+  Flame,
+  Beef,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -214,6 +217,7 @@ const Nutrition = () => {
     if (v === 'diario') setDiaryAnimEpoch((e) => e + 1);
   }, []);
   const [goals, setGoals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, hydrationGlasses: 8 });
+  const [profileBody, setProfileBody] = useState<{ weight: number; height: number } | null>(null);
   const [customFoods, setCustomFoods] = useState<CustomFood[]>([]);
   const [nutritionLogs, setNutritionLogs] = useState<NutritionLogRow[]>([]);
   const [glasses, setGlasses] = useState(0);
@@ -267,9 +271,17 @@ const Nutrition = () => {
     if (!user) return;
     supabase.from('profiles').select('weight, height, date_of_birth, gender, step_goal').eq('user_id', user.id).single().then(({ data }) => {
       const a = calculateAge(data?.date_of_birth);
-      if (!data || !data.weight || !data.height || a == null || a <= 0 || !data.gender) return;
+      if (!data || !data.weight || !data.height || a == null || a <= 0 || !data.gender) {
+        setProfileBody(null);
+        return;
+      }
       const w = Number(data.weight);
       const h = Number(data.height);
+      if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+        setProfileBody(null);
+        return;
+      }
+      setProfileBody({ weight: w, height: h });
       const sg = data.step_goal != null ? Number(data.step_goal) : 10000;
       if (Number.isFinite(sg) && sg > 0) {
         const g = Math.round(sg);
@@ -387,6 +399,26 @@ const Nutrition = () => {
   );
 
   const calsLeft = goals.calories ? goals.calories - totals.calories : 0;
+
+  const baseMetrics = useMemo(() => {
+    if (!profileBody || goals.calories <= 0) return null;
+    const imc = profileBody.weight / ((profileBody.height / 100) ** 2);
+    return {
+      imc,
+      tdee: goals.calories,
+      proteinGoal: goals.protein,
+      hydrationL: ((profileBody.weight * 35) / 1000).toFixed(1),
+    };
+  }, [profileBody, goals.calories, goals.protein]);
+
+  const kcalProgressPct =
+    baseMetrics && baseMetrics.tdee > 0 ? Math.min(100, Math.round((totals.calories / baseMetrics.tdee) * 100)) : 0;
+  const proteinProgressPct =
+    baseMetrics && baseMetrics.proteinGoal > 0
+      ? Math.min(100, Math.round((totals.protein / baseMetrics.proteinGoal) * 100))
+      : 0;
+  const hydrationProgressPct =
+    goals.hydrationGlasses > 0 ? Math.min(100, Math.round((glasses / goals.hydrationGlasses) * 100)) : 0;
 
   const filteredPickerFoods = useMemo(() => {
     const q = foodPickerSearch.trim().toLowerCase();
@@ -974,6 +1006,25 @@ const Nutrition = () => {
                 <p className="mt-3 text-center text-xs text-muted-foreground/70">Completa tu perfil para ver tus metas.</p>
               )}
             </div>
+
+            {baseMetrics ? (
+              <div className="rounded-2xl border border-border/40 bg-card/80 px-2 py-4 backdrop-blur-sm sm:px-5">
+                <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80 sm:px-0">
+                  Mis métricas base
+                </p>
+                <div className="grid grid-cols-4 gap-x-2 sm:gap-x-8">
+                  <MiniStat icon={Activity} label="IMC" value={baseMetrics.imc.toFixed(1)} />
+                  <MiniStat icon={Flame} label="kcal" value={String(baseMetrics.tdee)} progressPct={kcalProgressPct} />
+                  <MiniStat
+                    icon={Beef}
+                    label="Prot"
+                    value={`${baseMetrics.proteinGoal}g`}
+                    progressPct={proteinProgressPct}
+                  />
+                  <MiniStat icon={Droplets} label="Agua" value={`${baseMetrics.hydrationL}L`} progressPct={hydrationProgressPct} />
+                </div>
+              </div>
+            ) : null}
 
             <div className="space-y-3">
               {MEALS.map((m) => {
@@ -1695,6 +1746,47 @@ const Nutrition = () => {
     </div>
   );
 };
+
+const MiniStat = ({
+  icon: Icon,
+  label,
+  value,
+  progressPct,
+}: {
+  icon: typeof Activity;
+  label: string;
+  value: string;
+  /** Avance respecto del objetivo diario (% 0–100); si no viene, sin barra (ej. IMC). */
+  progressPct?: number;
+}) => (
+  <div className="flex min-w-0 flex-col items-center justify-center px-0.5 text-center sm:px-1">
+    <Icon className="mb-2 h-6 w-6 shrink-0 text-primary sm:h-7 sm:w-7" strokeWidth={2.25} aria-hidden />
+    <p className="text-2xl font-bold tabular-nums leading-none tracking-tight text-foreground">{value}</p>
+    {progressPct !== undefined ? (
+      <div
+        className="mt-2 h-1 w-full overflow-hidden rounded-full bg-muted/50 dark:bg-muted/30"
+        role="progressbar"
+        aria-valuenow={Math.round(progressPct)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`Avance ${label}`}
+      >
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+          style={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }}
+        />
+      </div>
+    ) : null}
+    <p
+      className={cn(
+        'max-w-full text-[10px] font-semibold uppercase tracking-wider text-muted-foreground',
+        progressPct !== undefined ? 'mt-1.5' : 'mt-2',
+      )}
+    >
+      {label}
+    </p>
+  </div>
+);
 
 const WELLBEING_LEVELS = [1, 2, 3, 4, 5] as const;
 

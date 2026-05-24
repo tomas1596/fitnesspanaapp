@@ -17,8 +17,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import {
-  LogOut, User, Activity, Flame, Beef, Droplets, Save, Camera, Lock,
-  Target, TrendingUp, Pencil, LayoutDashboard, HelpCircle,
+  LogOut, User, Save, Camera, Lock,
+  Target, Pencil, LayoutDashboard, HelpCircle,
   FileText, Heart, Sparkles, AlertTriangle, Loader2, Trash2, X, ZoomIn, ChevronRight,
   Eye, EyeOff,
   ScanFace,
@@ -34,8 +34,7 @@ import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { ThemeSegmentedControl } from '@/components/ThemeSegmentedControl';
 import { FAQBottomSheet } from '@/components/FAQBottomSheet';
 import { useTheme } from '@/hooks/useTheme';
-import { calculateAge } from '@/lib/age';
-import { todayLocalYMD, localDayBoundsISO } from '@/lib/nutritionDay';
+import { todayLocalYMD } from '@/lib/nutritionDay';
 import { cn } from '@/lib/utils';
 import { passwordMeetsPolicy } from '@/lib/passwordPolicy';
 import { PasswordRequirementsList } from '@/components/PasswordRequirementsList';
@@ -86,25 +85,6 @@ const modalSurfaceClass =
 
 const profileNeonButtonClass =
   'w-full rounded-xl border-0 bg-primary px-4 py-3 text-base font-bold text-primary-foreground shadow-md shadow-[0_10px_24px_var(--brand-glow-sm)] transition hover:bg-[color:var(--brand-hover)] hover:shadow-[0_12px_30px_var(--brand-glow)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 dark:text-black';
-
-const AdminButton = () => {
-  const navigate = useNavigate();
-  return (
-    <div className={cn(settingsListCardCn)}>
-      <button
-        type="button"
-        onClick={() => navigate('/admin')}
-        className={cn(settingsListRowCn)}
-      >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/15">
-          <LayoutDashboard className="h-[18px] w-[18px] text-violet-600 dark:text-violet-400" />
-        </span>
-        <span className="min-w-0 flex-1 text-left font-medium leading-snug">Admin Panel</span>
-        <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
-      </button>
-    </div>
-  );
-};
 
 const Profile = () => {
   const { user, signOut, isAdmin } = useAuth();
@@ -187,8 +167,6 @@ const Profile = () => {
   const [savingIdentity, setSavingIdentity] = useState(false);
 
   const [faqOpen, setFaqOpen] = useState(false);
-  /** Calorías y prote registradas hoy + vasos (hidratación) para barras de avance sutiles */
-  const [todayMacroTotals, setTodayMacroTotals] = useState({ calories: 0, protein: 0, glasses: 0 });
   /** Tema de marca leído de profiles.theme ('default' | 'pink') */
   const [brandTheme, setBrandTheme] = useState<string>('default');
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
@@ -282,42 +260,7 @@ const Profile = () => {
     }
   }, [user]);
 
-  const loadTodayMacroTotals = useCallback(async () => {
-    if (!user) return;
-    const day = todayLocalYMD();
-    const { start, end } = localDayBoundsISO(day);
-    const [{ data: feRows }, { data: nlRows }, { data: hyd }] = await Promise.all([
-      supabase.from('food_entries').select('calories, protein').eq('user_id', user.id).eq('entry_date', day),
-      supabase
-        .from('nutrition_logs')
-        .select('calories, protein')
-        .eq('user_id', user.id)
-        .gte('consumed_at', start)
-        .lte('consumed_at', end),
-      supabase.from('hydration_logs').select('glasses').eq('user_id', user.id).eq('log_date', day).maybeSingle(),
-    ]);
-    let calories = 0;
-    let protein = 0;
-    for (const r of feRows || []) {
-      calories += Number((r as { calories: unknown }).calories ?? 0);
-      protein += Number((r as { protein: unknown }).protein ?? 0);
-    }
-    for (const r of nlRows || []) {
-      calories += Number((r as { calories: unknown }).calories ?? 0);
-      protein += Number((r as { protein: unknown }).protein ?? 0);
-    }
-    setTodayMacroTotals({
-      calories: Math.round(calories),
-      protein: Math.round(protein),
-      glasses: hyd?.glasses ?? 0,
-    });
-  }, [user]);
-
   useEffect(() => { loadProfile(); }, [loadProfile]);
-
-  useEffect(() => {
-    void loadTodayMacroTotals();
-  }, [loadTodayMacroTotals]);
 
   const openEditProfile = () => {
     setDraftFirst(firstName);
@@ -678,16 +621,7 @@ const Profile = () => {
   }, [user, toast, loadProfile]);
 
   const w = parseFloat(weight);
-  const h = parseFloat(height);
   const tw = parseFloat(targetWeight);
-  const ageYears = calculateAge(dateOfBirth);
-  const hasData = w > 0 && h > 0 && ageYears != null && ageYears > 0 && !!gender;
-  const imc = hasData ? w / ((h / 100) ** 2) : 0;
-  const bmr = hasData ? (gender === 'male' ? 10 * w + 6.25 * h - 5 * ageYears + 5 : 10 * w + 6.25 * h - 5 * ageYears - 161) : 0;
-  const tdee = Math.round(bmr * 1.55);
-  const proteinGoal = hasData ? Math.round(w * 2) : 0;
-  const hydrationL = hasData ? ((w * 35) / 1000).toFixed(1) : '0';
-  const hydrationGlassGoal = hasData ? Math.max(8, Math.round((w * 35) / 250)) : 0;
   const weightDiff = w > 0 && tw > 0 ? (w - tw) : null;
 
   const handleAvatarCropApply = async (blob: Blob) => {
@@ -702,9 +636,8 @@ const Profile = () => {
   };
 
   const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
-  const kcalProgressPct = hasData && tdee > 0 ? Math.min(100, Math.round((todayMacroTotals.calories / tdee) * 100)) : 0;
-  const proteinProgressPct = hasData && proteinGoal > 0 ? Math.min(100, Math.round((todayMacroTotals.protein / proteinGoal) * 100)) : 0;
-  const hydrationProgressPct = hasData && hydrationGlassGoal > 0 ? Math.min(100, Math.round((todayMacroTotals.glasses / hydrationGlassGoal) * 100)) : 0;
+  const showAdminPanel = isAdmin && user?.email === ADMIN_EMAIL;
+  const showGestionSection = profileIsCoach || showAdminPanel;
 
   return (
     <div className="min-h-screen bg-background px-4 pb-24">
@@ -799,40 +732,22 @@ const Profile = () => {
         </div>
 
         {profileIsCoach && profileCoachCode ? (
-          <div className="space-y-2">
-          <div className="rounded-2xl border border-primary/35 bg-gradient-to-br from-primary/15 via-primary/8 to-transparent p-4 shadow-sm dark:border-primary/30 dark:from-primary/12 dark:via-primary/6 dark:to-transparent dark:shadow-none">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1 space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary dark:text-primary">
-                  Código de invitación
-                </p>
-                <p className="break-all font-mono text-2xl font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
-                  {profileCoachCode}
-                </p>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                  Compartilo con tus alumnos para que se unan desde su perfil.
-                </p>
-              </div>
-              <Button
-                type="button"
-                size="icon"
-                variant="secondary"
-                className="h-11 w-11 shrink-0 rounded-xl border border-primary/25 bg-white shadow-sm dark:border-primary/30 dark:bg-zinc-900"
-                title="Copiar código"
-                onClick={() => void handleCopyCoachCode()}
-              >
-                <Copy className="h-4 w-4 text-primary" />
-              </Button>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full rounded-xl border-primary/30 font-semibold text-zinc-900 dark:border-primary/35 dark:text-zinc-100"
-            onClick={() => navigate('/coach')}
-          >
-            Panel de Coach
-          </Button>
+          <div className={cn(settingsListCardCn)}>
+            <button
+              type="button"
+              onClick={() => void handleCopyCoachCode()}
+              className={cn(settingsListRowCn)}
+              title="Copiar código de invitación"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15">
+                <Copy className="h-[18px] w-[18px] text-emerald-600 dark:text-emerald-400" />
+              </span>
+              <span className="min-w-0 flex-1 text-left font-medium leading-snug">Código de invitación</span>
+              <span className="shrink-0 font-mono text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">
+                {profileCoachCode}
+              </span>
+              <Copy className="h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
+            </button>
           </div>
         ) : null}
 
@@ -956,17 +871,6 @@ const Profile = () => {
           </>
         )}
 
-        {hasData && (
-          <div className="rounded-2xl border border-zinc-200 bg-white px-2 py-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none sm:px-5">
-            <div className="grid grid-cols-4 gap-x-2 sm:gap-x-8">
-              <MiniStat icon={Activity} label="IMC" value={imc.toFixed(1)} />
-              <MiniStat icon={Flame} label="kcal" value={tdee.toString()} progressPct={kcalProgressPct} />
-              <MiniStat icon={Beef} label="Prot" value={`${proteinGoal}g`} progressPct={proteinProgressPct} />
-              <MiniStat icon={Droplets} label="Agua" value={`${hydrationL}L`} progressPct={hydrationProgressPct} />
-            </div>
-          </div>
-        )}
-
         <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none sm:px-5">
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
             Datos & objetivos
@@ -1009,7 +913,43 @@ const Profile = () => {
           </Button>
         </div>
 
-        {isAdmin && user?.email === ADMIN_EMAIL && <AdminButton />}
+        {showGestionSection ? (
+          <div className={cn(settingsListCardCn)}>
+            <div className={cn(settingsListSectionHeaderCn)}>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                Gestión
+              </p>
+            </div>
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {profileIsCoach ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/coach')}
+                  className={cn(settingsListRowCn)}
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15">
+                    <Medal className="h-[18px] w-[18px] text-emerald-600 dark:text-emerald-400" />
+                  </span>
+                  <span className="min-w-0 flex-1 text-left font-medium leading-snug">Panel de Coach</span>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
+                </button>
+              ) : null}
+              {showAdminPanel ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin')}
+                  className={cn(settingsListRowCn)}
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/15">
+                    <LayoutDashboard className="h-[18px] w-[18px] text-violet-600 dark:text-violet-400" />
+                  </span>
+                  <span className="min-w-0 flex-1 text-left font-medium leading-snug">Admin Panel</span>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
         {/* ── Suscripción ── */}
         <div className={cn(settingsListCardCn)}>
@@ -1632,47 +1572,6 @@ const LabeledNum = ({ label, value, onChange }: { label: string; value: string; 
       onChange={e => onChange(e.target.value)}
       className={profileFormInputClass}
     />
-  </div>
-);
-
-const MiniStat = ({
-  icon: Icon,
-  label,
-  value,
-  progressPct,
-}: {
-  icon: typeof Activity;
-  label: string;
-  value: string;
-  /** Avance respecto del objetivo diario (% 0–100); si no viene, sin barra (ej. IMC). */
-  progressPct?: number;
-}) => (
-  <div className="flex min-w-0 flex-col items-center justify-center px-0.5 text-center sm:px-1">
-    <Icon className="mb-2 h-6 w-6 shrink-0 text-primary sm:h-7 sm:w-7" strokeWidth={2.25} aria-hidden />
-    <p className="text-2xl font-bold tabular-nums leading-none tracking-tight text-zinc-900 dark:text-white">{value}</p>
-    {progressPct !== undefined ? (
-      <div
-        className="mt-2 h-1 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
-        role="progressbar"
-        aria-valuenow={Math.round(progressPct)}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={`Avance ${label}`}
-      >
-        <div
-          className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
-          style={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }}
-        />
-      </div>
-    ) : null}
-    <p
-      className={cn(
-        'max-w-full text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400',
-        progressPct !== undefined ? 'mt-1.5' : 'mt-2',
-      )}
-    >
-      {label}
-    </p>
   </div>
 );
 
