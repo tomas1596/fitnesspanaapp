@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 
 const LAST_UPDATED = '12 de mayo de 2026';
 const APP_NAME = 'Pana Fitness';
-const CONTACT_EMAIL = 'tomaspana06@hotmail.com';
+const CONTACT_EMAIL = 'contacto.panafitness@gmail.com';
 const CONTACT_PHONE = '+549388414236';
 
 // ─── Sección tipada ────────────────────────────────────────────────────────
@@ -62,7 +62,7 @@ const SECTIONS: Section[] = [
     content: [
       'Los datos ingresados por el usuario (medidas corporales, registros de actividad, alimentos, etc.) son almacenados de forma segura en servidores de Supabase y se utilizan exclusivamente para brindar las funcionalidades de la Aplicación.',
       'No comercializamos ni cedemos datos personales a terceros con fines publicitarios.',
-      'El usuario puede solicitar la eliminación de su cuenta y todos sus datos asociados contactando al soporte.',
+      'El usuario puede solicitar la eliminación de su cuenta y todos sus datos asociados escribiendo al correo oficial de soporte indicado en la sección de Contacto.',
     ],
   },
   {
@@ -87,7 +87,11 @@ const SECTIONS: Section[] = [
   },
   {
     title: '11. Contacto',
-    content: `Para consultas, reclamos o solicitudes relacionadas con estos Términos, podés comunicarte a: ${CONTACT_EMAIL} o ${CONTACT_PHONE}`,
+    content: [
+      `El correo electrónico oficial de ${APP_NAME} es ${CONTACT_EMAIL}. Esta dirección está habilitada de forma exclusiva para soporte, consultas y gestión de cuentas relacionadas estrictamente con la Aplicación (incluidas consultas sobre estos Términos, reclamos, activación de suscripción y solicitudes de eliminación de datos).`,
+      'No se utilizará este canal para fines ajenos al servicio ni se garantiza respuesta a mensajes que no guarden relación con Pana Fitness.',
+      `Para soporte directo también podés comunicarte por WhatsApp al ${CONTACT_PHONE}.`,
+    ],
   },
 ];
 

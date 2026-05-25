@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import {
   ADMIN_ONLINE_WINDOW_MS,
@@ -294,7 +295,7 @@ const CoachPanel = () => {
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <Medal className="h-7 w-7 shrink-0 text-primary" aria-hidden />
             <div className="min-w-0">
-              <h1 className="text-2xl font-extrabold tracking-tight">Mis Alumnos</h1>
+              <h1 className="text-2xl font-extrabold tracking-tight">Panel de Coach</h1>
               <p className="truncate text-xs font-medium text-zinc-500 dark:text-zinc-400">
                 {gymName ?? 'Tu espacio como coach'}
               </p>
@@ -308,6 +309,94 @@ const CoachPanel = () => {
           </div>
         )}
 
+        <Tabs defaultValue="alumnos" className="w-full">
+          <TabsList className="mb-6 grid h-11 w-full grid-cols-2 rounded-xl border border-zinc-200/80 bg-zinc-100/80 p-1 dark:border-white/10 dark:bg-zinc-900/60">
+            <TabsTrigger
+              value="alumnos"
+              className="rounded-lg text-sm font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-zinc-800"
+            >
+              Mis Alumnos
+            </TabsTrigger>
+            <TabsTrigger
+              value="rutinas"
+              className="rounded-lg text-sm font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-zinc-800"
+            >
+              Biblioteca de Rutinas
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="alumnos" className="mt-0">
+            <div className="rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-2 dark:border-white/10 dark:bg-zinc-900/40">
+              {loading ? (
+                <div className="space-y-3 p-3">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-24 w-full rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
+                  ))}
+                </div>
+              ) : rows.length === 0 ? (
+                <div className="flex flex-col items-center gap-4 px-6 py-14 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/12 dark:bg-primary/15">
+                    <Users className="h-8 w-8 text-primary" aria-hidden />
+                  </div>
+                  <p className="max-w-sm text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                    Aún no tienes alumnos. ¡Comparte tu código de invitación para empezar!
+                  </p>
+                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => navigate('/profile')}>
+                    Ir a mi código
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {rows.map((r) => {
+                    const displayName = r.full_name?.trim() || '—';
+                    return (
+                      <div
+                        key={r.id}
+                        className="rounded-2xl border border-transparent px-4 py-4 transition-colors hover:border-zinc-200/80 hover:bg-white dark:hover:border-white/10 dark:hover:bg-zinc-800/50 sm:py-5"
+                      >
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-4">
+                          <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-primary bg-zinc-100 dark:bg-zinc-800">
+                              {r.avatar_url ? (
+                                <img src={r.avatar_url} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <User className="h-5 w-5 text-zinc-400" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-semibold text-zinc-900 dark:text-zinc-100">{displayName}</div>
+                              <div className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">{r.email || '—'}</div>
+                              <div className="mt-2 sm:hidden">
+                                <StudentActivityCell iso={r.last_active_at} refreshTick={activityRefreshTick} />
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                            <div className="hidden min-w-0 flex-1 sm:block lg:max-w-[230px]">
+                              <StudentActivityCell iso={r.last_active_at} refreshTick={activityRefreshTick} />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-10 w-10 shrink-0 rounded-xl text-zinc-500 hover:bg-red-500/10 hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400"
+                              title="Desvincular alumno"
+                              aria-label="Desvincular alumno"
+                              onClick={() => setRemoveTarget(r)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="rutinas" className="mt-0">
         <section
           className={cn(
             'rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-4 dark:border-white/10 dark:bg-zinc-900/40',
@@ -423,75 +512,8 @@ const CoachPanel = () => {
             })}
           </div>
         </section>
-
-        <div className="rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-2 dark:border-white/10 dark:bg-zinc-900/40">
-          {loading ? (
-            <div className="space-y-3 p-3">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-24 w-full rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
-              ))}
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="flex flex-col items-center gap-4 px-6 py-14 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/12 dark:bg-primary/15">
-                <Users className="h-8 w-8 text-primary" aria-hidden />
-              </div>
-              <p className="max-w-sm text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                Aún no tienes alumnos. ¡Comparte tu código de invitación para empezar!
-              </p>
-              <Button type="button" variant="outline" className="rounded-xl" onClick={() => navigate('/profile')}>
-                Ir a mi código
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {rows.map((r) => {
-                const displayName = r.full_name?.trim() || '—';
-                return (
-                  <div
-                    key={r.id}
-                    className="rounded-2xl border border-transparent px-4 py-4 transition-colors hover:border-zinc-200/80 hover:bg-white dark:hover:border-white/10 dark:hover:bg-zinc-800/50 sm:py-5"
-                  >
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-4">
-                      <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-primary bg-zinc-100 dark:bg-zinc-800">
-                          {r.avatar_url ? (
-                            <img src={r.avatar_url} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <User className="h-5 w-5 text-zinc-400" />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-zinc-900 dark:text-zinc-100">{displayName}</div>
-                          <div className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">{r.email || '—'}</div>
-                          <div className="mt-2 sm:hidden">
-                            <StudentActivityCell iso={r.last_active_at} refreshTick={activityRefreshTick} />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                        <div className="hidden min-w-0 flex-1 sm:block lg:max-w-[230px]">
-                          <StudentActivityCell iso={r.last_active_at} refreshTick={activityRefreshTick} />
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-10 w-10 shrink-0 rounded-xl text-zinc-500 hover:bg-red-500/10 hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400"
-                          title="Desvincular alumno"
-                          aria-label="Desvincular alumno"
-                          onClick={() => setRemoveTarget(r)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
       <AlertDialog
