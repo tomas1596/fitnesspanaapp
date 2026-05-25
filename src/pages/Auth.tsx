@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBiometrics } from '@/hooks/useBiometrics';
 import { useTheme } from '@/hooks/useTheme';
 import { Navigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ThemeSegmentedControl } from '@/components/ThemeSegmentedControl';
@@ -10,6 +11,7 @@ import { ToastAction } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { passwordMeetsPolicy } from '@/lib/passwordPolicy';
 import { PasswordRequirementsList } from '@/components/PasswordRequirementsList';
+import { translateSupabaseAuthError } from '@/lib/supabaseAuthErrors';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Eye, EyeOff, Loader2, ScanFace } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
@@ -125,7 +127,7 @@ function useAuthStyles(isDark: boolean) {
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
 const Auth = () => {
-  const { user, loading, signIn, signUp } = useAuth();
+  const { user, loading, signIn, signUp, isPasswordRecovery, clearPasswordRecovery } = useAuth();
   const {
     supported: biometricsSupported,
     hasCredential: hasBiometricCredential,
@@ -177,6 +179,7 @@ const Auth = () => {
   }, [prefersReducedMotion]);
 
   const [isLogin, setIsLogin] = useState(true);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -199,8 +202,13 @@ const Auth = () => {
   const [dobFieldError, setDobFieldError] = useState('');
 
   const passwordsMatch = password === confirmPassword;
-  const registerSubmitEnabled =
-    isLogin || (passwordMeetsPolicy(password) && passwordsMatch);
+  const isRegisterView = !isLogin && !isResettingPassword && !isPasswordRecovery;
+  const isResetView = isResettingPassword && !isPasswordRecovery;
+  const submitEnabled = isPasswordRecovery
+    ? passwordMeetsPolicy(password) && passwordsMatch
+    : isResetView
+      ? true
+      : isLogin || (passwordMeetsPolicy(password) && passwordsMatch);
 
   const { minStr: dobMinStr, maxStr: dobMaxStr, minDob, maxDob } = birthdateBounds();
 
@@ -209,6 +217,12 @@ const Auth = () => {
       setEmail(storedEmail);
     }
   }, [isLogin, storedEmail, email]);
+
+  useEffect(() => {
+    if (isPasswordRecovery && user?.email) {
+      setEmail(user.email);
+    }
+  }, [isPasswordRecovery, user?.email]);
 
   const offerBiometricEnrollment = useCallback(
     (loginPassword: string) => {
@@ -319,10 +333,12 @@ const Auth = () => {
     );
   }
 
-  if (user && !signUpRedirectHold && !biometricOfferHold) return <Navigate to="/" replace />;
+  if (user && !signUpRedirectHold && !biometricOfferHold && !isPasswordRecovery) {
+    return <Navigate to="/" replace />;
+  }
 
   const preferBiometricLogin =
-    isLogin && biometricsSupported && !biometricsChecking && biometricFlowEnabled;
+    isLogin && !isResettingPassword && !isPasswordRecovery && biometricsSupported && !biometricsChecking && biometricFlowEnabled;
 
   const renderBiometricLogin = (variant: 'primary' | 'secondary') => (
     <>
@@ -389,6 +405,50 @@ const Auth = () => {
 
     const emailClean = email.trim();
 
+    if (isPasswordRecovery) {
+      if (password !== confirmPassword) {
+        setError('Las contraseñas no coinciden.');
+        return;
+      }
+      if (!passwordMeetsPolicy(password)) {
+        setError(
+          'La contraseña debe tener al menos 8 caracteres, una mayúscula y un carácter especial.',
+        );
+        return;
+      }
+      setIsLoading(true);
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      setIsLoading(false);
+      if (updateError) {
+        setError(translateSupabaseAuthError(updateError.message));
+        return;
+      }
+      clearPasswordRecovery();
+      setPassword('');
+      setConfirmPassword('');
+      toast({
+        title: 'Contraseña actualizada',
+        description: 'Ya podés usar tu nueva contraseña.',
+      });
+      return;
+    }
+
+    if (isResetView) {
+      setIsLoading(true);
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(emailClean, {
+        redirectTo: window.location.origin,
+      });
+      setIsLoading(false);
+      if (resetError) {
+        setError(translateSupabaseAuthError(resetError.message));
+        return;
+      }
+      toast({ title: 'Te enviamos un email con las instrucciones' });
+      setIsResettingPassword(false);
+      setSuccessMsg('Revisá tu bandeja de entrada para restablecer tu contraseña.');
+      return;
+    }
+
     if (!isLogin) {
       if (!dateOfBirth) {
         setDobFieldError(DOB_REQUIRED_ERROR);
@@ -417,23 +477,23 @@ const Auth = () => {
     setIsLoading(true);
 
     if (isLogin) {
-      const { error } = await signIn(emailClean, password);
-      if (error) {
-        setError(error.message);
+      const { error: signInError } = await signIn(emailClean, password);
+      if (signInError) {
+        setError(translateSupabaseAuthError(signInError.message));
       } else {
         offerBiometricEnrollment(password);
       }
     } else {
       setSignUpRedirectHold(true);
-      const { error } = await signUp(emailClean, password, {
+      const { error: signUpError } = await signUp(emailClean, password, {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         dateOfBirth,
         gender,
       });
-      if (error) {
+      if (signUpError) {
         setSignUpRedirectHold(false);
-        setError(error.message);
+        setError(translateSupabaseAuthError(signUpError.message));
       } else {
         await new Promise((r) => setTimeout(r, 800));
         setSignUpRedirectHold(false);
@@ -477,7 +537,15 @@ const Auth = () => {
         {/* ── Glass card ── */}
         <motion.div className={cn('w-full rounded-3xl p-7', S.card)} variants={cascadeItem}>
             <motion.form
-            key={isLogin ? 'login' : 'signup'}
+            key={
+              isPasswordRecovery
+                ? 'recovery'
+                : isResetView
+                  ? 'reset'
+                  : isLogin
+                    ? 'login'
+                    : 'signup'
+            }
             variants={formCascadeContainer}
             initial="hidden"
             animate="visible"
@@ -488,7 +556,13 @@ const Auth = () => {
               className={cn(`mb-6 text-lg font-bold tracking-tight`, S.titleColor)}
               variants={cascadeItem}
             >
-              {isLogin ? 'Iniciar Sesión' : 'Crear cuenta'}
+              {isPasswordRecovery
+                ? 'Nueva contraseña'
+                : isResetView
+                  ? 'Recuperar contraseña'
+                  : isLogin
+                    ? 'Iniciar Sesión'
+                    : 'Crear cuenta'}
             </motion.h2>
 
               {preferBiometricLogin ? renderBiometricLogin('primary') : null}
@@ -504,7 +578,7 @@ const Auth = () => {
               ) : null}
 
               {/* ── Register-only fields ── */}
-              {!isLogin && (
+              {isRegisterView && (
                 <>
                   <motion.div className="grid grid-cols-2 gap-3" variants={cascadeItem}>
                 <Input
@@ -610,18 +684,24 @@ const Auth = () => {
                 else setEmailFieldError('');
               }}
               required
+              readOnly={isPasswordRecovery}
               autoComplete="email"
-              className={cn(S.inputCls, emailFieldError && 'border-red-500 focus-visible:border-red-500')}
+              className={cn(
+                S.inputCls,
+                emailFieldError && 'border-red-500 focus-visible:border-red-500',
+                isPasswordRecovery && 'opacity-80',
+              )}
             />
             {emailFieldError ? (
               <p className="mt-1.5 text-sm text-red-500">{emailFieldError}</p>
             ) : null}
               </motion.div>
 
+              {!isResetView ? (
               <motion.div variants={cascadeItem} className="relative">
             <Input
               type={
-                isLogin
+                isLogin || isPasswordRecovery
                   ? showLoginPassword
                     ? 'text'
                     : 'password'
@@ -629,19 +709,21 @@ const Auth = () => {
                     ? 'text'
                     : 'password'
               }
-              placeholder="Contraseña"
+              placeholder={isPasswordRecovery ? 'Nueva contraseña' : 'Contraseña'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              {...(!isLogin ? { minLength: 8 } : {})}
-              autoComplete={isLogin ? 'current-password' : 'new-password'}
+              {...(isRegisterView || isPasswordRecovery ? { minLength: 8 } : {})}
+              autoComplete={isPasswordRecovery ? 'new-password' : isLogin ? 'current-password' : 'new-password'}
               className={cn(S.inputCls, 'pr-12')}
             />
             <button
               type="button"
               tabIndex={-1}
               onClick={() =>
-                isLogin ? setShowLoginPassword((v) => !v) : setShowRegPassword((v) => !v)
+                isLogin || isPasswordRecovery
+                  ? setShowLoginPassword((v) => !v)
+                  : setShowRegPassword((v) => !v)
               }
               className={cn(
                 'absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl transition-colors',
@@ -650,25 +732,48 @@ const Auth = () => {
                   : 'text-zinc-500 hover:bg-zinc-200/80 hover:text-zinc-900',
               )}
               aria-label={
-                (isLogin ? showLoginPassword : showRegPassword)
+                (isLogin || isPasswordRecovery ? showLoginPassword : showRegPassword)
                   ? 'Ocultar contraseña'
                   : 'Mostrar contraseña'
               }
             >
-              {(isLogin ? showLoginPassword : showRegPassword) ? (
+              {(isLogin || isPasswordRecovery ? showLoginPassword : showRegPassword) ? (
                 <EyeOff className="h-4 w-4" />
               ) : (
                 <Eye className="h-4 w-4" />
               )}
             </button>
               </motion.div>
-              {!isLogin ? (
+              ) : null}
+
+              {isLogin && !isResetView && !isPasswordRecovery ? (
+                <motion.div variants={cascadeItem} className="-mt-1 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsResettingPassword(true);
+                      setError('');
+                      setSuccessMsg('');
+                    }}
+                    className={cn(
+                      'text-xs transition-colors',
+                      isDark
+                        ? 'text-zinc-400 hover:text-primary'
+                        : 'text-zinc-500 hover:text-primary',
+                    )}
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                </motion.div>
+              ) : null}
+
+              {(isRegisterView || isPasswordRecovery) ? (
             <motion.div variants={cascadeItem}>
               <PasswordRequirementsList password={password} className="mt-1.5" />
             </motion.div>
               ) : null}
 
-              {!isLogin && (
+              {(isRegisterView || isPasswordRecovery) && (
             <motion.div variants={cascadeItem}>
               <div className="relative">
                 <Input
@@ -724,7 +829,7 @@ const Auth = () => {
               <motion.div variants={cascadeItem}>
           <Button
             type="submit"
-            disabled={isLoading || isBiometricLoading || !registerSubmitEnabled}
+            disabled={isLoading || isBiometricLoading || !submitEnabled}
             aria-busy={isLoading}
             className={cn(
               'h-14 w-full rounded-xl border-0 bg-primary text-base font-bold tracking-tight text-primary-foreground',
@@ -736,7 +841,15 @@ const Auth = () => {
               >
                 {isLoading ? (
                   <>
-                    <span className="sr-only">{isLogin ? 'Iniciando sesión…' : 'Creando cuenta…'}</span>
+                    <span className="sr-only">
+                      {isPasswordRecovery
+                        ? 'Guardando contraseña…'
+                        : isResetView
+                          ? 'Enviando enlace…'
+                          : isLogin
+                            ? 'Iniciando sesión…'
+                            : 'Creando cuenta…'}
+                    </span>
                     <Loader2
                       className={cn(
                         'shrink-0 animate-spin',
@@ -745,6 +858,10 @@ const Auth = () => {
                       aria-hidden
                     />
                   </>
+                ) : isPasswordRecovery ? (
+                  'Guardar nueva contraseña'
+                ) : isResetView ? (
+                  'Enviar enlace de recuperación'
                 ) : isLogin ? (
                   'Iniciar Sesión'
                 ) : (
@@ -753,16 +870,34 @@ const Auth = () => {
           </Button>
               </motion.div>
 
-              {isLogin && biometricsSupported && !biometricsChecking && !preferBiometricLogin
+              {isResetView ? (
+                <motion.div variants={cascadeItem}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsResettingPassword(false);
+                      setError('');
+                      setSuccessMsg('');
+                    }}
+                    className={`mt-2 w-full text-center text-sm transition-colors duration-300 ${S.toggleTextCls}`}
+                  >
+                    Volver a Iniciar Sesión
+                  </button>
+                </motion.div>
+              ) : null}
+
+              {isLogin && !isResetView && !isPasswordRecovery && biometricsSupported && !biometricsChecking && !preferBiometricLogin
                 ? renderBiometricLogin('secondary')
                 : null}
 
               {/* ── Toggle login / register ── */}
+              {!isResetView && !isPasswordRecovery ? (
               <motion.div variants={cascadeItem}>
         <button
           type="button"
           onClick={() => {
             setIsLogin(!isLogin);
+            setIsResettingPassword(false);
             setSignUpRedirectHold(false);
             setError('');
             setSuccessMsg('');
@@ -790,6 +925,7 @@ const Auth = () => {
           )}
         </button>
               </motion.div>
+              ) : null}
             </motion.form>
         </motion.div>
       </motion.div>

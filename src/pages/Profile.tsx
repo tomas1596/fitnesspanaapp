@@ -19,12 +19,13 @@ import { useToast } from '@/hooks/use-toast';
 import {
   LogOut, User, Save, Camera, Lock,
   Target, Pencil, LayoutDashboard, HelpCircle,
-  FileText, Heart, Sparkles, AlertTriangle, Loader2, Trash2, X, ZoomIn, ChevronRight,
+  FileText, Heart, AlertTriangle, Loader2, Trash2, X, ZoomIn, ChevronRight,
   Eye, EyeOff,
   ScanFace,
   Scale,
   Medal,
   Copy,
+  Key,
   Building2,
   Link2,
   Unlink,
@@ -33,6 +34,7 @@ import { AvatarCropModal } from '@/components/AvatarCropModal';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { ThemeSegmentedControl } from '@/components/ThemeSegmentedControl';
 import { FAQBottomSheet } from '@/components/FAQBottomSheet';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useTheme } from '@/hooks/useTheme';
 import { todayLocalYMD } from '@/lib/nutritionDay';
 import { cn } from '@/lib/utils';
@@ -118,6 +120,15 @@ const Profile = () => {
   const premiumDaysLeft = isPremium
     ? Math.max(0, Math.ceil(((sub as Extract<typeof sub, { status: 'premium' }>).until.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
+  const trialDaysLeft = isTrial ? (sub as Extract<typeof sub, { status: 'trial' }>).daysLeft : 0;
+  const showUpgradePremiumCta = !isAdmin && (isTrial || isExpiredFree);
+
+  const handleUpgradePremiumClick = useCallback(() => {
+    toast({
+      title: '¡Próximamente! 🚀',
+      description: 'La suscripción Premium estará disponible muy pronto.',
+    });
+  }, [toast]);
 
   const [testerModalOpen, setTesterModalOpen] = useState(false);
   const [premiumModalOpen, setPremiumModalOpen] = useState(false);
@@ -536,7 +547,7 @@ const Profile = () => {
     if (!profileCoachCode) return;
     try {
       await navigator.clipboard.writeText(profileCoachCode);
-      toast({ title: 'Código copiado', description: profileCoachCode });
+      toast({ title: 'Código copiado' });
     } catch {
       toast({
         title: 'No se pudo copiar',
@@ -712,16 +723,73 @@ const Profile = () => {
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-bold text-amber-600 dark:text-amber-400">
                     ✦ Premium · {premiumDaysLeft}d
                   </span>
-                ) : (
+                ) : isTrial ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-600 dark:bg-zinc-400/10 dark:text-zinc-400">
+                    ⏳ Prueba: {trialDaysLeft} {trialDaysLeft === 1 ? 'día' : 'días'}
+                  </span>
+                ) : isExpiredFree ? null : (
                   <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
                     Free
                   </span>
                 )}
+                {showUpgradePremiumCta ? (
+                  <button
+                    type="button"
+                    onClick={handleUpgradePremiumClick}
+                    className={cn(
+                      'inline-flex cursor-pointer items-center gap-1 rounded-full border border-amber-400/40 bg-gradient-to-r from-amber-500/20 to-yellow-400/20 px-2.5 py-0.5 text-[11px] font-bold text-amber-800 transition-transform active:scale-95',
+                      'hover:from-amber-500/30 hover:to-yellow-400/30 dark:border-amber-500/35 dark:from-amber-500/15 dark:to-yellow-500/15 dark:text-amber-300',
+                    )}
+                  >
+                    ✨ Mejorar a Premium
+                  </button>
+                ) : null}
                 {profileIsCoach ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
-                    <Medal className="h-3 w-3 shrink-0 opacity-90" aria-hidden />
-                    {coachOwnGymName ?? 'Coach'}
-                  </span>
+                  profileCoachCode ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 transition-transform active:scale-95 dark:text-emerald-300"
+                          aria-label="Ver código de invitación"
+                        >
+                          <Medal className="h-3 w-3 shrink-0 opacity-90" aria-hidden />
+                          {coachOwnGymName ?? 'Coach'}
+                          <Key size={12} className="ml-0.5 opacity-70" aria-hidden />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="bottom"
+                        align="start"
+                        sideOffset={5}
+                        className="w-auto rounded-xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-800 dark:bg-zinc-950"
+                      >
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                          Código de invitación
+                        </p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="font-mono text-base font-bold uppercase tracking-tight text-zinc-900 dark:text-zinc-50">
+                            {profileCoachCode}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0 rounded-lg text-zinc-600 hover:text-emerald-600 dark:text-zinc-400 dark:hover:text-emerald-400"
+                            onClick={() => void handleCopyCoachCode()}
+                            aria-label="Copiar código"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                      <Medal className="h-3 w-3 shrink-0 opacity-90" aria-hidden />
+                      {coachOwnGymName ?? 'Coach'}
+                    </span>
+                  )
                 ) : null}
               </div>
             </div>
@@ -730,26 +798,6 @@ const Profile = () => {
             </Button>
           </div>
         </div>
-
-        {profileIsCoach && profileCoachCode ? (
-          <div className={cn(settingsListCardCn)}>
-            <button
-              type="button"
-              onClick={() => void handleCopyCoachCode()}
-              className={cn(settingsListRowCn)}
-              title="Copiar código de invitación"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15">
-                <Copy className="h-[18px] w-[18px] text-emerald-600 dark:text-emerald-400" />
-              </span>
-              <span className="min-w-0 flex-1 text-left font-medium leading-snug">Código de invitación</span>
-              <span className="shrink-0 font-mono text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">
-                {profileCoachCode}
-              </span>
-              <Copy className="h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
-            </button>
-          </div>
-        ) : null}
 
         {!profileIsCoach ? (
           <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
@@ -825,50 +873,14 @@ const Profile = () => {
           </div>
         )}
 
-        {/* ── Subscription banners (visible según rol, no para Admin) ── */}
-        {!isAdmin && (
-          <>
-            {/* Trial: days remaining */}
-            {isTrial && (
-              <div className="flex items-center gap-3 rounded-2xl border border-muted bg-muted/50 px-4 py-3">
-                <Sparkles className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  Versión de prueba: te quedan{' '}
-                  <span className="font-semibold text-foreground">
-                    {(sub as Extract<typeof sub, { status: 'trial' }>).daysLeft}{' '}
-                    {(sub as Extract<typeof sub, { status: 'trial' }>).daysLeft === 1 ? 'día' : 'días'}
-                  </span>
-                </p>
-              </div>
-            )}
-
-            {/* Premium expiry warning: ≤5 days left */}
-            {isPremium && premiumDaysLeft <= 5 && premiumDaysLeft > 0 && (
-              <div className="flex items-center gap-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-3">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
-                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                  Tu Premium vence pronto. Recuerda renovar para no perder acceso.
-                </p>
-              </div>
-            )}
-
-            {/* Free (trial or expired): upgrade CTA */}
-            {(isTrial || isExpiredFree) && (
-              <button
-                type="button"
-                onClick={() =>
-                  toast({
-                    title: '¡Próximamente! 🚀',
-                    description: 'La suscripción Premium estará disponible muy pronto.',
-                  })
-                }
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 px-4 py-3.5 text-sm font-bold text-white shadow-md transition hover:brightness-110 active:scale-[0.98]"
-              >
-                <Sparkles className="h-4 w-4" />
-                Mejorar a Premium
-              </button>
-            )}
-          </>
+        {/* ── Subscription: aviso Premium por vencer (no para Admin) ── */}
+        {!isAdmin && isPremium && premiumDaysLeft <= 5 && premiumDaysLeft > 0 && (
+          <div className="flex items-center gap-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-3">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+              Tu Premium vence pronto. Recuerda renovar para no perder acceso.
+            </p>
+          </div>
         )}
 
         <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none sm:px-5">
@@ -943,28 +955,13 @@ const Profile = () => {
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/15">
                     <LayoutDashboard className="h-[18px] w-[18px] text-violet-600 dark:text-violet-400" />
                   </span>
-                  <span className="min-w-0 flex-1 text-left font-medium leading-snug">Admin Panel</span>
+                  <span className="min-w-0 flex-1 text-left font-medium leading-snug">Panel de Admin</span>
                   <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
                 </button>
               ) : null}
             </div>
           </div>
         ) : null}
-
-        {/* ── Suscripción ── */}
-        <div className={cn(settingsListCardCn)}>
-          <button
-            type="button"
-            onClick={() => setFaqOpen(true)}
-            className={cn(settingsListRowCn)}
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/12">
-              <HelpCircle className="h-[18px] w-[18px] text-primary dark:text-primary" />
-            </span>
-            <span className="min-w-0 flex-1 text-left font-medium leading-snug">FAQ</span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
-          </button>
-        </div>
 
         {/* ── Ayuda e Información ── */}
         <div className={cn(settingsListCardCn)}>
@@ -974,6 +971,17 @@ const Profile = () => {
             </p>
           </div>
           <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <button
+              type="button"
+              onClick={() => setFaqOpen(true)}
+              className={cn(settingsListRowCn)}
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/12">
+                <HelpCircle className="h-[18px] w-[18px] text-primary dark:text-primary" />
+              </span>
+              <span className="min-w-0 flex-1 text-left font-medium leading-snug">Preguntas Frecuentes</span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
+            </button>
             <a
               href="https://wa.me/5493388414236?text=Hola,%20necesito%20ayuda%20con%20Pana%20Fitness"
               target="_blank"

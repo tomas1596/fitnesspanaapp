@@ -14,6 +14,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { useSubscriptionStatus, SubscriptionProvider } from "@/hooks/useSubscriptionStatus";
+import { AccountStatusProvider, useAccountStatus } from "@/hooks/useAccountStatus";
 import { supabase } from "@/integrations/supabase/client";
 import BottomNav from "@/components/BottomNav";
 import Auth from "./pages/Auth";
@@ -27,6 +28,7 @@ import AdminPanel from "./pages/AdminPanel";
 import CoachPanel from "./pages/CoachPanel";
 import Paywall from "./pages/Paywall";
 import VerifiedAccount from "./pages/VerifiedAccount";
+import SuspendedAccount from "./pages/SuspendedAccount";
 import Terminos from "./pages/Terminos";
 import NotFound from "./pages/NotFound";
 import { applyBrandTheme } from "@/lib/brandTheme";
@@ -139,6 +141,19 @@ const CoachRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+/** Bloquea rutas cuando la cuenta está suspendida o baneada. */
+const AccountStatusGuard = ({ children }: { children: React.ReactNode }) => {
+  const { isAdmin, isAdminLoading } = useAuth();
+  const account = useAccountStatus();
+
+  if (isAdminLoading || account.status === 'loading') return null;
+  if (isAdmin) return <>{children}</>;
+  if (account.status === 'suspended' || account.status === 'banned') {
+    return <Navigate to="/suspendido" replace />;
+  }
+  return <>{children}</>;
+};
+
 /** Bloquea rutas cuando la suscripción expiró; redirige a /paywall. */
 const SubscriptionGuard = ({ children }: { children: React.ReactNode }) => {
   const sub = useSubscriptionStatus();
@@ -147,18 +162,20 @@ const SubscriptionGuard = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-/** Ruta protegida por auth + suscripción activa. */
+/** Ruta protegida por auth + estado de cuenta + suscripción activa. */
 const AppRoute = ({ children }: { children: React.ReactNode }) => (
   <ProtectedRoute>
-    <SubscriptionGuard>{children}</SubscriptionGuard>
+    <AccountStatusGuard>
+      <SubscriptionGuard>{children}</SubscriptionGuard>
+    </AccountStatusGuard>
   </ProtectedRoute>
 );
 
 /** Raíz (/): pantalla Auth sin cambiar pathname; si hay sesión, Entreno protegido. */
 const RootHomeGate = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, isPasswordRecovery } = useAuth();
   if (loading) return null;
-  if (!user) return <Auth />;
+  if (!user || isPasswordRecovery) return <Auth />;
   return (
     <AppRoute>
       <Workout />
@@ -167,7 +184,7 @@ const RootHomeGate = () => {
 };
 
 const AppRoutes = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, isPasswordRecovery } = useAuth();
   const location = useLocation();
 
   if (loading) return null;
@@ -190,12 +207,13 @@ const AppRoutes = () => {
         {/* /paywall y /verificado: sólo requieren auth, sin subscription guard */}
         <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />
         <Route path="/verificado" element={<ProtectedRoute><VerifiedAccount /></ProtectedRoute>} />
+        <Route path="/suspendido" element={<ProtectedRoute><SuspendedAccount /></ProtectedRoute>} />
         <Route path="/terminos" element={<ProtectedRoute><Terminos /></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       {/* Ocultar BottomNav en paywall y en la pantalla de bienvenida post-verificación */}
-      {user && !['/paywall', '/verificado', '/terminos'].includes(location.pathname) && <BottomNav />}
+      {user && !isPasswordRecovery && !['/paywall', '/verificado', '/terminos', '/suspendido'].includes(location.pathname) && <BottomNav />}
     </>
   );
 };
@@ -206,8 +224,9 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <AuthProvider>
-          <SubscriptionProvider>
-            <BrowserRouter>
+          <AccountStatusProvider>
+            <SubscriptionProvider>
+              <BrowserRouter>
               <div className="app-visual-shell relative isolate min-h-dvh">
                 <div
                   aria-hidden
@@ -220,6 +239,7 @@ const App = () => (
               </div>
             </BrowserRouter>
           </SubscriptionProvider>
+          </AccountStatusProvider>
         </AuthProvider>
       </TooltipProvider>
     </ThemeProvider>

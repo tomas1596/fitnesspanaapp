@@ -12,6 +12,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,13 +38,14 @@ import {
   Copy,
   CreditCard,
   Crown,
+  Dumbbell,
   Medal,
+  MoreVertical,
   Palette,
   Search,
   Shield,
   Sparkles,
   Star,
-  Trash2,
   User,
   UserPlus,
   Users,
@@ -56,6 +58,7 @@ import {
   lastActiveDotTone,
 } from '@/lib/lastActivityLabel';
 import { WORKOUT_MODALITY_OPTIONS } from '@/lib/workoutModality';
+import type { AccountStatus } from '@/hooks/useAccountStatus';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -79,6 +82,9 @@ type DirectoryRow = {
   coach_code: string | null;
   gym_name: string | null;
   gym_modalities: string[];
+  /** Nombre del box o coach vinculado (alumno con coach_id). */
+  assigned_coach_name: string | null;
+  account_status: AccountStatus;
 };
 
 type SubRole = 'free' | 'premium' | 'tester';
@@ -337,6 +343,116 @@ const ROLE_META: Record<
   },
 };
 
+function AssignedCoachIndicator({ name }: { name: string | null }) {
+  if (!name?.trim()) return null;
+  return (
+    <span className="mt-0.5 inline-flex max-w-full items-center gap-1 rounded-md bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-400/10 dark:text-zinc-400">
+      <Dumbbell size={12} className="shrink-0 opacity-80" aria-hidden />
+      <span className="truncate">
+        Gimnasio: <span className="text-zinc-700 dark:text-zinc-300">{name}</span>
+      </span>
+    </span>
+  );
+}
+
+function normalizeAccountStatus(raw: unknown): AccountStatus {
+  if (raw === 'suspended' || raw === 'banned') return raw;
+  return 'active';
+}
+
+function AccountStatusBadge({ status }: { status: AccountStatus }) {
+  if (status === 'active') return null;
+  const isBanned = status === 'banned';
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+        isBanned
+          ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+          : 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+      )}
+    >
+      {isBanned ? 'Baneado' : 'Suspendido'}
+    </span>
+  );
+}
+
+function UserModerationMenu({
+  row,
+  disabled,
+  canModerate,
+  onDelete,
+  onStatusChange,
+}: {
+  row: DirectoryRow;
+  disabled: boolean;
+  canModerate: boolean;
+  onDelete: (row: DirectoryRow) => void;
+  onStatusChange: (userId: string, status: AccountStatus) => void;
+}) {
+  if (!canModerate) return null;
+
+  const status = row.account_status ?? 'active';
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          disabled={disabled}
+          className="h-10 w-10 shrink-0 rounded-xl border border-zinc-200/90 bg-white text-zinc-500 shadow-sm transition hover:bg-zinc-100 hover:text-zinc-800 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+          aria-label={`Acciones de moderación para ${row.email || 'usuario'}`}
+        >
+          <MoreVertical className="h-4 w-4" aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52 rounded-xl">
+        {status === 'active' ? (
+          <>
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => onStatusChange(row.user_id, 'suspended')}
+            >
+              Suspender cuenta
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => onStatusChange(row.user_id, 'banned')}
+            >
+              Banear usuario
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer text-red-500 focus:bg-red-500/10 focus:text-red-500"
+              onClick={() => onDelete(row)}
+            >
+              Eliminar cuenta
+            </DropdownMenuItem>
+          </>
+        ) : null}
+        {status === 'suspended' ? (
+          <DropdownMenuItem
+            className="cursor-pointer font-semibold text-green-600 focus:bg-green-500/10 focus:text-green-600 dark:text-green-400 dark:focus:text-green-400"
+            onClick={() => onStatusChange(row.user_id, 'active')}
+          >
+            Reactivar acceso
+          </DropdownMenuItem>
+        ) : null}
+        {status === 'banned' ? (
+          <DropdownMenuItem
+            className="cursor-pointer font-semibold"
+            onClick={() => onStatusChange(row.user_id, 'active')}
+          >
+            Quitar Ban
+          </DropdownMenuItem>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function RoleDropdown({
   row,
   disabled,
@@ -553,6 +669,8 @@ const AdminPanel = () => {
       coach_code:            (r.coach_code           as string) ?? null,
       gym_name:              (r.gym_name             as string) ?? null,
       gym_modalities:        normalizeCoachGymModalities(r.gym_modalities),
+      assigned_coach_name:   (r.assigned_coach_name  as string) ?? null,
+      account_status:        normalizeAccountStatus(r.account_status),
     }));
 
     // 2. If admin_user_directory does NOT include subscription_role (all null),
@@ -796,6 +914,44 @@ const AdminPanel = () => {
   );
 
   // ── Theme toggle ───────────────────────────────────────────────────────
+
+  const updateAccountStatus = useCallback(
+    async (userId: string, status: AccountStatus) => {
+      if (!userId) return;
+      setToggling((prev) => new Set([...prev, userId]));
+      try {
+        const { error: rpcError } = await supabase.rpc('admin_set_account_status', {
+          p_target_user_id: userId,
+          p_status: status,
+        });
+        if (rpcError) throw rpcError;
+
+        setRows((prev) =>
+          prev.map((row) => (row.user_id === userId ? { ...row, account_status: status } : row)),
+        );
+
+        const labels: Record<AccountStatus, string> = {
+          active: 'Cuenta reactivada',
+          suspended: 'Cuenta suspendida',
+          banned: 'Usuario baneado',
+        };
+        toast({ title: labels[status] });
+      } catch (err: unknown) {
+        const msg =
+          err != null && typeof err === 'object' && 'message' in err
+            ? String((err as { message: unknown }).message)
+            : 'No se pudo actualizar el estado';
+        toast({ title: 'Error', description: msg, variant: 'destructive' });
+      } finally {
+        setToggling((prev) => {
+          const next = new Set(prev);
+          next.delete(userId);
+          return next;
+        });
+      }
+    },
+    [toast],
+  );
 
   const handleConfirmDeleteAccount = useCallback(async () => {
     const row = deleteAccountTarget;
@@ -1106,11 +1262,11 @@ const AdminPanel = () => {
         <div className="grid grid-cols-3 gap-3 sm:gap-4">
           {(
             [
-              { Icon: Users, label: 'Totales', value: totalUsers },
-              { Icon: UserPlus, label: 'Hoy', value: registeredToday },
-              { Icon: Star, label: 'Activos', value: activeCount },
+              { Icon: Users, label: 'Totales', value: totalUsers, subtitle: undefined },
+              { Icon: UserPlus, label: 'Hoy', value: registeredToday, subtitle: undefined },
+              { Icon: Star, label: 'Activos', value: activeCount, subtitle: 'Suscripciones vigentes' },
             ] as const
-          ).map(({ Icon, label, value }) => (
+          ).map(({ Icon, label, value, subtitle }) => (
             <div
               key={label}
               className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-md shadow-zinc-900/5 dark:border-white/10 dark:bg-zinc-900/80 dark:shadow-black/40 sm:p-5"
@@ -1124,9 +1280,14 @@ const AdminPanel = () => {
               {loading ? (
                 <Skeleton className="mt-3 h-9 w-20 rounded-lg bg-zinc-200 dark:bg-zinc-800" />
               ) : (
-                <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-white">
-                  {value}
-                </p>
+                <>
+                  <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-white">
+                    {value}
+                  </p>
+                  {subtitle ? (
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{subtitle}</p>
+                  ) : null}
+                </>
               )}
             </div>
           ))}
@@ -1234,6 +1395,10 @@ const AdminPanel = () => {
                         <div className="min-w-0 flex-1 sm:hidden">
                           <div className="font-semibold text-zinc-900 dark:text-zinc-100">{name}</div>
                           <div className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">{r.email || '—'}</div>
+                          <AssignedCoachIndicator name={r.assigned_coach_name} />
+                          <div className="mt-1.5">
+                            <AccountStatusBadge status={r.account_status} />
+                          </div>
                           <div className="mt-2">
                             <SubscriptionFinancialRow row={r} />
                           </div>
@@ -1246,6 +1411,10 @@ const AdminPanel = () => {
 
                       <div className="hidden min-w-0 flex-1 sm:block">
                         <div className="font-semibold text-zinc-900 dark:text-zinc-100">{name}</div>
+                        <AssignedCoachIndicator name={r.assigned_coach_name} />
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <AccountStatusBadge status={r.account_status} />
+                        </div>
                         <div className="mt-1.5">
                           <SubscriptionFinancialRow row={r} />
                         </div>
@@ -1315,19 +1484,13 @@ const AdminPanel = () => {
                               />
                             </button>
                             {canOfferAccountDelete ? (
-                              <button
-                                type="button"
-                                title="Eliminar cuenta permanentemente"
+                              <UserModerationMenu
+                                row={r}
                                 disabled={isBusy || deleteAccountDoing}
-                                onClick={() => setDeleteAccountTarget(r)}
-                                className={cn(
-                                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-white text-red-500 shadow-sm transition hover:border-red-500/40 hover:bg-red-500/[0.07] disabled:opacity-50 dark:border-red-500/30 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-500/15',
-                                  "[html[data-brand='pink']_&]:border-rose-500/35 [html[data-brand='pink']_&]:text-rose-400 [html[data-brand='pink']_&]:hover:bg-rose-500/10 dark:[html[data-brand='pink']_&]:text-rose-300",
-                                )}
-                                aria-label="Eliminar cuenta de usuario"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                                canModerate={canOfferAccountDelete}
+                                onDelete={setDeleteAccountTarget}
+                                onStatusChange={(userId, status) => void updateAccountStatus(userId, status)}
+                              />
                             ) : null}
                           </>
                         ) : (
@@ -1377,19 +1540,13 @@ const AdminPanel = () => {
                               />
                             </button>
                             {canOfferAccountDelete ? (
-                              <button
-                                type="button"
-                                title="Eliminar cuenta permanentemente"
+                              <UserModerationMenu
+                                row={r}
                                 disabled={isBusy || deleteAccountDoing}
-                                onClick={() => setDeleteAccountTarget(r)}
-                                className={cn(
-                                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-white text-red-500 shadow-sm transition hover:border-red-500/40 hover:bg-red-500/[0.07] disabled:opacity-50 dark:border-red-500/30 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-500/15',
-                                  "[html[data-brand='pink']_&]:border-rose-500/35 [html[data-brand='pink']_&]:text-rose-400 [html[data-brand='pink']_&]:hover:bg-rose-500/10 dark:[html[data-brand='pink']_&]:text-rose-300",
-                                )}
-                                aria-label="Eliminar cuenta de usuario"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                                canModerate={canOfferAccountDelete}
+                                onDelete={setDeleteAccountTarget}
+                                onStatusChange={(userId, status) => void updateAccountStatus(userId, status)}
+                              />
                             ) : null}
                           </>
                         )}

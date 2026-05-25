@@ -40,6 +40,9 @@ interface AuthContextType {
   /** true hasta conocer is_admin del usuario actual (evita redirigir admins por un frame). */
   isAdminLoading: boolean;
   isAdmin: boolean;
+  /** Sesión de recuperación tras el enlace del email (PASSWORD_RECOVERY). */
+  isPasswordRecovery: boolean;
+  clearPasswordRecovery: () => void;
   /** Vuelve a leer `profiles.is_admin` (p. ej. tras cambiar rol desde el panel admin). */
   refreshIsAdmin: () => Promise<void>;
   signUp: (
@@ -59,6 +62,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isAdminLoading, setIsAdminLoading] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+
+  const clearPasswordRecovery = useCallback(() => {
+    setIsPasswordRecovery(false);
+  }, []);
 
   useLayoutEffect(() => {
     if (!user) {
@@ -73,7 +81,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true);
+      }
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -144,6 +155,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         loading,
         isAdminLoading,
         isAdmin,
+        isPasswordRecovery,
+        clearPasswordRecovery,
         refreshIsAdmin,
         signUp,
         signIn,

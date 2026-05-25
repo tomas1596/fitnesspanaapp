@@ -760,6 +760,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_set_account_status: {
+        Args: {
+          p_target_user_id: string
+          p_status: string
+        }
+        Returns: undefined
+      }
       admin_set_coach_profile: {
         Args: {
           p_target_user_id: string
@@ -795,6 +802,8 @@ export type Database = {
           coach_code: string | null
           gym_name: string | null
           gym_modalities: string[]
+          assigned_coach_name: string | null
+          account_status: string
         }[]
       }
       coach_remove_student: {
