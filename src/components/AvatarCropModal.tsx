@@ -63,6 +63,7 @@ export function AvatarCropModal({ imageSrc, open, onCancel, onApply }: AvatarCro
       cropAreaStyle: {
         border: `2px solid ${brandHex}`,
         boxShadow: `0 0 0 9999em ${overlay}`,
+        borderRadius: '9999px',
       } as CSSProperties,
       containerBg: resolved === 'dark' ? '#18181b' : '#f4f4f5',
     };
@@ -138,7 +139,7 @@ export function AvatarCropModal({ imageSrc, open, onCancel, onApply }: AvatarCro
               }}
               cropperProps={{
                 'aria-label': 'Área de recorte',
-                className: 'touch-pan-x touch-pan-y',
+                className: 'touch-pan-x touch-pan-y avatar-cropper',
               }}
               zoomSpeed={0.65}
               keyboardStep={1}

@@ -216,6 +216,16 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Avatar cropper: máscara circular limpia sin guías/manijas cuadradas. */
+  .avatar-cropper .reactEasyCrop_CropArea {
+    border-radius: 9999px !important;
+  }
+  .avatar-cropper .reactEasyCrop_CropArea::before,
+  .avatar-cropper .reactEasyCrop_CropArea::after {
+    display: none !important;
+    content: none !important;
+  }
 }
 
 @layer utilities {

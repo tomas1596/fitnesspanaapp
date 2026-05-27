@@ -657,8 +657,8 @@ const Profile = () => {
   const weightDiff = w > 0 && tw > 0 ? (w - tw) : null;
 
   const handleAvatarCropApply = async (blob: Blob) => {
-    const thumbnail = new File([blob], 'avatar.jpg', {
-      type: blob.type.startsWith('image/') ? blob.type : 'image/jpeg',
+    const thumbnail = new File([blob], 'avatar.png', {
+      type: blob.type.startsWith('image/') ? blob.type : 'image/png',
     });
     const ok = await uploadAvatar(thumbnail);
     if (!ok) return;
