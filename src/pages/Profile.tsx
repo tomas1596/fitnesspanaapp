@@ -1188,57 +1188,30 @@ const Profile = () => {
       {avatarModalOpen && (
         <div
           className={cn(
-            'fixed inset-0 z-[200] flex items-end justify-center bg-black/60 px-4 backdrop-blur-sm',
-            'pb-[calc(env(safe-area-inset-bottom,0px)+1.75rem)]',
-            'sm:items-center sm:pb-8',
+            'fixed inset-0 z-[200] flex items-end justify-center bg-black/50 backdrop-blur-sm',
+            'pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)]',
           )}
           onClick={() => setAvatarModalOpen(false)}
         >
           <div
-            className="w-full max-w-sm overflow-hidden rounded-3xl bg-card shadow-2xl"
+            role="dialog"
+            aria-labelledby="avatar-sheet-title"
+            className="mx-auto w-full max-w-[90%] overflow-hidden rounded-2xl border border-border/50 bg-card shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Preview */}
-            <div className="flex flex-col items-center gap-3 bg-muted/30 py-6">
-              <button
-                type="button"
-                aria-label="Ver foto completa"
-                onClick={() => avatarUrl && setLightboxOpen(true)}
-                className={cn(
-                  'group relative h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-primary bg-accent transition-transform active:scale-95',
-                  'drop-shadow-none dark:drop-shadow-[0_0_8px_var(--brand-glow)]',
-                )}
-              >
-                {avatarUrl
-                  ? (
-                    <img
-                      src={avatarUrl}
-                      alt="Foto de perfil"
-                      className="h-full w-full rounded-full overflow-hidden object-cover aspect-square select-none pointer-events-none"
-                      style={{ WebkitTouchCallout: 'none' }}
-                    />
-                  )
-                  : <div className="flex h-full w-full items-center justify-center">
-                      <User className="h-10 w-10 text-primary/85 dark:text-primary/90" />
-                    </div>}
-                {avatarUrl && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/30">
-                    <ZoomIn className="h-6 w-6 text-white opacity-0 transition-opacity drop-shadow-lg group-hover:opacity-100" />
-                  </div>
-                )}
-              </button>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                {avatarUrl ? 'Toca para ampliar' : 'Foto de perfil'}
-              </p>
-            </div>
+            <p
+              id="avatar-sheet-title"
+              className="border-b border-border/40 px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+            >
+              Foto de perfil
+            </p>
 
-            {/* Actions */}
-            <div className="divide-y divide-border">
+            <div className="flex flex-col gap-2 p-4">
               <label
                 htmlFor="profile-avatar-upload"
-                className="flex w-full cursor-pointer items-center gap-3 px-5 py-4 text-left text-sm font-semibold text-primary transition-colors hover:bg-primary/5 active:bg-primary/10"
+                className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-primary transition-colors hover:bg-primary/5 active:bg-primary/10"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
                   <Camera className="h-4 w-4" />
                 </span>
                 Cambiar foto
@@ -1248,19 +1221,19 @@ const Profile = () => {
                 <button
                   type="button"
                   onClick={handleDeleteAvatar}
-                  className="flex w-full items-center gap-3 px-5 py-4 text-left text-sm font-semibold text-destructive transition-colors hover:bg-destructive/5 active:bg-destructive/10"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-destructive transition-colors hover:bg-destructive/5 active:bg-destructive/10"
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-destructive/10">
                     <Trash2 className="h-4 w-4" />
                   </span>
-                  Eliminar foto actual
+                  Eliminar foto
                 </button>
               )}
 
               <button
                 type="button"
                 onClick={() => setAvatarModalOpen(false)}
-                className="flex w-full items-center justify-center px-5 py-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent active:bg-accent/80"
+                className="mt-1 w-full rounded-xl bg-muted/60 px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted active:bg-muted/80"
               >
                 Cancelar
               </button>
