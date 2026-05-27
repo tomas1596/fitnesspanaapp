@@ -40,14 +40,15 @@ export function ProfileAvatarSheet({
           aria-labelledby="profile-avatar-sheet-title"
           aria-modal="true"
           className={cn(
-            'relative w-full max-w-sm bg-[#1a1a1a] rounded-3xl p-6 shadow-2xl',
+            'relative w-full max-w-sm rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl',
+            'dark:border-white/10 dark:bg-[#1a1a1a]',
             'animate-in zoom-in-95 duration-200',
           )}
           onClick={(e) => e.stopPropagation()}
         >
           <p
             id="profile-avatar-sheet-title"
-            className="mb-4 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
+            className="mb-4 text-center text-[11px] font-semibold uppercase tracking-wider text-gray-900 dark:text-white"
           >
             Foto de perfil
           </p>
@@ -124,7 +125,7 @@ export function ProfileAvatarSheet({
             <button
               type="button"
               onClick={onClose}
-              className="mt-1 w-full rounded-xl py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-300 active:text-zinc-200"
+              className="mt-1 w-full rounded-xl py-2.5 text-sm font-medium text-gray-900 transition-colors hover:text-gray-700 active:text-gray-800 dark:text-white dark:hover:text-zinc-300 dark:active:text-zinc-200"
             >
               Cancelar
             </button>
