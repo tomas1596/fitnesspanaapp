@@ -523,8 +523,32 @@ const Cardio = () => {
     return { km: totalKm, count: inMonth.length, time: totalTime, pace: avgPace };
   }, [runs]);
 
+  /** Mapa: sin scroll del layout; historial: lista larga con rebote en `<main>`. */
+  useEffect(() => {
+    const main = document.querySelector('main.app-main-scroll');
+    if (!main) return;
+
+    if (tab === 'run') {
+      main.classList.add('overflow-hidden');
+      main.classList.remove('overflow-y-auto');
+    } else {
+      main.classList.remove('overflow-hidden');
+      main.classList.add('overflow-y-auto');
+    }
+
+    return () => {
+      main.classList.remove('overflow-hidden');
+      main.classList.add('overflow-y-auto');
+    };
+  }, [tab]);
+
   return (
-    <div className="flex min-h-full flex-col bg-background">
+    <div
+      className={cn(
+        'flex flex-col bg-background',
+        tab === 'run' ? 'h-full min-h-0 overflow-hidden' : 'min-h-0',
+      )}
+    >
       {/* ── Saving overlay ── */}
       {isSaving && (
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-5 bg-background/95 backdrop-blur-sm">
@@ -535,7 +559,7 @@ const Cardio = () => {
       )}
 
       <PageScreenHeader
-        className="px-4"
+        className="shrink-0 px-4"
         title="Modo Ruta"
         right={
           <div className="flex items-center gap-1 rounded-full border border-border/40 bg-card/70 p-1 backdrop-blur-sm">
@@ -564,7 +588,7 @@ const Cardio = () => {
       />
 
       {tab === 'run' ? (
-        <div className="relative mt-3 min-h-[420px] flex-1 overflow-hidden">
+        <div className="relative mt-3 h-full min-h-0 flex-1 overflow-hidden">
           {/* Countdown overlay */}
           {countdown !== null && (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-background">

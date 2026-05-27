@@ -199,7 +199,7 @@ const AppRoutes = () => {
     <>
       <main
         className={[
-          'min-h-0 flex-1 overflow-y-auto overscroll-y-contain',
+          'app-main-scroll min-h-0 w-full flex-1 overflow-y-auto overscroll-y-contain',
           showBottomNav ? 'pb-24' : '',
         ]
           .filter(Boolean)
@@ -242,7 +242,7 @@ const App = () => (
           <AccountStatusProvider>
             <SubscriptionProvider>
               <BrowserRouter>
-              <div className="app-visual-shell relative isolate flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden">
+              <div className="app-visual-shell relative isolate flex h-[100dvh] w-full max-h-[100dvh] flex-col overflow-hidden">
                 <div
                   aria-hidden
                   className="app-ambient-glow pointer-events-none fixed -right-[10%] -top-[10%] -z-10 h-[40vw] max-h-[560px] w-[40vw] max-w-[560px] rounded-full blur-[100px] dark:blur-[120px]"

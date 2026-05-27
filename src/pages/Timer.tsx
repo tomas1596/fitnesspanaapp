@@ -352,6 +352,20 @@ const Timer = () => {
     };
   }, [bg]);
 
+  /** Pantalla fija: el scroll queda desactivado en el layout mientras el timer está visible. */
+  useEffect(() => {
+    const main = document.querySelector('main.app-main-scroll');
+    if (!main) return;
+
+    main.classList.add('overflow-hidden');
+    main.classList.remove('overflow-y-auto');
+
+    return () => {
+      main.classList.remove('overflow-hidden');
+      main.classList.add('overflow-y-auto');
+    };
+  }, []);
+
   const mins    = Math.floor(remaining / 60);
   const secs    = remaining % 60;
   const isRunning = (phase === 'prep' || phase === 'work' || phase === 'rest' || phase === 'setRest') && !paused;
@@ -486,7 +500,7 @@ const Timer = () => {
 
   return (
     <div
-      className="flex h-full min-h-full flex-1 flex-col transition-colors duration-300"
+      className="flex h-full flex-col transition-colors duration-300"
       style={{ backgroundColor: bg }}
     >
       <div className="mx-auto flex h-full min-h-0 w-full max-w-lg flex-1 flex-col px-4 pb-28">

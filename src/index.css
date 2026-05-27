@@ -161,6 +161,12 @@
     }
   }
 
+  /* Región de scroll de la app: rebote iOS solo dentro de listas largas (no en el documento). */
+  .app-main-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
   /*
    * Grain / noise — capa fija sobre toda la app (mate premium, no estática agresiva).
    * feTurbulence SVG embebido; sin dependencias externas.
