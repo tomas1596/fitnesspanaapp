@@ -204,24 +204,25 @@ const Profile = () => {
   const [avatarCropOpen, setAvatarCropOpen] = useState(false);
   const [avatarCropSrc, setAvatarCropSrc] = useState<string | null>(null);
   const avatarOriginalDraftRef = useRef<File | null>(null);
+  const readFileAsDataUrl = useCallback((file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error ?? new Error('No se pudo leer la imagen'));
+    reader.readAsDataURL(file);
+  }), []);
 
   const endAvatarCropSession = useCallback(() => {
     avatarOriginalDraftRef.current = null;
     setAvatarCropOpen(false);
-    setAvatarCropSrc((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
+    setAvatarCropSrc(null);
   }, []);
 
-  const openAvatarCropFromFile = useCallback((file: File) => {
+  const openAvatarCropFromFile = useCallback(async (file: File) => {
     avatarOriginalDraftRef.current = file;
-    setAvatarCropSrc((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
-    });
+    const dataUrl = await readFileAsDataUrl(file);
+    setAvatarCropSrc(dataUrl);
     setAvatarCropOpen(true);
-  }, []);
+  }, [readFileAsDataUrl]);
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
@@ -701,7 +702,7 @@ const Profile = () => {
                       return;
                     }
                     setAvatarModalOpen(false);
-                    openAvatarCropFromFile(file);
+                    void openAvatarCropFromFile(file);
                   }}
                 />
                 <div
