@@ -122,27 +122,39 @@
     @apply border-border;
   }
 
-  html {
-    overflow-x: hidden;
+  html,
+  body {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
   }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', sans-serif;
     -webkit-tap-highlight-color: transparent;
-    overscroll-behavior: none;
-    min-height: 100dvh;
     position: relative;
     isolation: isolate;
     touch-action: manipulation;
     -webkit-text-size-adjust: 100%;
-    overflow-x: hidden;
   }
 
   #root {
-    min-height: 100dvh;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     position: relative;
     isolation: isolate;
+  }
+
+  @supports (height: 100dvh) {
+    html,
+    body,
+    #root {
+      height: 100dvh;
+    }
   }
 
   /*
