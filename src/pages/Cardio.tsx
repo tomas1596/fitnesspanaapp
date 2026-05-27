@@ -523,7 +523,7 @@ const Cardio = () => {
     return { km: totalKm, count: inMonth.length, time: totalTime, pace: avgPace };
   }, [runs]);
 
-  /** Mapa: sin scroll del layout; historial: lista larga con rebote en `<main>`. */
+  /** Mapa: sin scroll del layout; historial: devuelve el scroll al contenedor principal. */
   useEffect(() => {
     const main = document.querySelector('main.app-main-scroll');
     if (!main) return;
@@ -546,7 +546,7 @@ const Cardio = () => {
     <div
       className={cn(
         'flex flex-col bg-background',
-        tab === 'run' ? 'h-full min-h-0 overflow-hidden' : 'min-h-0',
+        tab === 'run' ? 'h-full min-h-0 overflow-hidden' : 'min-h-0 flex-1',
       )}
     >
       {/* ── Saving overlay ── */}
@@ -870,7 +870,7 @@ const Cardio = () => {
           </div>
         </div>
       ) : (
-        <div className="px-4 pt-4">
+        <div className="flex min-h-0 flex-1 flex-col px-4 pt-4">
           <div
             className={cn(
               'rounded-2xl border bg-card/80 p-5 text-center backdrop-blur-sm',
@@ -909,16 +909,18 @@ const Cardio = () => {
             <StatCard label="Tiempo" value={fmtTime(monthStats.time)} />
           </div>
 
-          <h2 className="mt-5 text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Actividad reciente</h2>
-          <div className="mt-2 space-y-3">
-            {runs.length === 0 && (
-              <p className="rounded-2xl border border-border/40 bg-card/80 p-6 text-center text-xs font-medium text-muted-foreground/60 backdrop-blur-sm">
-                Aún no hay carreras registradas.
-              </p>
-            )}
-            {runs.map(r => (
-              <RunCard key={r.id} run={r} />
-            ))}
+          <div className="flex-1 overflow-y-auto overscroll-y-contain pb-24 app-main-scroll">
+            <h2 className="mt-5 text-xs font-bold uppercase tracking-widest text-muted-foreground/60">Actividad reciente</h2>
+            <div className="mt-2 space-y-3">
+              {runs.length === 0 && (
+                <p className="rounded-2xl border border-border/40 bg-card/80 p-6 text-center text-xs font-medium text-muted-foreground/60 backdrop-blur-sm">
+                  Aún no hay carreras registradas.
+                </p>
+              )}
+              {runs.map(r => (
+                <RunCard key={r.id} run={r} />
+              ))}
+            </div>
           </div>
         </div>
       )}

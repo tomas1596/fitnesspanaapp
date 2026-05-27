@@ -82,8 +82,12 @@ const editModalInputClass =
   'dark:border-zinc-600/80 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus-visible:border-primary dark:focus-visible:ring-primary';
 
 const modalSurfaceClass =
-  'max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 text-zinc-900 shadow-xl ' +
+  'w-[calc(100%-1rem)] max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-2xl border border-zinc-200 bg-white px-4 pt-6 pb-[max(1rem,env(safe-area-inset-bottom))] text-zinc-900 shadow-xl sm:w-full sm:p-6 ' +
   'dark:border-white/10 dark:bg-zinc-950 dark:text-zinc-100';
+const editProfileDialogClass =
+  'h-full w-full max-h-[100dvh] flex flex-col rounded-none border-0 bg-white p-0 text-zinc-900 shadow-xl ' +
+  'md:h-auto md:w-[calc(100%-1rem)] md:max-h-[calc(100dvh-1rem)] md:rounded-2xl md:border md:border-zinc-200 md:p-0 ' +
+  'dark:bg-zinc-950 dark:text-zinc-100 dark:md:border-white/10';
 
 const profileNeonButtonClass =
   'w-full rounded-xl border-0 bg-primary px-4 py-3 text-base font-bold text-primary-foreground shadow-md shadow-[0_10px_24px_var(--brand-glow-sm)] transition hover:bg-[color:var(--brand-hover)] hover:shadow-[0_12px_30px_var(--brand-glow)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 dark:text-black';
@@ -272,6 +276,22 @@ const Profile = () => {
   }, [user]);
 
   useEffect(() => { loadProfile(); }, [loadProfile]);
+
+  useEffect(() => {
+    const main = document.querySelector('main.app-main-scroll');
+    if (!main) return;
+    if (editProfileOpen) {
+      main.classList.add('overflow-hidden');
+      main.classList.remove('overflow-y-auto');
+    } else {
+      main.classList.remove('overflow-hidden');
+      main.classList.add('overflow-y-auto');
+    }
+    return () => {
+      main.classList.remove('overflow-hidden');
+      main.classList.add('overflow-y-auto');
+    };
+  }, [editProfileOpen]);
 
   const openEditProfile = () => {
     setDraftFirst(firstName);
@@ -661,49 +681,57 @@ const Profile = () => {
         <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={e => {
-                  const file = e.target.files?.[0];
-                  e.target.value = '';
-                  if (!file) return;
-                  if (!file.type.startsWith('image/')) {
-                    toast({
-                      title: 'Archivo no válido',
-                      description: 'Seleccioná una imagen (JPG, PNG, etc.).',
-                      variant: 'destructive',
-                    });
-                    return;
-                  }
-                  setAvatarModalOpen(false);
-                  openAvatarCropFromFile(file);
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => { if (!uploadingAvatar) setAvatarModalOpen(true); }}
-                className={cn(
-                  'relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-primary bg-accent',
-                  'drop-shadow-none dark:drop-shadow-[0_0_8px_var(--brand-glow)]',
-                )}
-                aria-label="Cambiar foto de perfil"
-              >
-                {avatarUrl
-                  ? <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
-                  : <User className="h-6 w-6 text-primary/85 dark:text-primary/90" />}
-                {uploadingAvatar ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/55">
-                    <Loader2 className="h-5 w-5 animate-spin text-white" />
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
-                    <Camera className="h-4 w-4 text-white" />
-                  </div>
-                )}
-              </button>
+              <label htmlFor="profile-avatar-upload" className="cursor-pointer">
+                <input
+                  id="profile-avatar-upload"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!file) return;
+                    if (!file.type.startsWith('image/')) {
+                      toast({
+                        title: 'Archivo no válido',
+                        description: 'Seleccioná una imagen (JPG, PNG, etc.).',
+                        variant: 'destructive',
+                      });
+                      return;
+                    }
+                    setAvatarModalOpen(false);
+                    openAvatarCropFromFile(file);
+                  }}
+                />
+                <div
+                  className={cn(
+                    'relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-primary bg-accent',
+                    'drop-shadow-none dark:drop-shadow-[0_0_8px_var(--brand-glow)]',
+                  )}
+                  aria-label="Cambiar foto de perfil"
+                >
+                  {avatarUrl
+                    ? (
+                      <img
+                        src={avatarUrl}
+                        alt="Avatar"
+                        className="h-full w-full select-none pointer-events-none object-cover"
+                        style={{ WebkitTouchCallout: 'none' }}
+                      />
+                    )
+                    : <User className="h-6 w-6 text-primary/85 dark:text-primary/90" />}
+                  {uploadingAvatar ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/55">
+                      <Loader2 className="h-5 w-5 animate-spin text-white" />
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
+                      <Camera className="h-4 w-4 text-white" />
+                    </div>
+                  )}
+                </div>
+              </label>
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-lg font-semibold leading-tight text-zinc-900 dark:text-zinc-100">
@@ -1173,7 +1201,14 @@ const Profile = () => {
                 )}
               >
                 {avatarUrl
-                  ? <img src={avatarUrl} alt="Foto de perfil" className="h-full w-full object-cover" />
+                  ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Foto de perfil"
+                      className="h-full w-full select-none pointer-events-none object-cover"
+                      style={{ WebkitTouchCallout: 'none' }}
+                    />
+                  )
                   : <div className="flex h-full w-full items-center justify-center">
                       <User className="h-10 w-10 text-primary/85 dark:text-primary/90" />
                     </div>}
@@ -1314,11 +1349,12 @@ const Profile = () => {
       </Dialog>
 
       <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
-        <DialogContent className={cn(modalSurfaceClass)}>
-          <DialogHeader>
+        <DialogContent className={cn(editProfileDialogClass)}>
+          <DialogHeader className="shrink-0 px-4 pt-6 md:px-6">
             <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Editar perfil</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="flex-1 overflow-y-auto overscroll-y-contain px-4 py-6 app-main-scroll pb-24 md:px-6">
+            <div className="space-y-4">
             <div>
               <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                 Nombre
@@ -1347,7 +1383,7 @@ const Profile = () => {
                 type="date"
                 value={draftDob}
                 onChange={(e) => setDraftDob(e.target.value)}
-                className={editModalInputClass}
+                className={cn(editModalInputClass, 'h-12 appearance-none px-4 py-2.5')}
               />
             </div>
             <div>
@@ -1384,6 +1420,7 @@ const Profile = () => {
             >
               {savingIdentity ? 'Guardando...' : 'Guardar cambios'}
             </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
