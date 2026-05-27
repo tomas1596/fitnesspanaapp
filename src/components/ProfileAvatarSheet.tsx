@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, Loader2, Trash2, User, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type ProfileAvatarSheetProps = {
@@ -11,7 +11,7 @@ type ProfileAvatarSheetProps = {
   uploading?: boolean;
 };
 
-/** Bottom sheet de foto de perfil: vista previa + acciones. */
+/** Bottom sheet: menú de foto de perfil (Cambiar / Eliminar). */
 export function ProfileAvatarSheet({
   open,
   onClose,
@@ -20,10 +20,13 @@ export function ProfileAvatarSheet({
   onDelete,
   uploading = false,
 }: ProfileAvatarSheetProps) {
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-
   useEffect(() => {
-    if (!open) setLightboxOpen(false);
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, [open]);
 
   if (!open) return null;
@@ -31,117 +34,77 @@ export function ProfileAvatarSheet({
   return (
     <>
       <div
-        className="fixed inset-0 z-[200] flex items-end justify-center bg-black/55 backdrop-blur-[2px]"
+        className="fixed inset-0 z-[200] flex flex-col justify-end bg-black/60 backdrop-blur-[3px]"
         onClick={onClose}
-        aria-hidden={false}
+        role="presentation"
       >
         <section
           role="dialog"
           aria-labelledby="profile-avatar-sheet-title"
           aria-modal="true"
           className={cn(
-            'mx-auto w-full max-w-lg',
-            'bg-[#1a1a1a] rounded-t-3xl p-6 shadow-2xl',
-            'pb-[max(1.5rem,env(safe-area-inset-bottom))]',
+            'mx-auto w-full max-w-lg shrink-0',
+            'max-h-[min(88dvh,calc(100dvh-env(safe-area-inset-top)-1rem))]',
+            'overflow-y-auto overscroll-contain',
+            'bg-[#1a1a1a] rounded-t-3xl px-6 pt-7 shadow-2xl',
+            'pb-[max(1.75rem,env(safe-area-inset-bottom))]',
           )}
           onClick={(e) => e.stopPropagation()}
         >
-          <p
+          <h2
             id="profile-avatar-sheet-title"
-            className="mb-4 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
+            className="text-center text-sm font-bold uppercase tracking-[0.12em] text-white"
           >
             Foto de perfil
-          </p>
+          </h2>
 
-          <div className="mb-5 flex justify-center">
-            {avatarUrl ? (
-              <button
-                type="button"
-                onClick={() => setLightboxOpen(true)}
-                disabled={uploading}
-                className={cn(
-                  'relative overflow-hidden rounded-2xl ring-1 ring-white/10',
-                  'transition active:scale-[0.98]',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                )}
-                aria-label="Ver foto de perfil en pantalla completa"
-              >
-                <img
-                  src={avatarUrl}
-                  alt="Vista previa de tu foto de perfil"
-                  className="h-36 w-36 object-cover sm:h-40 sm:w-40"
-                />
-                {uploading && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/55">
-                    <Loader2 className="h-7 w-7 animate-spin text-white" aria-hidden />
-                  </div>
-                )}
-              </button>
-            ) : (
-              <div
-                className="flex h-36 w-36 items-center justify-center rounded-2xl bg-zinc-800/80 ring-1 ring-white/10 sm:h-40 sm:w-40"
-                aria-hidden
-              >
-                <User className="h-14 w-14 text-zinc-500" />
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2">
+          <nav
+            className="mt-10 flex flex-col gap-6"
+            aria-label="Opciones de foto de perfil"
+          >
             <label
               htmlFor={fileInputId}
               onClick={onClose}
               className={cn(
-                'flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5',
-                'text-sm font-semibold text-primary transition-colors',
-                'hover:bg-white/5 active:bg-white/10',
+                'block w-full cursor-pointer text-left text-base font-bold text-white',
+                'transition-opacity hover:opacity-90 active:opacity-75',
+                uploading && 'pointer-events-none opacity-50',
               )}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15">
-                <Camera className="h-4 w-4" />
-              </span>
               Cambiar foto
             </label>
 
-            {avatarUrl && (
+            {avatarUrl ? (
               <button
                 type="button"
                 onClick={onDelete}
                 disabled={uploading}
                 className={cn(
-                  'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left',
-                  'text-sm font-semibold text-red-400 transition-colors',
-                  'hover:bg-red-500/10 active:bg-red-500/15',
+                  'block w-full text-left text-base font-bold text-red-500',
+                  'transition-opacity hover:text-red-400 active:opacity-80',
                   'disabled:pointer-events-none disabled:opacity-50',
                 )}
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15">
-                  <Trash2 className="h-4 w-4" />
-                </span>
                 Eliminar foto
               </button>
-            )}
+            ) : null}
+          </nav>
 
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-1 w-full rounded-xl py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-300 active:text-zinc-200"
-            >
-              Cancelar
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-10 w-full py-2 text-center text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-300"
+          >
+            Cancelar
+          </button>
         </section>
       </div>
-
-      {lightboxOpen && avatarUrl && (
-        <AvatarLightbox src={avatarUrl} onClose={() => setLightboxOpen(false)} />
-      )}
     </>
   );
 }
 
-/* ── Visor a pantalla completa ── */
-function AvatarLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+/** Visor a pantalla completa (pinch / zoom). */
+export function AvatarLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);

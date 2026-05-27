@@ -17,8 +17,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import {
-  LogOut, User, Save, Camera, Lock,
-  Target, Pencil, LayoutDashboard, HelpCircle,
+  LogOut, Save, Lock,
+  Target, LayoutDashboard, HelpCircle,
   FileText, Heart, AlertTriangle, Loader2, ChevronRight,
   Eye, EyeOff,
   ScanFace,
@@ -31,7 +31,8 @@ import {
   Unlink,
 } from 'lucide-react';
 import { AvatarCropModal } from '@/components/AvatarCropModal';
-import { ProfileAvatarSheet } from '@/components/ProfileAvatarSheet';
+import { AvatarLightbox, ProfileAvatarSheet } from '@/components/ProfileAvatarSheet';
+import { ProfileHeroCard } from '@/components/ProfileHeroCard';
 import { PageScreenHeader } from '@/components/PageScreenHeader';
 import { ThemeSegmentedControl } from '@/components/ThemeSegmentedControl';
 import { FAQBottomSheet } from '@/components/FAQBottomSheet';
@@ -163,6 +164,7 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
+  const [avatarLightboxOpen, setAvatarLightboxOpen] = useState(false);
   const [passwordDialog, setPasswordDialog] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -676,161 +678,129 @@ const Profile = () => {
   const showGestionSection = profileIsCoach || showAdminPanel;
 
   return (
-    <div className="min-h-screen bg-background px-4 pb-24">
+    <div className="min-h-screen bg-background px-4 pb-24 dark:bg-gradient-to-b dark:from-zinc-950 dark:via-background dark:to-background">
       <div className="mx-auto max-w-lg space-y-4">
         <PageScreenHeader
           title="Perfil"
           right={<ThemeSegmentedControl value={theme} onChange={setTheme} />}
         />
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <input
-                id="profile-avatar-upload"
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={e => {
-                  const file = e.target.files?.[0];
-                  e.target.value = '';
-                  if (!file) return;
-                  if (!file.type.startsWith('image/')) {
-                    toast({
-                      title: 'Archivo no válido',
-                      description: 'Seleccioná una imagen (JPG, PNG, etc.).',
-                      variant: 'destructive',
-                    });
-                    return;
-                  }
-                  setAvatarModalOpen(false);
-                  void openAvatarCropFromFile(file);
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setAvatarModalOpen(true)}
-                className={cn(
-                  'relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-primary bg-accent',
-                  'drop-shadow-none dark:drop-shadow-[0_0_8px_var(--brand-glow)]',
-                )}
-                aria-label="Opciones de foto de perfil"
-              >
-                {avatarUrl
-                  ? (
-                    <img
-                      src={avatarUrl}
-                      alt="Avatar"
-                      className="h-full w-full rounded-full overflow-hidden object-cover aspect-square select-none pointer-events-none"
-                      style={{ WebkitTouchCallout: 'none' }}
-                    />
-                  )
-                  : <User className="h-6 w-6 text-primary/85 dark:text-primary/90" />}
-                {uploadingAvatar ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/55">
-                    <Loader2 className="h-5 w-5 animate-spin text-white" />
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
-                    <Camera className="h-4 w-4 text-white" />
-                  </div>
-                )}
-              </button>
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-lg font-semibold leading-tight text-zinc-900 dark:text-zinc-100">
-                {fullName || 'Tu nombre'}
-              </p>
-              {/* ── Badges rol suscripción + Coach ── */}
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                {isAdmin ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2.5 py-0.5 text-[11px] font-bold text-blue-600 dark:text-blue-400">
-                    Admin 👑
-                  </span>
-                ) : isTester ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-0.5 text-[11px] font-bold text-primary">
-                    Tester ∞
-                  </span>
-                ) : isPremium ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-bold text-amber-600 dark:text-amber-400">
-                    ✦ Premium · {premiumDaysLeft}d
-                  </span>
-                ) : isTrial ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-600 dark:bg-zinc-400/10 dark:text-zinc-400">
-                    ⏳ Prueba: {trialDaysLeft} {trialDaysLeft === 1 ? 'día' : 'días'}
-                  </span>
-                ) : isExpiredFree ? null : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                    Free
-                  </span>
-                )}
-                {showUpgradePremiumCta ? (
-                  <button
-                    type="button"
-                    onClick={handleUpgradePremiumClick}
-                    className={cn(
-                      'inline-flex cursor-pointer items-center gap-1 rounded-full border border-amber-400/40 bg-gradient-to-r from-amber-500/20 to-yellow-400/20 px-2.5 py-0.5 text-[11px] font-bold text-amber-800 transition-transform active:scale-95',
-                      'hover:from-amber-500/30 hover:to-yellow-400/30 dark:border-amber-500/35 dark:from-amber-500/15 dark:to-yellow-500/15 dark:text-amber-300',
-                    )}
-                  >
-                    ✨ Mejorar a Premium
-                  </button>
-                ) : null}
-                {profileIsCoach ? (
-                  profileCoachCode ? (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 transition-transform active:scale-95 dark:text-emerald-300"
-                          aria-label="Ver código de invitación"
-                        >
-                          <Medal className="h-3 w-3 shrink-0 opacity-90" aria-hidden />
-                          {coachOwnGymName ?? 'Coach'}
-                          <Key size={12} className="ml-0.5 opacity-70" aria-hidden />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        side="bottom"
-                        align="start"
-                        sideOffset={5}
-                        className="w-auto rounded-xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-800 dark:bg-zinc-950"
+        <input
+          id="profile-avatar-upload"
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={e => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            if (!file.type.startsWith('image/')) {
+              toast({
+                title: 'Archivo no válido',
+                description: 'Seleccioná una imagen (JPG, PNG, etc.).',
+                variant: 'destructive',
+              });
+              return;
+            }
+            setAvatarModalOpen(false);
+            void openAvatarCropFromFile(file);
+          }}
+        />
+
+        <ProfileHeroCard
+          avatarUrl={avatarUrl}
+          uploading={uploadingAvatar}
+          fullName={fullName}
+          email={user?.email}
+          onAvatarClick={() => setAvatarModalOpen(true)}
+          onViewAvatar={avatarUrl ? () => setAvatarLightboxOpen(true) : undefined}
+          onEditClick={openEditProfile}
+          badges={(
+            <>
+              {isAdmin ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2.5 py-0.5 text-[11px] font-bold text-blue-600 dark:text-blue-400">
+                  Admin 👑
+                </span>
+              ) : isTester ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-0.5 text-[11px] font-bold text-primary">
+                  Tester ∞
+                </span>
+              ) : isPremium ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                  ✦ Premium · {premiumDaysLeft}d
+                </span>
+              ) : isTrial ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-600 dark:bg-zinc-400/10 dark:text-zinc-400">
+                  ⏳ Prueba: {trialDaysLeft} {trialDaysLeft === 1 ? 'día' : 'días'}
+                </span>
+              ) : isExpiredFree ? null : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                  Free
+                </span>
+              )}
+              {showUpgradePremiumCta ? (
+                <button
+                  type="button"
+                  onClick={handleUpgradePremiumClick}
+                  className={cn(
+                    'inline-flex cursor-pointer items-center gap-1 rounded-full border border-amber-400/40 bg-gradient-to-r from-amber-500/20 to-yellow-400/20 px-2.5 py-0.5 text-[11px] font-bold text-amber-800 transition-transform active:scale-95',
+                    'hover:from-amber-500/30 hover:to-yellow-400/30 dark:border-amber-500/35 dark:from-amber-500/15 dark:to-yellow-500/15 dark:text-amber-300',
+                  )}
+                >
+                  ✨ Mejorar a Premium
+                </button>
+              ) : null}
+              {profileIsCoach ? (
+                profileCoachCode ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 transition-transform active:scale-95 dark:text-emerald-300"
+                        aria-label="Ver código de invitación"
                       >
-                        <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                          Código de invitación
-                        </p>
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="font-mono text-base font-bold uppercase tracking-tight text-zinc-900 dark:text-zinc-50">
-                            {profileCoachCode}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 shrink-0 rounded-lg text-zinc-600 hover:text-emerald-600 dark:text-zinc-400 dark:hover:text-emerald-400"
-                            onClick={() => void handleCopyCoachCode()}
-                            aria-label="Copiar código"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
-                      <Medal className="h-3 w-3 shrink-0 opacity-90" aria-hidden />
-                      {coachOwnGymName ?? 'Coach'}
-                    </span>
-                  )
-                ) : null}
-              </div>
-            </div>
-            <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0 rounded-xl" onClick={openEditProfile} aria-label="Editar perfil">
-              <Pencil className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+                        <Medal className="h-3 w-3 shrink-0 opacity-90" aria-hidden />
+                        {coachOwnGymName ?? 'Coach'}
+                        <Key size={12} className="ml-0.5 opacity-70" aria-hidden />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      side="bottom"
+                      align="center"
+                      sideOffset={5}
+                      className="w-auto rounded-xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-800 dark:bg-zinc-950"
+                    >
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        Código de invitación
+                      </p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="font-mono text-base font-bold uppercase tracking-tight text-zinc-900 dark:text-zinc-50">
+                          {profileCoachCode}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 rounded-lg text-zinc-600 hover:text-emerald-600 dark:text-zinc-400 dark:hover:text-emerald-400"
+                          onClick={() => void handleCopyCoachCode()}
+                          aria-label="Copiar código"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                    <Medal className="h-3 w-3 shrink-0 opacity-90" aria-hidden />
+                    {coachOwnGymName ?? 'Coach'}
+                  </span>
+                )
+              ) : null}
+            </>
+          )}
+        />
 
         {!profileIsCoach ? (
           <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
@@ -1192,6 +1162,10 @@ const Profile = () => {
         onDelete={handleDeleteAvatar}
         uploading={uploadingAvatar}
       />
+
+      {avatarLightboxOpen && avatarUrl && (
+        <AvatarLightbox src={avatarUrl} onClose={() => setAvatarLightboxOpen(false)} />
+      )}
 
       {/* ── Tester welcome modal (shown once) ── */}
       <Dialog
