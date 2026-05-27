@@ -1187,11 +1187,15 @@ const Profile = () => {
       {/* ── Avatar options modal ── */}
       {avatarModalOpen && (
         <div
-          className="fixed inset-0 z-[200] flex items-end justify-center backdrop-blur-sm bg-black/60 sm:items-center"
+          className={cn(
+            'fixed inset-0 z-[200] flex items-end justify-center bg-black/60 px-4 backdrop-blur-sm',
+            'pb-[calc(env(safe-area-inset-bottom,0px)+1.75rem)]',
+            'sm:items-center sm:pb-8',
+          )}
           onClick={() => setAvatarModalOpen(false)}
         >
           <div
-            className="w-full max-w-sm overflow-hidden rounded-t-3xl sm:rounded-3xl bg-card shadow-2xl"
+            className="w-full max-w-sm overflow-hidden rounded-3xl bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Preview */}
@@ -1257,7 +1261,6 @@ const Profile = () => {
                 type="button"
                 onClick={() => setAvatarModalOpen(false)}
                 className="flex w-full items-center justify-center px-5 py-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent active:bg-accent/80"
-                style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
               >
                 Cancelar
               </button>
