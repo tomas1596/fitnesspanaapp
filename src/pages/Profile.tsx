@@ -686,66 +686,57 @@ const Profile = () => {
         <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <label htmlFor="profile-avatar-upload" className="cursor-pointer">
-                <input
-                  id="profile-avatar-upload"
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={e => {
-                    const file = e.target.files?.[0];
-                    e.target.value = '';
-                    if (!file) return;
-                    if (!file.type.startsWith('image/')) {
-                      toast({
-                        title: 'Archivo no válido',
-                        description: 'Seleccioná una imagen (JPG, PNG, etc.).',
-                        variant: 'destructive',
-                      });
-                      return;
-                    }
-                    setAvatarModalOpen(false);
-                    void openAvatarCropFromFile(file);
-                  }}
-                />
-                <div
-                  className={cn(
-                    'relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-primary bg-accent',
-                    'drop-shadow-none dark:drop-shadow-[0_0_8px_var(--brand-glow)]',
-                  )}
-                  aria-label="Cambiar foto de perfil"
-                >
-                  {avatarUrl
-                    ? (
-                      <img
-                        src={avatarUrl}
-                        alt="Avatar"
-                        className="h-full w-full select-none pointer-events-none object-cover"
-                        style={{ WebkitTouchCallout: 'none' }}
-                      />
-                    )
-                    : <User className="h-6 w-6 text-primary/85 dark:text-primary/90" />}
-                  {uploadingAvatar ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/55">
-                      <Loader2 className="h-5 w-5 animate-spin text-white" />
-                    </div>
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
-                      <Camera className="h-4 w-4 text-white" />
-                    </div>
-                  )}
-                </div>
-              </label>
-              {avatarUrl && (
-                <button
-                  type="button"
-                  onClick={handleDeleteAvatar}
-                  className="mt-2 inline-flex items-center justify-center text-xs font-medium text-red-500 transition-colors hover:text-red-400"
-                >
-                  Eliminar foto
-                </button>
-              )}
+              <input
+                id="profile-avatar-upload"
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!file) return;
+                  if (!file.type.startsWith('image/')) {
+                    toast({
+                      title: 'Archivo no válido',
+                      description: 'Seleccioná una imagen (JPG, PNG, etc.).',
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+                  setAvatarModalOpen(false);
+                  void openAvatarCropFromFile(file);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setAvatarModalOpen(true)}
+                className={cn(
+                  'relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-primary bg-accent',
+                  'drop-shadow-none dark:drop-shadow-[0_0_8px_var(--brand-glow)]',
+                )}
+                aria-label="Opciones de foto de perfil"
+              >
+                {avatarUrl
+                  ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Avatar"
+                      className="h-full w-full rounded-full overflow-hidden object-cover aspect-square select-none pointer-events-none"
+                      style={{ WebkitTouchCallout: 'none' }}
+                    />
+                  )
+                  : <User className="h-6 w-6 text-primary/85 dark:text-primary/90" />}
+                {uploadingAvatar ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/55">
+                    <Loader2 className="h-5 w-5 animate-spin text-white" />
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
+                    <Camera className="h-4 w-4 text-white" />
+                  </div>
+                )}
+              </button>
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-lg font-semibold leading-tight text-zinc-900 dark:text-zinc-100">
@@ -1219,7 +1210,7 @@ const Profile = () => {
                     <img
                       src={avatarUrl}
                       alt="Foto de perfil"
-                      className="h-full w-full select-none pointer-events-none object-cover"
+                      className="h-full w-full rounded-full overflow-hidden object-cover aspect-square select-none pointer-events-none"
                       style={{ WebkitTouchCallout: 'none' }}
                     />
                   )
@@ -1239,21 +1230,20 @@ const Profile = () => {
 
             {/* Actions */}
             <div className="divide-y divide-border">
-              <button
-                type="button"
-                onClick={() => { setAvatarModalOpen(false); fileInputRef.current?.click(); }}
-                className="flex w-full items-center gap-3 px-5 py-4 text-left text-sm font-semibold text-primary transition-colors hover:bg-primary/5 active:bg-primary/10"
+              <label
+                htmlFor="profile-avatar-upload"
+                className="flex w-full cursor-pointer items-center gap-3 px-5 py-4 text-left text-sm font-semibold text-primary transition-colors hover:bg-primary/5 active:bg-primary/10"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
                   <Camera className="h-4 w-4" />
                 </span>
-                Subir nueva foto
-              </button>
+                Cambiar foto
+              </label>
 
               {avatarUrl && (
                 <button
                   type="button"
-                  onClick={() => void deleteAvatar()}
+                  onClick={handleDeleteAvatar}
                   className="flex w-full items-center gap-3 px-5 py-4 text-left text-sm font-semibold text-destructive transition-colors hover:bg-destructive/5 active:bg-destructive/10"
                 >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-destructive/10">

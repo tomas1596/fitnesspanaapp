@@ -29,12 +29,13 @@ function normalizeSquareCrop(pixelCrop: Area, imageW: number, imageH: number): {
 }
 
 /**
- * Genera un blob circular del área seleccionada, reescalado a thumbnail.
+ * Genera un blob cuadrado del área seleccionada, reescalado a thumbnail.
+ * La visualización circular se aplica en UI con `rounded-full overflow-hidden`.
  *
  * Futuro: conservar `File` original en el caller y subirlo aparte como alta resolución
  * (`avatar_original_url`) sin pasar por este pipeline.
  */
-export async function blobFromCircularCrop(
+export async function blobFromSquareCrop(
   imageSrc: string,
   pixelCrop: Area,
   options?: { maxSide?: number; mimeType?: string; quality?: number },
@@ -48,14 +49,8 @@ export async function blobFromCircularCrop(
   const maxSide = Math.min(options?.maxSide ?? AVATAR_THUMB_MAX_SIDE, side);
   canvas.width = maxSide;
   canvas.height = maxSide;
-  ctx.clearRect(0, 0, maxSide, maxSide);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-
-  ctx.beginPath();
-  ctx.arc(maxSide / 2, maxSide / 2, maxSide / 2, 0, 2 * Math.PI);
-  ctx.closePath();
-  ctx.clip();
 
   ctx.drawImage(image, sx, sy, side, side, 0, 0, maxSide, maxSide);
 

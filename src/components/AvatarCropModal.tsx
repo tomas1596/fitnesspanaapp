@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Cropper, { type Area, type Point } from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
 
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Loader2 } from 'lucide-react';
-import { useBrandColorHex } from '@/hooks/useBrandColorHex';
-import { useTheme } from '@/hooks/useTheme';
-import { blobFromCircularCrop } from '@/lib/avatarCrop';
+import { blobFromSquareCrop } from '@/lib/avatarCrop';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -16,18 +14,16 @@ interface AvatarCropModalProps {
   imageSrc: string | null;
   open: boolean;
   onCancel: () => void;
-  /** Recibe el thumbnail listo para subir (JPEG circular). */
+  /** Recibe el thumbnail cuadrado listo para subir (se muestra circular en UI). */
   onApply: (blob: Blob) => void | Promise<void>;
 }
 
 const ZOOM_SLIDER_STEP = 0.02;
 
 /**
- * Modal de recorte circular (premium): zoom por slider + arrastre nativo del cropper.
+ * Modal de recorte (1:1): mínima configuración del cropper + zoom por slider.
  */
 export function AvatarCropModal({ imageSrc, open, onCancel, onApply }: AvatarCropModalProps) {
-  const { resolved } = useTheme();
-  const brandHex = useBrandColorHex();
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const croppedPixelsRef = useRef<Area | null>(null);
@@ -53,29 +49,13 @@ export function AvatarCropModal({ imageSrc, open, onCancel, onApply }: AvatarCro
     croppedPixelsRef.current = areaPixels;
   }, []);
 
-  /** Visibilidad del velo circular: la sombra usa `color` como currentColor en react-easy-crop. */
-  const cropVisualStyle = useMemo(() => {
-    const overlay =
-      resolved === 'dark'
-        ? 'rgba(0, 0, 0, 0.7)'
-        : 'rgba(15, 23, 42, 0.48)';
-    return {
-      cropAreaStyle: {
-        border: `2px solid ${brandHex}`,
-        boxShadow: `0 0 0 9999em ${overlay}`,
-        borderRadius: '9999px',
-      } as CSSProperties,
-      containerBg: resolved === 'dark' ? '#18181b' : '#f4f4f5',
-    };
-  }, [resolved, brandHex]);
-
   const handleApply = async () => {
     if (!imageSrc || applying) return;
     const pix = croppedPixelsRef.current;
     if (!pix) return;
     setApplying(true);
     try {
-      const blob = await blobFromCircularCrop(imageSrc, pix);
+      const blob = await blobFromSquareCrop(imageSrc, pix);
       await onApply(blob);
     } finally {
       setApplying(false);
@@ -102,47 +82,26 @@ export function AvatarCropModal({ imageSrc, open, onCancel, onApply }: AvatarCro
             Ajustar Foto
           </DialogTitle>
           <DialogDescription className="text-center text-xs text-zinc-600 dark:text-zinc-400">
-            Mové la imagen y usá zoom para encuadrar. El recorte es circular.
+            Mové la imagen y usá zoom para encuadrar. Se verá circular en tu perfil.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] app-main-scroll sm:px-5">
-          <div
-            className={cn(
-              'relative h-[min(52vh,340px)] w-full overflow-hidden rounded-2xl ring-1 ring-zinc-200 dark:ring-zinc-700',
-            )}
-            style={{ backgroundColor: cropVisualStyle.containerBg }}
-          >
+          <div className="relative z-0 h-[min(52vh,340px)] w-full">
             <Cropper
               image={imageSrc}
               crop={crop}
               zoom={zoom}
-              rotation={0}
               aspect={1}
               cropShape="round"
-              showGrid={false}
-              restrictPosition
-              objectFit="contain"
-              zoomWithScroll={false}
               minZoom={1}
               maxZoom={4}
               onCropChange={setCrop}
               onZoomChange={setZoom}
               onCropComplete={onCropComplete}
-              onRotationChange={() => {}}
-              style={{
-                cropAreaStyle: cropVisualStyle.cropAreaStyle,
+              classes={{
+                cropAreaClassName: 'border-2 border-white/80',
               }}
-              classes={{}}
-              mediaProps={{
-                draggable: false,
-              }}
-              cropperProps={{
-                'aria-label': 'Área de recorte',
-                className: 'touch-pan-x touch-pan-y avatar-cropper',
-              }}
-              zoomSpeed={0.65}
-              keyboardStep={1}
             />
           </div>
 
