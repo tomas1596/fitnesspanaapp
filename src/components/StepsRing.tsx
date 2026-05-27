@@ -66,11 +66,11 @@ const StepsRing = ({
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5">
         {variant === 'compact' ? (
           compactCenter === 'percent' ? (
-            <span className="text-[11px] font-black tabular-nums tracking-tight text-primary dark:text-black">
+            <span className="text-[11px] font-black tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100">
               {pctLabel}
             </span>
           ) : (
-            <Footprints className="h-5 w-5 shrink-0 text-primary dark:text-black" aria-hidden />
+            <Footprints className="h-5 w-5 shrink-0 text-zinc-900 dark:text-zinc-100" aria-hidden />
           )
         ) : (
           <>

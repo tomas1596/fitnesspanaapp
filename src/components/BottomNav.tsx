@@ -22,11 +22,11 @@ const BottomNav = () => {
   return (
     <nav
       className={[
-        'fixed bottom-0 left-0 right-0 z-50',
+        'fixed bottom-0 left-0 right-0 z-50 w-full',
         /* Light */ 'border-t border-zinc-200 bg-white shadow-[0_-1px_8px_rgba(0,0,0,0.06)]',
         /* Dark  */ 'dark:border-white/[0.06] dark:bg-zinc-950/85 dark:backdrop-blur-xl dark:shadow-none',
       ].join(' ')}
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-1.5">
         {tabs.map(({ path, icon: Icon, label }) => {

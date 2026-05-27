@@ -524,7 +524,7 @@ const Cardio = () => {
   }, [runs]);
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="flex min-h-full flex-col bg-background">
       {/* ── Saving overlay ── */}
       {isSaving && (
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-5 bg-background/95 backdrop-blur-sm">
@@ -564,7 +564,7 @@ const Cardio = () => {
       />
 
       {tab === 'run' ? (
-        <div className="relative mt-3 h-[calc(100vh-180px)] overflow-hidden">
+        <div className="relative mt-3 min-h-[420px] flex-1 overflow-hidden">
           {/* Countdown overlay */}
           {countdown !== null && (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-background">
@@ -815,9 +815,12 @@ const Cardio = () => {
           )}
 
           {/* Idle: CTA principal — neón marca; glow en noche, borde nítido en día */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30">
+          <div
+            className="pointer-events-none fixed inset-x-0 z-40"
+            style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+          >
             {phase === 'idle' && (
-              <div className="pointer-events-auto flex w-full flex-col items-center px-5 pb-5 pt-14">
+              <div className="pointer-events-auto flex w-full flex-col items-center px-5">
                 <button
                   type="button"
                   onClick={handleStart}

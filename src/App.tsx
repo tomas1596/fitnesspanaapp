@@ -189,31 +189,39 @@ const AppRoutes = () => {
 
   if (loading) return null;
 
+  const hideBottomNav =
+    ['/paywall', '/verificado', '/terminos', '/suspendido', '/admin', '/coach'].includes(location.pathname) ||
+    location.pathname.startsWith('/actividad/') ||
+    /^\/cardio\/.+/.test(location.pathname);
+  const showBottomNav = Boolean(user && !isPasswordRecovery && !hideBottomNav);
+
   return (
     <>
-      <Routes>
-        <Route path="/auth" element={<Navigate to="/" replace />} />
-        <Route path="/onboarding" element={<Navigate to="/" replace />} />
-        <Route element={<Outlet />}>
-          <Route path="/" element={<RootHomeGate />} />
-          <Route path="/timer" element={<AppRoute><Timer /></AppRoute>} />
-          <Route path="/cardio" element={<AppRoute><Cardio /></AppRoute>} />
-          <Route path="/nutrition" element={<AppRoute><Nutrition /></AppRoute>} />
-          <Route path="/profile" element={<AppRoute><Profile /></AppRoute>} />
-        </Route>
-        <Route path="/cardio/:activityId" element={<AppRoute><ActivityDetail /></AppRoute>} />
-        <Route path="/actividad/:id" element={<AppRoute><ActivityDetail /></AppRoute>} />
-        <Route path="/coach" element={<AppRoute><CoachRoute><CoachPanel /></CoachRoute></AppRoute>} />
-        {/* /paywall y /verificado: sólo requieren auth, sin subscription guard */}
-        <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />
-        <Route path="/verificado" element={<ProtectedRoute><VerifiedAccount /></ProtectedRoute>} />
-        <Route path="/suspendido" element={<ProtectedRoute><SuspendedAccount /></ProtectedRoute>} />
-        <Route path="/terminos" element={<ProtectedRoute><Terminos /></ProtectedRoute>} />
-        <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <main className={['min-h-0 flex-1 overflow-y-auto', showBottomNav ? 'pb-24' : ''].filter(Boolean).join(' ')}>
+        <Routes>
+          <Route path="/auth" element={<Navigate to="/" replace />} />
+          <Route path="/onboarding" element={<Navigate to="/" replace />} />
+          <Route element={<Outlet />}>
+            <Route path="/" element={<RootHomeGate />} />
+            <Route path="/timer" element={<AppRoute><Timer /></AppRoute>} />
+            <Route path="/cardio" element={<AppRoute><Cardio /></AppRoute>} />
+            <Route path="/nutrition" element={<AppRoute><Nutrition /></AppRoute>} />
+            <Route path="/profile" element={<AppRoute><Profile /></AppRoute>} />
+          </Route>
+          <Route path="/cardio/:activityId" element={<AppRoute><ActivityDetail /></AppRoute>} />
+          <Route path="/actividad/:id" element={<AppRoute><ActivityDetail /></AppRoute>} />
+          <Route path="/coach" element={<AppRoute><CoachRoute><CoachPanel /></CoachRoute></AppRoute>} />
+          {/* /paywall y /verificado: sólo requieren auth, sin subscription guard */}
+          <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />
+          <Route path="/verificado" element={<ProtectedRoute><VerifiedAccount /></ProtectedRoute>} />
+          <Route path="/suspendido" element={<ProtectedRoute><SuspendedAccount /></ProtectedRoute>} />
+          <Route path="/terminos" element={<ProtectedRoute><Terminos /></ProtectedRoute>} />
+          <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
       {/* Ocultar BottomNav en paywall y en la pantalla de bienvenida post-verificación */}
-      {user && !isPasswordRecovery && !['/paywall', '/verificado', '/terminos', '/suspendido'].includes(location.pathname) && <BottomNav />}
+      {showBottomNav && <BottomNav />}
     </>
   );
 };
@@ -227,7 +235,7 @@ const App = () => (
           <AccountStatusProvider>
             <SubscriptionProvider>
               <BrowserRouter>
-              <div className="app-visual-shell relative isolate min-h-dvh">
+              <div className="app-visual-shell relative isolate flex h-[100dvh] flex-col overflow-hidden">
                 <div
                   aria-hidden
                   className="app-ambient-glow pointer-events-none fixed -right-[10%] -top-[10%] -z-10 h-[40vw] max-h-[560px] w-[40vw] max-w-[560px] rounded-full blur-[100px] dark:blur-[120px]"
