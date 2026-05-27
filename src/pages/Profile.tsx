@@ -479,6 +479,10 @@ const Profile = () => {
     toast({ title: 'Foto eliminada' });
   };
 
+  const handleDeleteAvatar = () => {
+    void deleteAvatar();
+  };
+
 
   const newPasswordOk = passwordMeetsPolicy(newPassword);
 
@@ -733,6 +737,15 @@ const Profile = () => {
                   )}
                 </div>
               </label>
+              {avatarUrl && (
+                <button
+                  type="button"
+                  onClick={handleDeleteAvatar}
+                  className="mt-2 inline-flex items-center justify-center text-xs font-medium text-red-500 transition-colors hover:text-red-400"
+                >
+                  Eliminar foto
+                </button>
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-lg font-semibold leading-tight text-zinc-900 dark:text-zinc-100">
