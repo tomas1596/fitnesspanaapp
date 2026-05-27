@@ -336,6 +336,22 @@ const Timer = () => {
 
   const fgDark = phase === 'prep' || phase === 'work' || phase === 'rest' || phase === 'setRest' || paused;
 
+  /** Sincroniza el canvas del navegador (overscroll iOS) con el fondo activo del timer. */
+  useEffect(() => {
+    const html = document.documentElement;
+    const { body } = document;
+    const prevHtml = html.style.backgroundColor;
+    const prevBody = body.style.backgroundColor;
+
+    html.style.backgroundColor = bg;
+    body.style.backgroundColor = bg;
+
+    return () => {
+      html.style.backgroundColor = prevHtml;
+      body.style.backgroundColor = prevBody;
+    };
+  }, [bg]);
+
   const mins    = Math.floor(remaining / 60);
   const secs    = remaining % 60;
   const isRunning = (phase === 'prep' || phase === 'work' || phase === 'rest' || phase === 'setRest') && !paused;
@@ -470,10 +486,10 @@ const Timer = () => {
 
   return (
     <div
-      className="min-h-screen transition-colors duration-300"
+      className="flex h-full min-h-full flex-1 flex-col transition-colors duration-300"
       style={{ backgroundColor: bg }}
     >
-      <div className="mx-auto flex min-h-screen max-w-lg flex-col px-4 pb-28">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-lg flex-1 flex-col px-4 pb-28">
 
         <PageScreenHeader
           title="Timer"

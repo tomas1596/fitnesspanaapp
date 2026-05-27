@@ -128,10 +128,12 @@
     width: 100%;
     overflow: hidden;
     overscroll-behavior: none;
+    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply font-sans antialiased;
     font-family: 'Inter', sans-serif;
     -webkit-tap-highlight-color: transparent;
     position: relative;
@@ -147,6 +149,8 @@
     overflow: hidden;
     position: relative;
     isolation: isolate;
+    @apply bg-background;
+    background-color: hsl(var(--background));
   }
 
   @supports (height: 100dvh) {
