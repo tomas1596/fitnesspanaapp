@@ -228,6 +228,10 @@
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
   }
 
+  .pb-safe {
+    padding-bottom: max(3rem, env(safe-area-inset-bottom, 0px));
+  }
+
   /* Ambient glow — hereda --primary (verde neón / rosa VIP vía applyBrandTheme) */
   .app-ambient-glow {
     background: radial-gradient(
