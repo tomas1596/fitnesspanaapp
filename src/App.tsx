@@ -183,7 +183,7 @@ const RootHomeGate = () => {
   );
 };
 
-const AppRoutes = () => {
+const AppLayout = () => {
   const { user, loading, isPasswordRecovery } = useAuth();
   const location = useLocation();
 
@@ -197,38 +197,46 @@ const AppRoutes = () => {
 
   return (
     <>
-      <main
-        className={[
-          'app-main-scroll min-h-0 w-full flex-1 overflow-y-auto overscroll-y-contain',
-          showBottomNav ? 'pb-24' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-      >
-        <Routes>
-          <Route path="/auth" element={<Navigate to="/" replace />} />
-          <Route path="/onboarding" element={<Navigate to="/" replace />} />
-          <Route element={<Outlet />}>
-            <Route path="/" element={<RootHomeGate />} />
-            <Route path="/timer" element={<AppRoute><Timer /></AppRoute>} />
-            <Route path="/cardio" element={<AppRoute><Cardio /></AppRoute>} />
-            <Route path="/nutrition" element={<AppRoute><Nutrition /></AppRoute>} />
-            <Route path="/profile" element={<AppRoute><Profile /></AppRoute>} />
-          </Route>
-          <Route path="/cardio/:activityId" element={<AppRoute><ActivityDetail /></AppRoute>} />
-          <Route path="/actividad/:id" element={<AppRoute><ActivityDetail /></AppRoute>} />
-          <Route path="/coach" element={<AppRoute><CoachRoute><CoachPanel /></CoachRoute></AppRoute>} />
-          {/* /paywall y /verificado: sólo requieren auth, sin subscription guard */}
-          <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />
-          <Route path="/verificado" element={<ProtectedRoute><VerifiedAccount /></ProtectedRoute>} />
-          <Route path="/suspendido" element={<ProtectedRoute><SuspendedAccount /></ProtectedRoute>} />
-          <Route path="/terminos" element={<ProtectedRoute><Terminos /></ProtectedRoute>} />
-          <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </main>
-      {/* Ocultar BottomNav en paywall y en la pantalla de bienvenida post-verificación */}
-      {showBottomNav && <BottomNav />}
+      <div className="app-visual-shell relative isolate flex h-[100dvh] w-full max-h-[100dvh] min-h-0 flex-1 flex-col overflow-hidden">
+        <div
+          aria-hidden
+          className="app-ambient-glow pointer-events-none fixed -right-[10%] -top-[10%] -z-10 h-[40vw] max-h-[560px] w-[40vw] max-w-[560px] rounded-full blur-[100px] dark:blur-[120px]"
+        />
+        <LastActiveHeartbeat />
+        <BrandThemeApplier />
+        <ServiceWorkerCardioBridge />
+        <main
+          className={[
+            'app-main-scroll min-h-0 w-full flex-1 overflow-y-auto overscroll-y-contain',
+            showBottomNav ? 'pb-bottom-nav' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          <Routes>
+            <Route path="/auth" element={<Navigate to="/" replace />} />
+            <Route path="/onboarding" element={<Navigate to="/" replace />} />
+            <Route element={<Outlet />}>
+              <Route path="/" element={<RootHomeGate />} />
+              <Route path="/timer" element={<AppRoute><Timer /></AppRoute>} />
+              <Route path="/cardio" element={<AppRoute><Cardio /></AppRoute>} />
+              <Route path="/nutrition" element={<AppRoute><Nutrition /></AppRoute>} />
+              <Route path="/profile" element={<AppRoute><Profile /></AppRoute>} />
+            </Route>
+            <Route path="/cardio/:activityId" element={<AppRoute><ActivityDetail /></AppRoute>} />
+            <Route path="/actividad/:id" element={<AppRoute><ActivityDetail /></AppRoute>} />
+            <Route path="/coach" element={<AppRoute><CoachRoute><CoachPanel /></CoachRoute></AppRoute>} />
+            {/* /paywall y /verificado: sólo requieren auth, sin subscription guard */}
+            <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />
+            <Route path="/verificado" element={<ProtectedRoute><VerifiedAccount /></ProtectedRoute>} />
+            <Route path="/suspendido" element={<ProtectedRoute><SuspendedAccount /></ProtectedRoute>} />
+            <Route path="/terminos" element={<ProtectedRoute><Terminos /></ProtectedRoute>} />
+            <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </main>
+      </div>
+      {showBottomNav ? <BottomNav /> : null}
     </>
   );
 };
@@ -242,17 +250,8 @@ const App = () => (
           <AccountStatusProvider>
             <SubscriptionProvider>
               <BrowserRouter>
-              <div className="app-visual-shell relative isolate flex h-[100dvh] w-full max-h-[100dvh] flex-col overflow-hidden">
-                <div
-                  aria-hidden
-                  className="app-ambient-glow pointer-events-none fixed -right-[10%] -top-[10%] -z-10 h-[40vw] max-h-[560px] w-[40vw] max-w-[560px] rounded-full blur-[100px] dark:blur-[120px]"
-                />
-                <LastActiveHeartbeat />
-                <BrandThemeApplier />
-                <ServiceWorkerCardioBridge />
-                <AppRoutes />
-              </div>
-            </BrowserRouter>
+                <AppLayout />
+              </BrowserRouter>
           </SubscriptionProvider>
           </AccountStatusProvider>
         </AuthProvider>

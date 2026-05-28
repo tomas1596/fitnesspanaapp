@@ -229,7 +229,12 @@
   }
 
   .pb-safe {
-    padding-bottom: max(3rem, env(safe-area-inset-bottom, 0px));
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Altura aproximada de la barra inferior (iconos + etiquetas + pt-2) para reservar scroll */
+  .pb-bottom-nav {
+    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
   }
 
   /* Ambient glow — hereda --primary (verde neón / rosa VIP vía applyBrandTheme) */

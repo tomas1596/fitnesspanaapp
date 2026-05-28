@@ -1,6 +1,7 @@
 import { Dumbbell, Timer, Footprints, Flame, User } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { hapticsNavTap } from '@/lib/haptics';
+import { cn } from '@/lib/utils';
 
 const tabs = [
   { path: '/', icon: Dumbbell, label: 'Entreno' },
@@ -16,19 +17,19 @@ const BottomNav = () => {
 
   if (location.pathname.startsWith('/actividad/')) return null;
   if (/^\/cardio\/.+/.test(location.pathname)) return null;
-      if (location.pathname === '/admin') return null;
-      if (location.pathname === '/coach') return null;
+  if (location.pathname === '/admin') return null;
+  if (location.pathname === '/coach') return null;
 
   return (
     <nav
-      className={[
-        'fixed bottom-0 z-50 w-full',
-        /* Light */ 'border-t border-zinc-200 bg-white shadow-[0_-1px_8px_rgba(0,0,0,0.06)]',
-        /* Dark  */ 'dark:border-white/[0.06] dark:bg-zinc-950/85 dark:backdrop-blur-xl dark:shadow-none',
-      ].join(' ')}
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      className={cn(
+        'fixed inset-x-0 bottom-0 z-50',
+        'border-t border-zinc-200 bg-white shadow-[0_-1px_8px_rgba(0,0,0,0.06)]',
+        'dark:border-white/[0.06] dark:bg-zinc-950/85 dark:backdrop-blur-xl dark:shadow-none',
+        'pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]',
+      )}
     >
-      <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-1.5">
+      <div className="mx-auto flex max-w-lg items-center justify-around px-2">
         {tabs.map(({ path, icon: Icon, label }) => {
           const active = location.pathname === path;
           return (
