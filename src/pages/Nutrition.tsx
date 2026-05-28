@@ -216,7 +216,7 @@ const Nutrition = () => {
     setNutritionTab(v);
     if (v === 'diario') setDiaryAnimEpoch((e) => e + 1);
   }, []);
-  const [goals, setGoals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, hydrationGlasses: 8 });
+  const [goals, setGoals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const [profileBody, setProfileBody] = useState<{ weight: number; height: number } | null>(null);
   const [customFoods, setCustomFoods] = useState<CustomFood[]>([]);
   const [nutritionLogs, setNutritionLogs] = useState<NutritionLogRow[]>([]);
@@ -273,6 +273,7 @@ const Nutrition = () => {
       const a = calculateAge(data?.date_of_birth);
       if (!data || !data.weight || !data.height || a == null || a <= 0 || !data.gender) {
         setProfileBody(null);
+        setGoals({ calories: 0, protein: 0, carbs: 0, fat: 0 });
         return;
       }
       const w = Number(data.weight);
@@ -298,10 +299,14 @@ const Nutrition = () => {
         protein,
         carbs,
         fat,
-        hydrationGlasses: Math.max(8, Math.round((w * 35) / 250)),
       });
     });
   }, [user]);
+  const hydrationGoalGlasses = useMemo(
+    () => (profileBody ? Math.max(1, Math.round((profileBody.weight * 35) / 250)) : 0),
+    [profileBody],
+  );
+
 
   const fetchCustomFoods = useCallback(async () => {
     if (!user) return;
@@ -418,7 +423,7 @@ const Nutrition = () => {
       ? Math.min(100, Math.round((totals.protein / baseMetrics.proteinGoal) * 100))
       : 0;
   const hydrationProgressPct =
-    goals.hydrationGlasses > 0 ? Math.min(100, Math.round((glasses / goals.hydrationGlasses) * 100)) : 0;
+    hydrationGoalGlasses > 0 ? Math.min(100, Math.round((glasses / hydrationGoalGlasses) * 100)) : 0;
 
   const filteredPickerFoods = useMemo(() => {
     const q = foodPickerSearch.trim().toLowerCase();
@@ -1098,7 +1103,7 @@ const Nutrition = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-2xl font-bold tabular-nums text-foreground">{glassesLiters}<span className="ml-1 text-sm font-normal text-muted-foreground">L</span></p>
-                    <p className="text-[11px] text-muted-foreground">{glasses} vasos · Meta: {goals.hydrationGlasses}</p>
+                    <p className="text-[11px] text-muted-foreground">{glasses} vasos · Meta: {hydrationGoalGlasses}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="secondary" size="icon" onClick={() => updateGlasses(glasses - 1)} className="h-10 w-10 rounded-xl">
@@ -1111,7 +1116,7 @@ const Nutrition = () => {
                   </div>
                 </div>
                 <div className="mt-3 flex gap-1">
-                  {Array.from({ length: goals.hydrationGlasses }).map((_, i) => (
+                  {Array.from({ length: hydrationGoalGlasses }).map((_, i) => (
                     <div
                       key={i}
                       className={cn(
