@@ -28,7 +28,6 @@ import {
   Key,
   Building2,
   Link2,
-  Unlink,
 } from 'lucide-react';
 import { AvatarCropModal } from '@/components/AvatarCropModal';
 import { ProfileAvatarSheet } from '@/components/ProfileAvatarSheet';
@@ -199,6 +198,7 @@ const Profile = () => {
   const [linkCoachCodeInput, setLinkCoachCodeInput] = useState('');
   const [linkCoachSubmitting, setLinkCoachSubmitting] = useState(false);
   const [unlinkCoachSubmitting, setUnlinkCoachSubmitting] = useState(false);
+  const [unlinkCoachDialogOpen, setUnlinkCoachDialogOpen] = useState(false);
 
   /** Recorte de avatar: preview local + archivo original conservado para futura subida HR. */
   const [avatarCropOpen, setAvatarCropOpen] = useState(false);
@@ -637,12 +637,13 @@ const Profile = () => {
     }
   }, [user, linkCoachCodeInput, toast, loadProfile]);
 
-  const handleUnlinkCoach = useCallback(async () => {
+  const handleConfirmUnlinkCoach = useCallback(async () => {
     if (!user) return;
     setUnlinkCoachSubmitting(true);
     try {
       const { error } = await supabase.rpc('unlink_student_from_coach');
       if (error) throw error;
+      setUnlinkCoachDialogOpen(false);
       toast({ title: 'Desvinculado', description: 'Ya no estás unido a ese gimnasio.' });
       await loadProfile();
     } catch (err: unknown) {
@@ -743,7 +744,7 @@ const Profile = () => {
                 {fullName || 'Tu nombre'}
               </p>
               {/* ── Badges rol suscripción + Coach ── */}
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <div className="mt-1 flex flex-wrap items-center gap-2">
                 {isAdmin ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2.5 py-0.5 text-[11px] font-bold text-blue-600 dark:text-blue-400">
                     Admin 👑
@@ -824,6 +825,22 @@ const Profile = () => {
                     </span>
                   )
                 ) : null}
+                {!profileIsCoach && profileCoachLinkId ? (
+                  <button
+                    type="button"
+                    disabled={unlinkCoachSubmitting}
+                    onClick={() => setUnlinkCoachDialogOpen(true)}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700 transition-colors',
+                      'cursor-pointer hover:bg-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700',
+                      unlinkCoachSubmitting && 'pointer-events-none opacity-60',
+                    )}
+                    aria-label={`Gimnasio: ${linkedCoachGymDisplay ?? 'Coach vinculado'}. Tocá para desvincular`}
+                  >
+                    <Building2 className="h-3 w-3 shrink-0" aria-hidden />
+                    <span className="max-w-[150px] truncate">{linkedCoachGymDisplay ?? 'Coach vinculado'}</span>
+                  </button>
+                ) : null}
               </div>
             </div>
             <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0 rounded-xl" onClick={openEditProfile} aria-label="Editar perfil">
@@ -832,67 +849,29 @@ const Profile = () => {
           </div>
         </div>
 
-        {!profileIsCoach ? (
+        {!profileIsCoach && !profileCoachLinkId ? (
           <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
-            {profileCoachLinkId ? (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12">
-                    <Building2 className="h-5 w-5 text-primary" aria-hidden />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                      Mi gimnasio
-                    </p>
-                    <p className="mt-0.5 truncate text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                      {linkedCoachGymDisplay ?? 'Coach vinculado'}
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={unlinkCoachSubmitting}
-                  className="shrink-0 rounded-xl border-zinc-200 font-semibold dark:border-zinc-700"
-                  onClick={() => void handleUnlinkCoach()}
-                >
-                  {unlinkCoachSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                      …
-                    </>
-                  ) : (
-                    <>
-                      <Unlink className="mr-2 h-4 w-4" aria-hidden />
-                      Desvincular
-                    </>
-                  )}
-                </Button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setLinkCoachOpen(true)}
-                className={cn(
-                  'flex w-full items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3.5 text-left transition',
-                  'hover:bg-primary/15 active:scale-[0.99] dark:border-primary/35 dark:bg-primary/12 dark:hover:bg-primary/18',
-                )}
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/20 dark:bg-primary/25">
-                  <Link2 className="h-5 w-5 text-primary" aria-hidden />
+            <button
+              type="button"
+              onClick={() => setLinkCoachOpen(true)}
+              className={cn(
+                'flex w-full items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3.5 text-left transition',
+                'hover:bg-primary/15 active:scale-[0.99] dark:border-primary/35 dark:bg-primary/12 dark:hover:bg-primary/18',
+              )}
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/20 dark:bg-primary/25">
+                <Link2 className="h-5 w-5 text-primary" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                  Vincularme a un Gimnasio
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold text-zinc-900 dark:text-zinc-50">
-                    Vincularme a un Gimnasio
-                  </span>
-                  <span className="mt-0.5 block text-xs text-zinc-600 dark:text-zinc-400">
-                    Ingresá el código que te dio tu profe (ej. PANA-X7B9).
-                  </span>
+                <span className="mt-0.5 block text-xs text-zinc-600 dark:text-zinc-400">
+                  Ingresá el código que te dio tu profe (ej. PANA-X7B9).
                 </span>
-                <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
-              </button>
-            )}
+              </span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
+            </button>
           </div>
         ) : null}
 
@@ -1474,6 +1453,61 @@ const Profile = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={unlinkCoachDialogOpen}
+        onOpenChange={(open) => {
+          setUnlinkCoachDialogOpen(open);
+          if (!open) setUnlinkCoachSubmitting(false);
+        }}
+      >
+        <AlertDialogContent
+          className={cn(
+            'gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-white/10 dark:bg-zinc-950 dark:text-zinc-100 sm:max-w-md',
+            'duration-300',
+          )}
+        >
+          <AlertDialogHeader className="space-y-3 sm:text-left">
+            <AlertDialogTitle className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+              ¿Desvincular gimnasio?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+              ¿Estás seguro que deseas desvincularte de{' '}
+              <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                {linkedCoachGymDisplay ?? 'este gimnasio'}
+              </span>
+              ?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end sm:space-x-0 sm:gap-2">
+            <AlertDialogCancel
+              type="button"
+              disabled={unlinkCoachSubmitting}
+              className={cn(
+                'mt-0 h-11 rounded-xl border-zinc-300 bg-zinc-50 font-semibold text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800',
+              )}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              disabled={unlinkCoachSubmitting}
+              variant="destructive"
+              className="h-11 rounded-xl border-0 px-5 text-sm font-bold shadow-md sm:min-w-[8.75rem]"
+              onClick={() => void handleConfirmUnlinkCoach()}
+            >
+              {unlinkCoachSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                  Desvinculando…
+                </>
+              ) : (
+                'Sí, desvincular'
+              )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={logoutDialogOpen}
